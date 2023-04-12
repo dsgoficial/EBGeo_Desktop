@@ -10,7 +10,7 @@
 name=DSGTools Op
 qgisMinimumVersion=3.22
 description=Ferramentas para planejamento militar do Exército Brasileiro
-version=2.2.1
+version=2.2.2
 author=Exército Brasileiro - Diretoria de Serviço Geográfico
 email=suporte.dsgtools@dsg.eb.mil.br
 about=
