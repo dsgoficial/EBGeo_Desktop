@@ -52,7 +52,12 @@ class SimbMilAlgorithm(QgsProcessingAlgorithm):
         inputFolder = self.parameterAsString(parameters, self.INPUT_FOLDER, context)
         if inputFolder is None:
             raise QgsProcessingException(self.tr("Invalid input folder."))
-
+        
+        # Get info about files in INPUT_FOLDER
+        paths = []
+        for file_name in os.listdir(inputFolder):
+            file_path = os.path.join(inputFolder, file_name)
+            paths.append(file_path)
 
         # Get layer information
         layer = self.parameterAsLayer(parameters, self.INPUT, context)
@@ -61,11 +66,15 @@ class SimbMilAlgorithm(QgsProcessingAlgorithm):
         attr = [ feat.attributes() for feat in selected_feats ]
         field_index = layer.fields().indexFromName('path')
 
+        # Add info in path column
         for k in range(len(attr)):
-            print(k)
-            layer.changeAttributeValue(k+1, field_index, inputFolder + "\\" +  str((attr[k][0])) + '.svg')
-        layer.commitChanges()
+            path_destination = inputFolder + "\\" +  str((attr[k][0])) + '.svg'
+            if path_destination not in paths:
+                path_destination = 'NULL'
+            else:
+                layer.changeAttributeValue(k+1, field_index, path_destination)
         
+        layer.commitChanges()
         return {"OUTPUT": inputFolder}
     
     def name(self):

@@ -16,9 +16,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
 
     INPUT_LAYERS = 'INPUT_LAYERS'
     INPUT_FRAME = 'INPUT_FRAME'
-    INPUT_SCALE = 'INPUT_SCALE'
     INPUT_NAME_FIELD = 'INPUT_NAME_FIELD'
-    INPUT_SRC = 'INPUT'
     OUTPUT = 'OUTPUT'
 
     def initAlgorithm(self, config=None):
@@ -126,16 +124,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 })['OUTPUT']
         return frameLayer
         
-    def createFrames(self, context, feedback, inputFrame, inputScale):
-        frameGrid = processing.run('dsgtools:createframeswithconstraintalgorithm', 
-                {
-                    'INPUT': inputFrame,
-                    'STOP_SCALE': inputScale,
-                    'OUTPUT': 'TEMPORARY_OUTPUT'
-                },
-                context=context,
-                feedback=feedback)['OUTPUT']
-        return frameGrid
+    
     def pctToRgb(self, context, feedback, inputlayer):
         rgbLayer =processing.run('gdal:pcttorgb', 
                 {
@@ -206,5 +195,12 @@ class MakeMosaic(QgsProcessingAlgorithm):
         return 'vetoreraster'
 
     def shortHelpString(self):
-        return self.tr("O algoritmo mosaica as camadas selcionadas baseada na moldura, que é responsável por limitar, usando polígonos, a área a ser mosaicada de cada imagem. Pode-se associar a imagem aos polígonos informando o campo da moldura que contém o nome da imagem correspondente ao polígono ou automaticamente, nesse caso será usado o campo 'nome' na moldura, portanto, é necessário que este campo já esteja preenchido com o nome da imagem correspondente. No caso de imagens com paleta pode-se corrigir automaticamente. Atenção: não corrigr paleta automaticamente quando selecionar outras camadas de apenas uma banda sem ser paleta, como imagens de MDS")
-    
+        return self.tr("""
+        Mosaica as camadas selcionadas baseada na camada de póligono 'moldura', que é responsável por limitar a área a ser mosaicada de cada imagem. Portanto, deve existir um polígono associado a cada imagem.
+
+        Pode-se associar a imagem aos polígonos de forma automática ou informando o campo da camada de moldura que contém o nome da imagem, nesse caso será usado o campo 'nome' na moldura, portanto, é necessário que este campo já esteja preenchido com o nome da imagem correspondente. 
+        
+        No caso de imagens com paleta pode-se corrigir automaticamente. 
+        
+        Atenção: não corrigir paleta automaticamente quando selecionar outras camadas de apenas uma banda sem ser paleta, como MDS ou MDT.
+        """)
