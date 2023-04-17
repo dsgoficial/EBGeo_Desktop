@@ -6,6 +6,8 @@ import os
 from .makeMosaic import MakeMosaic
 from .matchLayerAndFrame import MatchLayerAndFrame
 from .insertMASACODE import ConvertEDGVtoMASACODE
+from .simbmilGenerator import CreateLayerSimbMil
+from .simbmilLoader import SimbMilAlgorithm
 class Provider(QgsProcessingProvider):
 
     def __init__(self):
@@ -16,6 +18,8 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(MatchLayerAndFrame())
         self.addAlgorithm(ConvertEDGVtoMASACODE())
         self.addAlgorithm(ConvertBDGExZIPtoMASACODE())
+        self.addAlgorithm(CreateLayerSimbMil())
+        self.addAlgorithm(SimbMilAlgorithm())
 
     def load(self):
         ProcessingConfig.settingIcons[self.name()] = self.icon()

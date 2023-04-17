@@ -86,13 +86,13 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
         return 'convertbdgexziptomasacode'
 
     def displayName(self):
-        return self.tr("Converte os zips baixados do BDGEx para o formato MASACODE")
+        return self.tr("Zips BDGEx para o formato MASACODE")
 
     def group(self):
-        return self.tr('Missoes')
+        return self.tr(self.groupId())
 
     def groupId(self):
-        return 'missoes'
+        return 'MASACODE'
 
     def shortHelpString(self):
         return self.tr('Converte em lote os zips contendo shapefiles no formato EDGV para o formato MASACODE')

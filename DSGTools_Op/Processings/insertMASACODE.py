@@ -217,13 +217,13 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
         return 'convertedgvtomasacode'
 
     def displayName(self):
-        return self.tr('Converte shapefiles no formato EDGV para o formato MASACODE')
+        return self.tr('Shapefiles EDGV para o formato MASACODE')
 
     def group(self):
-        return self.tr('Missoes')
+        return self.tr(self.groupId())
 
     def groupId(self):
-        return 'missoes'
+        return 'MASACODE'
 
     def shortHelpString(self):
         return self.tr("Converte os shapefiles baixados do BDGEx para o formato MASACODE")
