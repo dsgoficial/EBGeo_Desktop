@@ -2,6 +2,7 @@
 
 # Importar as bibliotecas necessárias:
 import glob
+import itertools
 import os
 import shutil
 import zipfile
@@ -47,7 +48,15 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
         keepAttributes = self.parameterAsBool(parameters, self.KEEP_ATTRIBUTES, context)
         inputFolder = self.parameterAsFile(
             parameters, self.INPUT_FOLDER, context)
-        inputFiles = [i for i in glob.glob(f'{inputFolder}/**/*.zip')]
+        inputFiles = list(
+            set(
+                [
+                    i for i in itertools.chain.from_iterable(
+                        [glob.glob(f'{inputFolder}/**/*.zip'), glob.glob(f'{inputFolder}/*.zip')]
+                    )
+                ]
+            )
+        )
         nInputs = len(inputFiles)
         if nInputs == 0:
             return {self.OUTPUT_FOLDER: 'Não foi possível localizar os arquivos no formato zip na pasta informada'}
