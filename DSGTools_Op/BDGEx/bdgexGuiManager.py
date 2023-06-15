@@ -24,10 +24,10 @@ from __future__ import absolute_import
 from functools import partial
 
 from qgis.core import Qgis, QgsProject, QgsVectorLayer
+from qgis.utils import iface
 from qgis.PyQt.QtCore import QObject
 
-from DsgTools.core.Utils.utils import MessageRaiser
-from DsgTools.core.NetworkTools.BDGExRequestHandler import BDGExRequestHandler
+from .bdgexRequestHandler import BDGExRequestHandler
 
 
 class BDGExGuiManager(QObject):
@@ -341,7 +341,7 @@ class BDGExGuiManager(QObject):
                     " your network settings (proxy and exceptions "
                     "too, if necessary)."
                 )
-                MessageRaiser().raiseIfaceMessage(title, msg, Qgis.Warning, 5)
+                iface.messageBar().pushMessage(title, msg, level=Qgis.Warning, duration=5)
             else:
                 QgsProject.instance().addMapLayer(vlayer)
 

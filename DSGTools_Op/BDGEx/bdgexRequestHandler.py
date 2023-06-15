@@ -31,10 +31,9 @@ import urllib.request, urllib.error, urllib.parse
 from xml.dom.minidom import parseString, Element
 
 from qgis.core import Qgis
+from qgis.utils import iface
 from qgis.PyQt.QtCore import QSettings, QObject
 from qgis.PyQt.QtWidgets import QMessageBox
-
-from DsgTools.core.Utils.utils import MessageRaiser
 
 
 class BDGExRequestHandler(QObject):
@@ -169,7 +168,7 @@ class BDGExRequestHandler(QObject):
                 "your network settings (proxy and exceptions too, if"
                 " necessary)."
             )
-            MessageRaiser().raiseIfaceMessage(title, msg, Qgis.Warning, 5)
+            iface.messageBar().pushMessage(title, msg, level=Qgis.Warning, duration=5)
             return ""
         response = resp.read()
         try:
