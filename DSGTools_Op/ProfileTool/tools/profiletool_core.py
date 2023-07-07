@@ -29,7 +29,7 @@ class ProfileToolCore(QWidget):
         self.iface = iface
         self.plugincore = plugincore
         #the rubberband
-        self.polygon = False
+        self.polygon = QgsWkbTypes.LineGeometry
         self.rubberband = QgsRubberBand(self.iface.mapCanvas(), self.polygon)
         self.rubberband.setWidth(2)
         self.rubberband.setColor(QtGui.QColor(QtCore.Qt.red))
