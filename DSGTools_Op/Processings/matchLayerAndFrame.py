@@ -10,7 +10,8 @@ from qgis.core import (QgsProcessing,
                        QgsGeometry,
                        QgsFields,
                        QgsField,
-                       QgsProcessingParameterFeatureSink
+                       QgsProcessingParameterFeatureSink,
+                       QgsWkbTypes
                        )
 
 class MatchLayerAndFrame(QgsProcessingAlgorithm): 
@@ -106,7 +107,7 @@ class MatchLayerAndFrame(QgsProcessingAlgorithm):
             self.OUTPUT,
             context,
             newField,
-            3, #polygon in QgsWkbTypes
+            QgsWkbTypes.Polygon, #polygon in QgsWkbTypes
             setCRS
         )
 
