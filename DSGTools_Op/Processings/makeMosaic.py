@@ -51,8 +51,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 type=QgsProcessingParameterField.String, 
                 parentLayerParameterName='INPUT_FRAME', 
                 allowMultiple=False, 
-                optional = True,
-                defaultValue='nome')
+                optional = False,)
             )
         
         
