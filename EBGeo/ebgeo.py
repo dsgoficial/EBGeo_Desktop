@@ -49,7 +49,7 @@ class EBGeo:
 		self.menuBar = self.iface.mainWindow().menuBar()
 		self.ebGeo = QMenu(self.iface.mainWindow())
 		self.ebGeo.setObjectName(u'EBGeo')
-		self.ebGeo.setTitle('Ferramentas Militares')
+		self.ebGeo.setTitle('EBGeo')
 		self.fieldToolbox = None
 		self.menuBar.insertMenu(self.iface.firstRightStandardMenu().menuAction(), self.ebGeo)
 
