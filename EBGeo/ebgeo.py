@@ -123,27 +123,46 @@ class EBGeo:
 		 	add_to_toolbar=False)
 		self.ebGeo.addAction(self.ms_action)
 
-		self.pt_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'profileIcon.png'),
-			text=u'Traçar perfil do terreno',
-			callback=self.loadProfileTool,
+		self.nd_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'numericaldigitize.png'),
+			text=u'Criação de pontos por coordenadas',
+			callback=self.loadNumericalDigitize,
 			parent=self.ebGeo,
 			add_to_menu=False,
 			add_to_toolbar=False)
-		self.ebGeo.addAction(self.pt_action)
-		from .ProfileTool.profileplugin import ProfilePlugin as Main_ProfileTool
-		self.mainProfileTool = Main_ProfileTool(iface)
+		self.ebGeo.addAction(self.nd_action)
 
-		self.vis_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'visib.png'),
-			text=u'Mapa de visibilidade',
-			callback=self.loadVisibility,
+		self.az_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'azimuth.png'),
+			text=u'Criação de pontos por azimute e distância',
+			callback=self.loadAzimuthTool,
 			parent=self.ebGeo,
 			add_to_menu=False,
 			add_to_toolbar=False)
-		self.ebGeo.addAction(self.vis_action)
-		from .Visibility.main import Main as Main_Visib
-		self.mainVisib = Main_Visib(iface)
+		self.az_action.setCheckable(True)
+		self.ebGeo.addAction(self.az_action)
+		from .AzimuthDistance.azimuthTool import AzimuthTool as Main_AzimuthTool
+		self.mainAzimuthTool = Main_AzimuthTool(iface)
+
+		self.mv_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'numericalvertexedit.png'),
+			text=u'Movimentação de pontos por coordenadas',
+			callback=self.loadMoveVertex,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.mv_action)
+
+		self.azgen_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'azimuthgen.png'),
+			text=u'Gerador de azimute e distância',
+			callback=self.loadAzimuthGenerator,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.azgen_action)
+		from .AzimuthGenerator.main import Main as Main_AzimuthGen
+		self.mainAzimuthGen = Main_AzimuthGen(iface)
 
 		self.ar_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'arearange.png'),
@@ -157,31 +176,40 @@ class EBGeo:
 		from .AreaRange.areaRange import AreaRange as Main_AreaRange
 		self.mainAreaRange = Main_AreaRange(iface)
 
-		self.miA_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'findmiarea.png'),
-			text=u'Localizar carta topográfca (MI) por região',
-			callback=self.loadDeterminarMIArea,
+		self.pt_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'profileIcon.png'),
+			text=u'Gerador de perfil do terreno',
+			callback=self.loadProfileTool,
 			parent=self.ebGeo,
 			add_to_menu=False,
 			add_to_toolbar=False)
-		self.ebGeo.addAction(self.miA_action)
-		from .DeterminarMIArea.main import Main as Main_MIArea
-		self.mainMIArea = Main_MIArea(iface)
-        
-		self.dec_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'declconv.png'),
-			text=u'Declinação magnética e convergência meridiana',
-			callback=self.loadDeclinacaoConvergencia,
+		self.ebGeo.addAction(self.pt_action)
+		from .ProfileTool.profileplugin import ProfilePlugin as Main_ProfileTool
+		self.mainProfileTool = Main_ProfileTool(iface)
+
+		self.vis_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'visib.png'),
+			text=u'Gerador de Mapa de visibilidade',
+			callback=self.loadVisibility,
 			parent=self.ebGeo,
 			add_to_menu=False,
 			add_to_toolbar=False)
-		self.ebGeo.addAction(self.dec_action)
-		from .DeclinacaoConvergencia.main import Main as Main_DecConv
-		self.mainDecConv = Main_DecConv(iface)
+		self.ebGeo.addAction(self.vis_action)
+		from .Visibility.main import Main as Main_Visib
+		self.mainVisib = Main_Visib(iface)
+
+		self.mosaic_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'mosaic.png'),
+			text=u'Gerador de Mosaicos',
+			callback=self.loadMakeMosaic,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.mosaic_action)
 
 		self.sd_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'shaderIcon.png'),
-			text=u'Sombrear terreno',
+			text=u'Sombreador do terreno',
 			callback=self.loadShaderTool,
 			parent=self.ebGeo,
 			add_to_menu=False,
@@ -189,78 +217,6 @@ class EBGeo:
 		self.ebGeo.addAction(self.sd_action)
 		from .Shader.main import Main as Main_Shader
 		self.mainShaderTool = Main_Shader(iface)
-
-		self.nd_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'numericaldigitize.png'),
-			text=u'Criação de pontos por coordenadas',
-			callback=self.loadNumericalDigitize,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False)
-		self.ebGeo.addAction(self.nd_action)
-
-		self.mv_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'numericalvertexedit.png'),
-			text=u'Mover pontos por coordenadas',
-			callback=self.loadMoveVertex,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False)
-		self.ebGeo.addAction(self.mv_action)
-
-		self.az_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'azimuth.png'),
-			text=u'Criação de pontos por azimute e distância',
-			callback=self.loadAzimuthTool,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False)
-		self.az_action.setCheckable(True)
-		self.ebGeo.addAction(self.az_action)
-		from .AzimuthDistance.azimuthTool import AzimuthTool as Main_AzimuthTool
-		self.mainAzimuthTool = Main_AzimuthTool(iface)
-		
-		self.geo_action = self.add_action(
-		 	os.path.join(os.path.dirname(__file__), 'icons', 'geocoder.png'),
-		 	text=u'Geocodificação',
-		 	callback=self.loadGeocoding,
-		 	parent=self.ebGeo,
-		 	add_to_menu=False,
-		 	add_to_toolbar=False)
-		self.ebGeo.addAction(self.geo_action)
-		from .QuickGeocoder.geocoder import QuickGeocoder as Main_Geocoding
-		self.mainGeocoding = Main_Geocoding(iface)
-
-		self.azgen_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'azimuthgen.png'),
-			text=u'Gerador de azimute e distância',
-			callback=self.loadAzimuthGenerator,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False)
-		self.ebGeo.addAction(self.azgen_action)
-		from .AzimuthGenerator.main import Main as Main_AzimuthGen
-		self.mainAzimuthGen = Main_AzimuthGen(iface)
-
-		self.rd_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'rendezvous.png'),
-			text=u'Plano de chamada',
-			callback=self.loadRendezvous,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False)
-		self.ebGeo.addAction(self.rd_action)
-		from .Rendezvous.main import Main as Main_Rendezvous
-		self.mainRendezvous = Main_Rendezvous(iface)
-
-		self.vfaction = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'dimensionsvf.png'),
-			text=u'Calculadora de Coordenadas e Dimensões',
-			callback=self.loadVirtualFieldGenerator,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False)
-		self.ebGeo.addAction(self.vfaction)
 		
 		self.auc_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'convang.png'),
@@ -283,14 +239,58 @@ class EBGeo:
 		from .measureTool.measureTool import MeasureTool as Main_MeasureTool
 		self.mainMeasureTool = Main_MeasureTool(iface)
 
-		self.mosaic_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'mosaic.png'),
-			text=u'Mosaicar',
-			callback=self.loadMakeMosaic,
+		self.miA_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'findmiarea.png'),
+			text=u'Localizar carta topográfca (MI) por região',
+			callback=self.loadDeterminarMIArea,
 			parent=self.ebGeo,
 			add_to_menu=False,
 			add_to_toolbar=False)
-		self.ebGeo.addAction(self.mosaic_action)
+		self.ebGeo.addAction(self.miA_action)
+		from .DeterminarMIArea.main import Main as Main_MIArea
+		self.mainMIArea = Main_MIArea(iface)
+
+		self.vfaction = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'dimensionsvf.png'),
+			text=u'Calculadora de Coordenadas e Dimensões',
+			callback=self.loadVirtualFieldGenerator,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.vfaction)
+        
+		self.dec_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'declconv.png'),
+			text=u'Calculadora de Declinação magnética e convergência meridiana',
+			callback=self.loadDeclinacaoConvergencia,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.dec_action)
+		from .DeclinacaoConvergencia.main import Main as Main_DecConv
+		self.mainDecConv = Main_DecConv(iface)
+
+		# self.geo_action = self.add_action(
+		#  	os.path.join(os.path.dirname(__file__), 'icons', 'geocoder.png'),
+		#  	text=u'Geocodificação',
+		#  	callback=self.loadGeocoding,
+		#  	parent=self.ebGeo,
+		#  	add_to_menu=False,
+		#  	add_to_toolbar=False)
+		# self.ebGeo.addAction(self.geo_action)
+		# from .QuickGeocoder.geocoder import QuickGeocoder as Main_Geocoding
+		# self.mainGeocoding = Main_Geocoding(iface)
+
+		# self.rd_action = self.add_action(
+		# 	os.path.join(os.path.dirname(__file__), 'icons', 'rendezvous.png'),
+		# 	text=u'Plano de chamada',
+		# 	callback=self.loadRendezvous,
+		# 	parent=self.ebGeo,
+		# 	add_to_menu=False,
+		# 	add_to_toolbar=False)
+		# self.ebGeo.addAction(self.rd_action)
+		# from .Rendezvous.main import Main as Main_Rendezvous
+		# self.mainRendezvous = Main_Rendezvous(iface)
 
 		self.ms_action = self.add_action(
 		 	os.path.join(os.path.dirname(__file__), 'icons', 'help.png'),
