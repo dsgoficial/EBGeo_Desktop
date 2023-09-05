@@ -41,6 +41,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         event.accept()
         self.isOpen = False
         self.mapList.clear()
+        self.getFromGeometry(False)
 
     def initVariables(self):
         self.geomlist = []
@@ -62,6 +63,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         else:
             self.canvas.unsetMapTool(self.myToolGeom)
             self.clearLayersSelections()
+            self.pointsButton.setChecked(False)
 
     def clearLayersSelections(self):
         layers = self.iface.mapCanvas().layers()
@@ -133,7 +135,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
 
         csvFile.write(u'Ponto;X;Y;Azimute;Distancia;Destino\n')
 
-        for i in range(0, self.mapList.topLevelItemCount()-1):
+        for i in range(0, self.mapList.topLevelItemCount()):
             csvFile.write(u'{};{};{};{};{};{}\n'.format(self.mapList.topLevelItem(i).data(0, 0), self.mapList.topLevelItem(i).data(1, 0), self.mapList.topLevelItem(i).data(2, 0), self.mapList.topLevelItem(i).data(3, 0), self.mapList.topLevelItem(i).data(4, 0), self.mapList.topLevelItem(i).data(5, 0)))
             
         csvFile.close()    
