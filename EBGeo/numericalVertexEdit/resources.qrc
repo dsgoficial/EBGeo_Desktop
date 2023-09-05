@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/plugins/DsgTools/DsgToolsOp/MilitaryTools/numericalVertexEdit" >
+    <qresource prefix="/plugins/DsgTools/EbGeo/MilitaryTools/numericalVertexEdit" >
         <!--icon made by Robert Szczepanek . Thanks Robert-->
         <file>vector-edit-keyboard.png</file>
     </qresource>

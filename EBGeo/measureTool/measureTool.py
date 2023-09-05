@@ -20,7 +20,7 @@ class MeasureTool(QObject):
 
     def initGui(self):
         # Criar ação de ativação
-        self.enableAction = QAction( QIcon(":/plugins/DsgTools/DsgToolsOp/MilitaryTools/measureTool/icon.png"), u"Ativar medição da aquisição", self.iface.mainWindow())
+        self.enableAction = QAction( QIcon(":/plugins/DsgTools/EbGeo/MilitaryTools/measureTool/icon.png"), u"Ativar medição da aquisição", self.iface.mainWindow())
         self.enableAction.setCheckable(True)
         
         # pointList: isso armazena todos os pontos

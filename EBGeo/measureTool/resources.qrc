@@ -1,6 +1,6 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
-    <qresource prefix="/plugins/DsgTools/DsgToolsOp/MilitaryTools/measureTool/">
+    <qresource prefix="/plugins/DsgTools/EbGeo/MilitaryTools/measureTool/">
         <file>icon.png</file>
     </qresource>
 </RCC>

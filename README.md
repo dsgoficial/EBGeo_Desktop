@@ -1,9 +1,9 @@
-# DSGTools Op
+# EBGeo
 ### Ferramentas para utilização da geoinformação digital pelo Exército Brasileiro.
 #### DSG - Diretoria de Serviço Geográfico
 
 ---
-O DSGTools Op tem a finalidade facilitar o uso da geoinformação digital pelas OM de Corpo de Tropa do Exército Brasileiro, servindo de ferramenta básica para atuar nos PCI de geoinformação e futuramente no Estágio de Geoinformação para Corpo de Tropa.
+O EBGeo tem a finalidade facilitar o uso da geoinformação digital pelas OM de Corpo de Tropa do Exército Brasileiro, servindo de ferramenta básica para atuar nos PCI de geoinformação e futuramente no Estágio de Geoinformação para Corpo de Tropa.
 
 ---
 ### Ferramentas atuais

@@ -1,4 +1,4 @@
-from DSGTools_Op.Processings.convertEDGVzipToMASACODE import ConvertBDGExZIPtoMASACODE
+from EBGeo.Processings.convertEDGVzipToMASACODE import ConvertBDGExZIPtoMASACODE
 from qgis.core import QgsProcessingProvider
 from processing.core.ProcessingConfig import ProcessingConfig, Setting
 from qgis.PyQt.QtGui import QIcon
@@ -26,7 +26,7 @@ class Provider(QgsProcessingProvider):
         ProcessingConfig.addSetting(
             Setting(
                 self.name(),
-                'ACTIVATE_DSGToolsOp',
+                'ACTIVATE_EBGeo',
                 'Activate',
                 True
             )
@@ -44,10 +44,10 @@ class Provider(QgsProcessingProvider):
         return True
 
     def id(self, *args, **kwargs):
-        return 'DSGToolsOpProvider'
+        return 'EBGeoProvider'
 
     def name(self, *args, **kwargs):
-        return self.tr('DSGToolsOp')
+        return self.tr('EBGeo')
 
     def icon(self):
         return QIcon(

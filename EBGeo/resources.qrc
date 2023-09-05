@@ -1,5 +1,5 @@
 <RCC>
-  <qresource prefix="/plugins/DSGToolsOp">
+  <qresource prefix="/plugins/EBGeo">
     <file>icons/azimuth.png</file>
     <file>icons/convang.png</file>
     <file>icons/declconv.png</file>

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 /***************************************************************************
- DSGTools Op
+ EBGeo
                                  A QGIS plugin
  Ferramentas para planejamento militar do Exército Brasileiro
                              -------------------
@@ -21,7 +21,7 @@
  This script initializes the plugin, making it known to QGIS.
 """
 
-from .dsgtoolsop import DSGToolsOp
+from .ebgeo import EBGeo
 
 def classFactory(iface):
-    return DSGToolsOp(iface)
+    return EBGeo(iface)

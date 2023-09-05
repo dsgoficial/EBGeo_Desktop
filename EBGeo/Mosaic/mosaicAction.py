@@ -9,7 +9,7 @@ class Mosaic(QtWidgets.QWidget):
     def __init__(self, iface):
         super(Mosaic, self).__init__()
         '''Constructor'''
-        processing.execAlgorithmDialog('DSGToolsOpProvider:mosaic')
+        processing.execAlgorithmDialog('EBGeoProvider:mosaic')
 
     def cancel(self):
         self.close()

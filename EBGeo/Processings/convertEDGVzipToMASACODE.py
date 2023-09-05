@@ -72,7 +72,7 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
             zip_ref.close()
             fileList = [i for i in glob.glob(f'{self.tempFolder}/**/*.shp')]
             processing.run(
-                "DSGToolsOpProvider:convertedgvtomasacode",
+                "EBGeoProvider:convertedgvtomasacode",
                 {
                     "INPUT": fileList,
                     "KEEP_ATTRIBUTES": keepAttributes,

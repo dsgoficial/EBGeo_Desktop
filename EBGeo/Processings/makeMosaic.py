@@ -115,7 +115,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
         return{self.OUTPUT: merged}
     
     def matchLayerAndFrame(self, inputFrame, layers):
-        frameLayer = processing.run('DSGToolsOpProvider:matchlayerandframe',
+        frameLayer = processing.run('EBGeoProvider:matchlayerandframe',
                 {
                     'INPUT_LAYERS': layers,
                     'INPUT_FRAME': inputFrame,

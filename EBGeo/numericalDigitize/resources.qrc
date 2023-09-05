@@ -1,5 +1,5 @@
 <RCC>
-  <qresource prefix="/plugins/DsgTools/DsgToolsOp/MilitaryTools/numericalDigitize">
+  <qresource prefix="/plugins/DsgTools/EbGeo/MilitaryTools/numericalDigitize">
    <!--icon made by Robert Szczepanek . Thanks Robert-->
     <file>vector-create-keyboard.png</file>
   </qresource>

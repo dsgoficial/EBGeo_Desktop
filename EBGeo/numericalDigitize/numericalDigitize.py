@@ -50,8 +50,8 @@ class NumericalDigitize:
       
   def initGui(self):
     # For i18n support
-    userPluginPath = QFileInfo(QgsApplication.qgisUserDatabaseFilePath()).path() + "/python/plugins/DsgTools/DsgToolsOp/MilitaryTools/numericalDigitize"
-    systemPluginPath = QgsApplication.prefixPath() + "/python/plugins/DsgTools/DsgToolsOp/MilitaryTools/numericalDigitize"
+    userPluginPath = QFileInfo(QgsApplication.qgisUserDatabaseFilePath()).path() + "/python/plugins/DsgTools/EbGeo/MilitaryTools/numericalDigitize"
+    systemPluginPath = QgsApplication.prefixPath() + "/python/plugins/DsgTools/EbGeo/MilitaryTools/numericalDigitize"
 
     overrideLocale = bool(QSettings().value("locale/overrideFlag", False, bool))
     if not overrideLocale:

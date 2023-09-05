@@ -7,7 +7,7 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=DSGTools Op
+name=EBGeo
 qgisMinimumVersion=3.22
 description=Ferramentas para planejamento militar do Exército Brasileiro
 version=2.2.2
@@ -138,9 +138,9 @@ changelog=
 # Tags are comma separated with spaces allowed
 tags=Exército,Brasileiro,DSG,Diretoria,Serviço,Geográfico,BDGEx,Militar
 
-homepage=http://bit.ly/dsgtoolsop
-tracker=https://github.com/dsgoficial/DSGToolsOp/issues
-repository=https://github.com/dsgoficial/DSGToolsOp
+homepage=http://bit.ly/ebgeo
+tracker=https://github.com/dsgoficial/EBGeo/issues
+repository=https://github.com/dsgoficial/EBGeo
 icon=icons/dsg.png
 # experimental flag
 experimental=False
