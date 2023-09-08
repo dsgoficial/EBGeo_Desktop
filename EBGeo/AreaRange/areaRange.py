@@ -107,9 +107,9 @@ class AreaRange(QObject):
         qid = QInputDialog()
         name_check = True
         while name_check:
-            input_name = QInputDialog.getText(qid, "Selecione a Camada", "Digite o nome da Camada de Pontos", QLineEdit.Normal)[0]
+            input_name = QInputDialog.getText(qid, "Selecione a Camada", "Digite o nome da Camada de Pontos contendo os campos 'Alcance', 'Azimute' e 'Abertura'", QLineEdit.Normal)[0]
             if not input_name:
-                return
+                return 
             layerlist = self.iface.mapCanvas().layers()
             for layer in layerlist:
                 if layer.name() == input_name:
@@ -146,21 +146,38 @@ class AreaRange(QObject):
             else:
                 continue
 
-    # Gerar aréa de alcance do armamento.
-    def generateArea(self, point, dist, azimuth, op_angle):
-        edge_pt_1 = QgsPointXY(point.x() + dist * (1 / cos(radians(op_angle / 2))) * sin(radians(azimuth + op_angle / 2)), point.y() + dist * (1 / cos(radians(op_angle / 2))) * cos(radians(azimuth + op_angle / 2)))
-        edge_pt_2 = QgsPointXY(point.x() + dist * (1 / cos(radians(op_angle / 2))) * sin(radians(azimuth - op_angle / 2)), point.y() + dist * (1 / cos(radians(op_angle / 2))) * cos(radians(azimuth - op_angle / 2)))
-        cut_polygon = QgsGeometry.fromWkt( 'Polygon(({} {}, {} {}, {} {}, {} {}))'.format(point.x(), point.y(), edge_pt_1.x(), edge_pt_1.y(),edge_pt_2.x(), edge_pt_2.y(), point.x(), point.y()))
-        point = QgsGeometry.fromPointXY(point)
-        buffered = point.buffer(dist, 20)
-        range_area = buffered.intersection(cut_polygon)
-        return range_area
+    # Gerar área de alcance do armamento.
+    def generateArea(self, point:QgsPointXY, dist, azimuth, op_angle):
+        if op_angle>=360:
+            p = QgsGeometry.fromPointXY(point)
+            return p.buffer(dist, 90)
+        divisions = 10+int(op_angle)+int(op_angle%2)
+        points = []
+        points.append(point)
+        for i in reversed(range(1, int(divisions/2+1))):
+            alpha = 360+azimuth-i*op_angle/divisions
+            xneg = point.x()+dist*(sin(radians(alpha)))
+            yneg = point.y()+dist*(cos(radians(alpha)))
+            pneg = QgsPointXY(xneg, yneg)
+            points.append(pneg)
+        for i in range(0, int(divisions/2)+1):
+            alpha = azimuth+i*op_angle/divisions
+            xpos = point.x()+dist*(sin(radians(alpha)))
+            ypos = point.y()+dist*(cos(radians(alpha)))
+            ppos = QgsPointXY(xpos, ypos)
+            points.append(ppos)
+        points.append(point)
+        poly = QgsGeometry.fromPolygonXY([points])
+        return poly
 
     # Realiza ações de gerenciamento do clique do mouse.
     def doWork(self, point, button):
         # Caso botão direito clicado:
         if button == QtCore.Qt.RightButton:
-            output_layer, dtprovider, activeLayer = self.getInputRightButton()
+            resultInput = self.getInputRightButton()
+            if not resultInput:
+                return
+            output_layer, dtprovider, activeLayer = resultInput
             for feature in activeLayer.getFeatures():
                 geo = QgsGeometry.asPoint(feature.geometry())
                 point = QgsPointXY(geo)
