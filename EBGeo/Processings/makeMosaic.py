@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from EBGeo.Utils.featureHandler import FeatureHandler
-from qgis.PyQt.Qt import QVariant
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsProject,
@@ -29,11 +28,7 @@ from qgis import processing
 class MakeMosaic(QgsProcessingAlgorithm): 
 
     INPUT_LAYERS = 'INPUT_LAYERS'
-    """INPUT_FRAME = 'INPUT_FRAME'"""
-    INPUT_NAME_FIELD = 'INPUT_NAME_FIELD'
-    CHECKBOX_MATCH_LAYERS = 'CHECKBOX_MATCH_LAYERS'
     STOP_SCALE = 'STOP_SCALE'
-    CHECKBOX_PCT = 'CHECKBOX_PCT'
     OUTPUT = 'OUTPUT'
 
     def initAlgorithm(self, config=None):
