@@ -1,25 +1,4 @@
 # -*- coding: utf-8 -*-
-'''
-/***************************************************************************
- EBGeo
-                                 A QGIS plugin
- Ferramentas para planejamento militar do Exército Brasileiro
-                             -------------------
-        begin                : 2017-01-01
-        copyright            : (C) 2017 by Diego Benincasa
-        email                : benincasa.diego@eb.mil.br
- ***************************************************************************/
-
-/***************************************************************************
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- ***************************************************************************/
-'''
-
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt import QtGui, QtCore, uic
 import os, sys, webbrowser
@@ -241,7 +220,7 @@ class EBGeo:
 
 		self.miA_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'findmiarea.png'),
-			text=u'Localizar carta topográfca (MI) por região',
+			text=u'Localizador de carta topográfca (MI) por região',
 			callback=self.loadDeterminarMIArea,
 			parent=self.ebGeo,
 			add_to_menu=False,

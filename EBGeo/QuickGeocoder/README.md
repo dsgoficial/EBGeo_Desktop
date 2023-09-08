@@ -1,7 +1,7 @@
 # Quick Geocoder
 ### QGIS 3 plugin for geocoding using many different API's and GeoPy
 
-![](https://img.shields.io/badge/development--version-0.1-brightgreen.svg) ![](https://img.shields.io/badge/stable--date-not--launched-orange.svg) ![](https://img.shields.io/badge/maintainer-diegobenincasa-blue.svg)
+![](https://img.shields.io/badge/development--version-0.1-brightgreen.svg) ![](https://img.shields.io/badge/stable--date-not--launched-orange.svg)
 ---
 This plugin is used to geocode a point layer using many different API's, or reverse-geocode a CSV addresses file (adress splitted into fields or not) to a point layer.
 
@@ -29,5 +29,5 @@ Remember to insert the required service parameters, or geocoding might fail.
 
 ### Contact
 For suggestions, opinions or general contact, stay in touch:
-- GitHub: http://github.com/diegobenincasa
-- E-mail: diego@diegobenincasa.com
+- GitHub: http://github.com/dsgoficial/EBGeo
+- E-mail: capacitacao@1cgeo.eb.mil.br
