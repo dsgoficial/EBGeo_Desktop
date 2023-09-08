@@ -1,13 +1,27 @@
 # -*- coding: utf-8 -*-
 
+from EBGeo.Utils.featureHandler import FeatureHandler
+from qgis.PyQt.Qt import QVariant
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
+                       QgsProject,
+                       QgsVectorLayer,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterMultipleLayers,
                        QgsProcessingParameterBoolean,
+                       QgsProcessingParameterEnum,
                        QgsProcessingParameterVectorLayer,
                        QgsFeatureRequest,
-                       QgsProcessingParameterFeatureSink,
+                       QgsField,
+                       QgsFields,
+                       QgsGeometry,
+                       QgsCoordinateTransform,
+                       QgsCoordinateReferenceSystem,
+                       QgsFeatureSink,
+                       QgsProcessingMultiStepFeedback,
+                       QgsFeature,
+                       QgsSpatialIndex,
+                       QgsProcessingParameterRasterDestination,
                        QgsProcessingParameterField
                        )
 from qgis import processing
@@ -15,75 +29,119 @@ from qgis import processing
 class MakeMosaic(QgsProcessingAlgorithm): 
 
     INPUT_LAYERS = 'INPUT_LAYERS'
-    INPUT_FRAME = 'INPUT_FRAME'
+    """INPUT_FRAME = 'INPUT_FRAME'"""
     INPUT_NAME_FIELD = 'INPUT_NAME_FIELD'
+    CHECKBOX_MATCH_LAYERS = 'CHECKBOX_MATCH_LAYERS'
+    STOP_SCALE = 'STOP_SCALE'
+    CHECKBOX_PCT = 'CHECKBOX_PCT'
     OUTPUT = 'OUTPUT'
 
     def initAlgorithm(self, config=None):
         self.addParameter(
             QgsProcessingParameterMultipleLayers(
-                'INPUT_LAYERS',
+                self.INPUT_LAYERS,
                 self.tr('Selecionar camadas'),
                 QgsProcessing.TypeRaster,
                 optional=False
             )
         )
+
+        self.scales = [
+            "250k",
+            "100k",
+            "50k",
+            "25k",
+        ]
+
         self.addParameter(
-            QgsProcessingParameterVectorLayer(
-                'INPUT_FRAME',
-                self.tr('Moldura'),
-                [QgsProcessing.TypeVectorPolygon]
+            QgsProcessingParameterEnum(
+                self.STOP_SCALE,
+                self.tr("Desired scale"),
+                options = self.scales,
+                defaultValue=0,
             )
         )
         
         self.addParameter(
-            QgsProcessingParameterBoolean(
-                'CHECKBOX_MATCH_LAYERS',
-                self.tr('Associar imagem e polígonos automaticamente'),
-                defaultValue = True
-            )
-        )
-        
-        self.addParameter(
-            QgsProcessingParameterField(
-                'INPUT_NAME_FIELD',
-                self.tr('Selecione o campo que informa o nome da camada correspondente ao poligono.'), 
-                type=QgsProcessingParameterField.String, 
-                parentLayerParameterName='INPUT_FRAME', 
-                allowMultiple=False, 
-                optional = False,)
-            )
-        
-        
-        
-        self.addParameter(
-            QgsProcessingParameterBoolean(
-                'CHECKBOX_PCT',
-                self.tr('Corrigir paleta, se necessário'),
-                defaultValue = True
-            )
-        )
-        
-        self.addParameter(
-            QgsProcessingParameterFeatureSink(
+            QgsProcessingParameterRasterDestination(
                 self.OUTPUT,
-                self.tr('Mosaico')
+                self.tr('Mosaico'),
             )
         ) 
         
     def processAlgorithm(self, parameters, context, feedback):      
         feedback.setProgressText('Construindo mosaico...')
-        layers = self.parameterAsLayerList(parameters,'INPUT_LAYERS', context)
-        inputFrame = self.parameterAsVectorLayer(parameters,'INPUT_FRAME', context)
-        nameField = self.parameterAsFields (parameters,'INPUT_NAME_FIELD', context)[0]
-        fixPct = self.parameterAsBool(parameters,'CHECKBOX_PCT', context)
-        matchLayers = self.parameterAsBool(parameters,'CHECKBOX_MATCH_LAYERS', context)
+        layers = self.parameterAsLayerList(parameters, self.INPUT_LAYERS, context)
+        stopScaleIdx = self.parameterAsEnum(parameters, self.STOP_SCALE, context)
+
+        featureHandler = FeatureHandler()
+        
+        # Scale
+        stopScale = self.scales[stopScaleIdx]
+        stopScale = int(stopScale.replace("k", ""))
+
+        # Crs raster layer
+        crs = layers[1].crs()
+        stringCrs = str(crs).split(" ")[1].split(">")[0]
+        rasterRange = QgsVectorLayer("Polygon?crs=" + stringCrs, "raster_range", "memory")
+        QgsProject.instance().addMapLayer(rasterRange)
+        inputFrame = QgsVectorLayer("Polygon?crs=" + stringCrs, "grid_poligono", "memory")
+        QgsProject.instance().addMapLayer(inputFrame)
+        inputFrame.startEditing()
+        
+        # x and y of rasters
+        coordX = []
+        coordY = []
+        for raster in layers:
+            extentRaster = raster.extent()
+            centerRaster = extentRaster.center()
+            xRaster = centerRaster.x()
+            yRaster = centerRaster.y()
+            coordX.append(xRaster)
+            coordY.append(yRaster)
+        sortedX = sorted(coordX)
+        sortedY = sorted(coordY)
+        xMin = sortedX[0]
+        xMax = sortedX[-1]
+        yMin = sortedY[0]
+        yMax = sortedY[-1]
+        feat = QgsFeature()
+        feat.setGeometry(QgsGeometry.fromWkt(f"POLYGON (({xMin} {yMin}, {xMin} {yMax}, {xMax} {yMax}, {xMax} {yMin}, {xMin} {yMin}))"))
+        rasterRange.startEditing()
+        rasterRange.addFeature(feat, QgsFeatureSink.FastInsert)
+        rasterRange.commitChanges()
+        crs = rasterRange.crs()
+        featureList = []
+        coordinateTransformer = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem(crs.geographicCrsAuthId()),
+            crs,
+            QgsProject.instance(),
+        )
+        featureHandler.getSystematicGridFeaturesWithConstraint(
+            featureList,
+            rasterRange,
+            stopScale,
+            coordinateTransformer,
+            xSubdivisions=1,
+            ySubdivisions=1,
+            feedback=feedback,
+        )
+        inputFrame.startEditing()
+        list(
+            map(
+                lambda x: inputFrame.addFeature(x, QgsFeatureSink.FastInsert),
+                featureList,
+            )
+        )
+
         frameGrid = inputFrame
-        if matchLayers:
-            frameLayer = self.matchLayerAndFrame(inputFrame, layers)
-            nameField = 'nome'
-            frameGrid = frameLayer
+        frameLayer = self.matchLayerAndFrame(inputFrame, layers)
+        nameField = 'nome'
+        frameGrid = frameLayer
         countGrid = frameGrid.featureCount()
+
+        QgsProject.instance().removeMapLayer(rasterRange.id())
+        QgsProject.instance().removeMapLayer(inputFrame.id())
         
         listLayerSize = len(layers)
         listSize = listLayerSize*countGrid+1
@@ -96,23 +154,22 @@ class MakeMosaic(QgsProcessingAlgorithm):
             for step,pctLayer in enumerate(layers):
                 if feedback.isCanceled():
                         return {self.OUTPUT: 'cancelado'}
-                rect = pctLayer.extent()
                 if (feat[nameField] == pctLayer.name()):
                     frameGrid.select(feat.id())
                     frameSelected = frameGrid.materialize(QgsFeatureRequest().setFilterFids(frameGrid.selectedFeatureIds()))
-                    if pctLayer.bandCount()==1 and fixPct:
+                    if pctLayer.bandCount() == 1:
                         rgbLayer = self.pctToRgb(context, feedback, pctLayer)
                     else:
-                        if fixPct and not pctLayer.bandCount()==1:
-                            feedback.setProgressText('Corrigir paleta está marcada, mas a imagem ' + pctLayer.name() + ' não tem apenas 1 banda, será considerada como RGB')
                         rgbLayer = pctLayer
                     clippedLayer = self.clipLayer(context, feedback, rgbLayer, frameSelected)
                     mergeLayers.append(clippedLayer)
                     frameGrid.removeSelection()
                 feedback.setProgress( ((i-1)*listLayerSize+step+1)  * progressStep )
             i+=1
-        merged = self.mergeAll(parameters, context, feedback, mergeLayers)
-        return{self.OUTPUT: merged}
+        merged = self.mergeAll(context, parameters, feedback, mergeLayers)
+        return{"OUTPUT": merged}
+    
+
     
     def matchLayerAndFrame(self, inputFrame, layers):
         frameLayer = processing.run('EBGeoProvider:matchlayerandframe',
@@ -136,7 +193,6 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 feedback=feedback)['OUTPUT']
         return rgbLayer
     def clipLayer(self, context, feedback, inputlayer, inputGrid):
-        
         clippedLayer = processing.run('gdal:cliprasterbymasklayer', 
                 {
                     'INPUT': inputlayer,
@@ -159,7 +215,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 context=context,
                 feedback=feedback)['OUTPUT']
         return clippedLayer
-    def mergeAll(self, parameters, context, feedback, mergeLayers):
+    def mergeAll(self, context, parameters, feedback, mergeLayers):
         rgbLayer =processing.run('gdal:merge', 
                 {
                     'INPUT': mergeLayers,
@@ -173,8 +229,8 @@ class MakeMosaic(QgsProcessingAlgorithm):
                     'OUTPUT': parameters['OUTPUT']
                 },
                 context=context,
-                feedback=feedback)['OUTPUT']
-        return rgbLayer
+                feedback=feedback)
+        return rgbLayer['OUTPUT']
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)
 
