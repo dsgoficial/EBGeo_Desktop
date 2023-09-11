@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>300</width>
-    <height>200</height>
+    <width>360</width>
+    <height>591</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -18,16 +18,16 @@
   </property>
   <property name="minimumSize">
    <size>
-    <width>300</width>
-    <height>200</height>
+    <width>302</width>
+    <height>332</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>Gerar azimute e distância</string>
   </property>
   <widget class="QWidget" name="dockWidgetContents">
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <item>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
      <layout class="QHBoxLayout" name="horizontalLayout">
       <item>
        <widget class="QPushButton" name="pointsButton">
@@ -37,6 +37,15 @@
         <property name="checkable">
          <bool>true</bool>
         </property>
+        <property name="autoRepeat">
+         <bool>true</bool>
+        </property>
+        <property name="autoExclusive">
+         <bool>false</bool>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">selecfina</string>
+        </attribute>
        </widget>
       </item>
       <item>
@@ -44,11 +53,21 @@
         <property name="text">
          <string>Finalizar</string>
         </property>
+        <attribute name="buttonGroup">
+         <string notr="true">selecfina</string>
+        </attribute>
        </widget>
       </item>
      </layout>
     </item>
-    <item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="label">
+      <property name="text">
+       <string>Formatação Ângulo</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
      <layout class="QHBoxLayout" name="horizontalLayout_2">
       <item>
        <widget class="QRadioButton" name="decimalButton">
@@ -58,6 +77,9 @@
         <property name="checked">
          <bool>true</bool>
         </property>
+        <attribute name="buttonGroup">
+         <string notr="true">formatacao</string>
+        </attribute>
        </widget>
       </item>
       <item>
@@ -65,11 +87,106 @@
         <property name="text">
          <string>Grau minuto segundo</string>
         </property>
+        <attribute name="buttonGroup">
+         <string notr="true">formatacao</string>
+        </attribute>
        </widget>
       </item>
      </layout>
     </item>
-    <item>
+    <item row="3" column="0">
+     <widget class="QLabel" name="label_2">
+      <property name="text">
+       <string>Delimitador</string>
+      </property>
+     </widget>
+    </item>
+    <item row="4" column="0">
+     <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <item>
+       <widget class="QRadioButton" name="virgulaButton">
+        <property name="text">
+         <string>Vírgula</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">delimitador</string>
+        </attribute>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="pontoButton">
+        <property name="text">
+         <string>Ponto</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">delimitador</string>
+        </attribute>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item row="5" column="0">
+     <widget class="QLabel" name="label_3">
+      <property name="text">
+       <string>Medidor</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="0">
+     <layout class="QHBoxLayout" name="horizontalLayout_4">
+      <item>
+       <widget class="QRadioButton" name="metrosButton">
+        <property name="text">
+         <string>Metros</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">medidor</string>
+        </attribute>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="grausButton">
+        <property name="text">
+         <string>Graus</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">medidor</string>
+        </attribute>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item row="8" column="0">
+     <layout class="QHBoxLayout" name="horizontalLayout_5">
+      <item>
+       <widget class="QPushButton" name="csvButton">
+        <property name="text">
+         <string>Exportar como CSV</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">exportar</string>
+        </attribute>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="txtButton">
+        <property name="text">
+         <string>Exportar como TXT</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">exportar</string>
+        </attribute>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item row="7" column="0">
      <widget class="QTreeWidget" name="mapList">
       <property name="enabled">
        <bool>true</bool>
@@ -121,16 +238,20 @@
       </column>
      </widget>
     </item>
-    <item>
-     <widget class="QPushButton" name="csvButton">
-      <property name="text">
-       <string>Exportar como CSV</string>
-      </property>
-     </widget>
-    </item>
    </layout>
   </widget>
  </widget>
  <resources/>
  <connections/>
+ <buttongroups>
+  <buttongroup name="exportar"/>
+  <buttongroup name="selecfina">
+   <property name="exclusive">
+    <bool>false</bool>
+   </property>
+  </buttongroup>
+  <buttongroup name="formatacao"/>
+  <buttongroup name="delimitador"/>
+  <buttongroup name="medidor"/>
+ </buttongroups>
 </ui>

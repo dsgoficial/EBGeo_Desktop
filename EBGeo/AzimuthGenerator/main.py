@@ -1,5 +1,19 @@
 # -*- coding: utf-8 -*-
-from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsVectorLayer, QgsGeometry, QgsProject, QgsRectangle, QgsGeometry, QgsMapLayer, QgsWkbTypes, QgsPointXY
+from qgis.core import (
+    QgsCoordinateTransform, 
+    QgsVectorLayer, 
+    QgsGeometry, 
+    QgsProject, 
+    QgsRectangle, 
+    QgsGeometry, 
+    QgsMapLayer, 
+    QgsWkbTypes, 
+    QgsPointXY,
+    QgsDistanceArea,
+    QgsCoordinateTransformContext,
+    QgsUnitTypes,
+    QgsCoordinateReferenceSystem,
+)
 from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker, QgsMapToolIdentifyFeature, QgsMapToolIdentify, QgsMapMouseEvent, QgsRubberBand
 from qgis.PyQt import uic, QtWidgets, QtCore
 from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QHeaderView
@@ -45,6 +59,8 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
 
     def initVariables(self):
         self.geomlist = []
+        self.crs = None
+        self.listFeatureId = list()
         self.canvas = self.iface.mapCanvas()
         self.myToolGeom = GeometryMapTool(self.canvas, self.iface)
         self.currentTool = self.canvas.mapTool()
@@ -53,8 +69,9 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.closeEvent = self.closeDock
         self.pointsButton.clicked.connect(self.getFromGeometry)
         self.myToolGeom.geometrySelected.connect(self.getWorkGeom)
-        self.FinishPointsButton.clicked.connect(self.getWorkPoints)
-        self.csvButton.clicked.connect(self.exportCsv) 
+        self.FinishPointsButton.pressed.connect(self.getWorkPoints)
+        self.csvButton.clicked.connect(self.exportCsv)
+        self.txtButton.clicked.connect(self.exportTxt)
 
     def getFromGeometry(self, state):
         if state:
@@ -62,8 +79,8 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             self.canvas.setMapTool(self.myToolGeom)
         else:
             self.canvas.unsetMapTool(self.myToolGeom)
-            self.clearLayersSelections()
             self.pointsButton.setChecked(False)
+            self.clearLayersSelections()
 
     def clearLayersSelections(self):
         layers = self.iface.mapCanvas().layers()
@@ -91,27 +108,63 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             azimuth = degrees(acos((pointList[i + 1].y() - pointList[i].y()) / dist))
             if pointList[i].x() > pointList[i + 1].x():
                 azimuth = 360 - azimuth
-            dist = round(dist, 3)
+            if self.metrosButton.isChecked():
+                if self.crs.isGeographic():
+                    distMetros = QgsDistanceArea()
+                    distMetros.setSourceCrs(self.crs, QgsCoordinateTransformContext())
+                    dist = distMetros.convertLengthMeasurement(dist, QgsUnitTypes.DistanceMeters)
+                    x = distMetros.convertLengthMeasurement(pointList[i].x(), QgsUnitTypes.DistanceMeters)
+                    y = distMetros.convertLengthMeasurement(pointList[i].y(), QgsUnitTypes.DistanceMeters)
+                else:
+                    x = pointList[i].x()
+                    y = pointList[i].y()
+                dist = round(dist, 3)
+            elif self.grausButton.isChecked():
+                if not self.crs.isGeographic():
+                    distGraus = QgsDistanceArea()
+                    distGraus.setSourceCrs(self.crs, QgsCoordinateTransformContext())
+                    dist = distGraus.convertLengthMeasurement(dist, QgsUnitTypes.DistanceDegrees)
+                    x = distGraus.convertLengthMeasurement(pointList[i].x(), QgsUnitTypes.DistanceDegrees)
+                    y = distGraus.convertLengthMeasurement(pointList[i].y(), QgsUnitTypes.DistanceDegrees)
+                else:
+                    x = pointList[i].x()
+                    y = pointList[i].y()
+                dist = round(dist, 8)
+            
             if self.decimalButton.isChecked():
-                azimuth = round(azimuth, 5)
+                azimuth = str(round(azimuth, 5)).replace(".", ",")
             elif self.dmsButton.isChecked():
                 azimuth = self.generateDMS(azimuth)
             if i == 0:
-                item = QTreeWidgetItem(['P' + str(i + 1), str(round(pointList[i].x(), 3)), str(round(pointList[i].y(), 3)), str(azimuth), str(dist), 'P' + str(i + 2)])
+                if self.virgulaButton.isChecked():
+                    item = QTreeWidgetItem(['P' + str(i + 1), str(round(x, 3)).replace(".", ","), str(round(y, 3)).replace(".", ","), azimuth.replace(".", ","), str(dist).replace(".", ","), 'P' + str(i + 2)])
+                elif self.pontoButton.isChecked():
+                    item = QTreeWidgetItem(['P' + str(i + 1), str(round(x, 3)), str(round(y, 3)), azimuth, str(dist), 'P' + str(i + 2)])
             else:
-                item = QTreeWidgetItem(['P' + str(i + 1), '', '', str(azimuth), str(dist), 'P' + str(i + 2)])
+                if self.virgulaButton.isChecked():
+                    item = QTreeWidgetItem(['P' + str(i + 1), '', '', azimuth.replace(".", ","), str(dist).replace(".", ","), 'P' + str(i + 2)])
+                elif self.virgulaButton.isChecked():
+                    item = QTreeWidgetItem(['P' + str(i + 1), '', '', azimuth, str(dist), 'P' + str(i + 2)])
             self.mapList.insertTopLevelItem(i, item)
 
-    def getWorkGeom(self, g):
+    def getWorkGeom(self, geomandcrs):
+        g, featureId, crs = geomandcrs
+        self.crs = crs
         if self.pointsButton.isChecked():
-            self.geomlist.append(g)
-            if self.geomlist[-1].type() in (1,2):
-                self.geomlist = []
-                self.geomlist.append(g)
-                self.pointsButton.toggle()
-            self.canvas.setMapTool(self.myToolGeom)
+            if len(self.listFeatureId) == 0:
+                self.analysisGeom(g, featureId)
+            elif featureId != self.listFeatureId[-1]:
+                self.analysisGeom(g, featureId)
         elif not self.geomlist:
             return
+
+    def analysisGeom(self, g, featureId):
+        self.geomlist.append(g)
+        self.listFeatureId.append(featureId)
+        if self.geomlist[-1].type() in (1,2):
+            self.geomlist = []
+            self.geomlist.append(g)
+        self.canvas.setMapTool(self.myToolGeom)
 
     def getWorkPoints(self):
         pointList = []
@@ -120,6 +173,8 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
                 pointList.append(point)
         self.geomlist = []
         self.doWork(pointList)
+        self.getFromGeometry(False)
+        self.listFeatureId= list()
 
     def exportCsv(self):
         fileDlg = QFileDialog()
@@ -138,12 +193,31 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         for i in range(0, self.mapList.topLevelItemCount()):
             csvFile.write(u'{};{};{};{};{};{}\n'.format(self.mapList.topLevelItem(i).data(0, 0), self.mapList.topLevelItem(i).data(1, 0), self.mapList.topLevelItem(i).data(2, 0), self.mapList.topLevelItem(i).data(3, 0), self.mapList.topLevelItem(i).data(4, 0), self.mapList.topLevelItem(i).data(5, 0)))
             
-        csvFile.close()    
+        csvFile.close()
+    
+    def exportTxt(self):
+        fileDlg = QFileDialog()
+        filePath = fileDlg.getSaveFileName(None, u"Selecionar arquivo de saída", "", u"Arquivo TXT (*.txt)")[0]
 
+        if filePath != "" and filePath[-4:].lower() != ".txt":
+            filePath += ".txt"
+        
+        if filePath != "":
+            txtFile = open(filePath, 'w')
+        else:
+            return
+        
+        txtFile.write(u'Ponto;X;Y;Azimute;Distancia;Destino\n')
+
+        for i in range(0, self.mapList.topLevelItemCount()):
+            txtFile.write(u'{};{};{};{};{};{}\n'.format(self.mapList.topLevelItem(i).data(0, 0), self.mapList.topLevelItem(i).data(1, 0), self.mapList.topLevelItem(i).data(2, 0), self.mapList.topLevelItem(i).data(3, 0), self.mapList.topLevelItem(i).data(4, 0), self.mapList.topLevelItem(i).data(5, 0)))
+
+        txtFile.close()
 
 class GeometryMapTool(QgsMapToolIdentifyFeature):
 
-    geometrySelected = pyqtSignal(QgsGeometry)
+    geometrySelected = pyqtSignal(list)
+    crsEmit = pyqtSignal(QgsCoordinateReferenceSystem)
 
     def __init__(self, canvas, iface):
         self.canvas = canvas
@@ -158,9 +232,8 @@ class GeometryMapTool(QgsMapToolIdentifyFeature):
             layer = found_features[0].mLayer
             layer.selectByIds([feature.id()])
             geometry = feature.geometry()
-            transformer = QgsCoordinateTransform(layer.crs(), self.canvas.mapSettings().destinationCrs(), QgsProject.instance())
-            geometry.transform(transformer)
+            featureId = feature.id()
         else: 
             return
 
-        self.geometrySelected.emit(geometry)
+        self.geometrySelected.emit([geometry, featureId, layer.crs()])
