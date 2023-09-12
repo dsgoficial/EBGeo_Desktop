@@ -1,9 +1,6 @@
 from qgis.PyQt.QtCore import QCoreApplication
-from qgis.core import (QgsProcessing, QgsWkbTypes, QgsVectorLayer,
-                       QgsFeatureSink, QgsProcessingException,
-                       QgsProcessingAlgorithm, QgsFields, QgsProcessingParameters,
-                       QgsProcessingParameterFeatureSource, QgsCoordinateReferenceSystem,
-                       QgsProcessingParameterFeatureSink, QgsProcessingParameterFile)
+from qgis.core import (QgsProcessing, QgsProcessingException,
+                       QgsProcessingAlgorithm, QgsProcessingParameterVectorLayer, QgsProcessingParameterFile)
 import os
 
 
@@ -31,10 +28,10 @@ class SimbMilAlgorithm(QgsProcessingAlgorithm):
         """
 
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
+            QgsProcessingParameterVectorLayer(
                 self.INPUT,
                 self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+                [QgsProcessing.TypeVectorPoint]
             )
         )
 
@@ -62,17 +59,13 @@ class SimbMilAlgorithm(QgsProcessingAlgorithm):
         # Get layer information
         layer = self.parameterAsLayer(parameters, self.INPUT, context)
         layer.startEditing()
-        selected_feats = layer.getFeatures()
-        attr = [ feat.attributes() for feat in selected_feats ]
         field_index = layer.fields().indexFromName('path')
-
-        # Add info in path column
-        for k in range(len(attr)):
-            path_destination = inputFolder + "\\" +  str((attr[k][0])) + '.svg'
-            if path_destination not in paths:
-                path_destination = 'NULL'
-            else:
-                layer.changeAttributeValue(k+1, field_index, path_destination)
+        for feat in layer.getFeatures():
+            path_destination_png = os.path.join(inputFolder, (str((feat['nome']))+'.png'))
+            path_destination_PNG = os.path.join(inputFolder, (str((feat['nome']))+'.PNG'))
+            if path_destination_png in paths or path_destination_PNG in paths:
+                path_destination = path_destination_png if path_destination_png in paths else path_destination_PNG
+                layer.changeAttributeValue(feat.id(), field_index, path_destination)
         
         layer.commitChanges()
         return {"OUTPUT": inputFolder}
@@ -85,7 +78,7 @@ class SimbMilAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return '2 - Carregar Simbologia Militar'
+        return 'Carregar Simbologia Militar'
 
     def displayName(self):
         """
@@ -116,7 +109,7 @@ class SimbMilAlgorithm(QgsProcessingAlgorithm):
     
     def shortHelpString(self):
         return self.tr("""
-        Selecione a camada criada no passo 1 - Criar Camada de Simbologia Militar Ponto e em seguida a pasta onde foram salvos os arquivos .svg
+        Selecione a camada de pontos de simbologia militar e em seguida a pasta onde foram salvos os arquivos .png, o arquivo deve ter o mesmo nome do campo 'nome'
         """)
 
     def createInstance(self):

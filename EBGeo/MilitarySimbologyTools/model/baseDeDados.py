@@ -13,63 +13,15 @@ class BaseDeDados(QObject):
 
     def initVariables(self):
         self.listName = {
-                    'tropa_a': u'Tropa aliada',
-                    'tropa_i': u'Tropa inimiga', 
-                    'limite_entre_fracoes_esquerdo': u'Limite entre frações - texto esquerdo',
-                    'limite_entre_fracoes_direito': u'Limite entre frações - texto direito',
-                    'linha_de_controle': u'Linha de controle',
-                    'eixo_de_direcao': u'Eixo de direcao',
-                    'armamento_a': u'Armamento aliado',
-                    'armamento_i': u'Armamento inimigo',
-                    'instalacao_orgao_a': u'Instalação ou órgão aliado', 
-                    'instalacao_orgao_i': u'Instalação ou órgão inimigo', 
-                    'nucleo_defesa': u'Núcleo de defesa',
-                    'objetivo': u'Objetivo',
-                    'ponto_coordenacao': u'Ponto de coordenação',
-                    'posto_observacao_a': u'Posto de observação aliado',  
-                    'posto_observacao_i': u'Posto de observação inimigo',
-                    'seta_situacao': u'Seta de situação',
-                    'area_coordenacao': u'Área de coordenação',
-                    'fortificacoes': u'Fortificações', 
-                    #'fortificacoes_ot': u'Fortificações - Trabahos de OT',
-                    'fortificacoes_pf': u'Fortificações - Pontos Fortes',
-                    #'obstaculos': u'Obstáculos',
-                    #'redes': u'Redes',
-                    #'fumaca': u'Fumaça',
-                    #'minas': u'Minas',
-                    #'campos_minados': u'Campos Minados',
-                    #'barreiras': u'Barreiras',
-                    'localizacao_comando_a': u'Localização de comando aliada',
-                    'localizacao_comando_i': u'Localização de comando inimiga',
-                    #'comunicacoes' : u'Comunicações',
-                    'concentracao_explosao' : u'Alvos',
-                    'ativ_isoladas': u'Atividades Isoladas',
                     'coord_ap_fogo': u'Coordenação de Apoio de Fogo',
-                    'veiculos': u'Veículos'
+                    'eixo_de_direcao': u'Eixo de direcao',
+                    'fortificacoes_pf': u'Fortificações - Pontos Fortes',
+                    'limite_entre_fracoes_direito': u'Limite entre frações - texto direito',
+                    'limite_entre_fracoes_esquerdo': u'Limite entre frações - texto esquerdo',
+                    'linha_de_controle': u'Linha de controle',
+                    'seta_situacao': u'Seta de situação',
+                    'simbolos_pontos': u'Símbolos (pontos)',
                    }
-        self.grupos = {
-           '1_calco_operacoes': {
-               'nome': u'CALCO DE OPERAÇÕES',
-               'classes': ['tropa_a', 'posto_observacao_a','armamento_a','limite_entre_fracoes_esquerdo','limite_entre_fracoes_direito', 'linha_de_controle', 'eixo_de_direcao', 'nucleo_defesa',
-                            'objetivo', 'ponto_coordenacao', 'medida_restritiva', 'area_coordenacao','seta_situacao','ativ_isoladas','veiculos']
-           },
-           '3_calco_logistica': {
-               'nome': u'CALCO DE APOIO LOGÍSTICO',
-               'classes': [ 'instalacao_orgao_a', 'localizacao_comando_a']
-           },
-           '2_calco_fogos': {
-               'nome': u'CALCO DE ALVOS DO PAF',
-               'classes': ['coord_ap_fogo', 'concentracao_explosao']
-           }, 
-           '4_plano_barreiras': {
-               'nome': u'PLANO DE BARREIRAS',
-               'classes': ['fortificacoes','fortificacoes_ot','fortificacoes_pf','obstaculos','redes','fumaca','minas','campos_minados','barreiras']
-           },		   
-           '5_calco_comu': {
-               'nome': u'CALCO DE COMUNICAÇÕES - DIAGRAMA DO SISTEMA MULTICANAL',
-               'classes': ['comunicacoes']
-           }
-        }
         self.Database = None
 
     def checkTableFromDatabase(self, tablename):
@@ -116,12 +68,7 @@ class BaseDeDados(QObject):
         fileName = fileNameFull.split('/')[-1].split('.')[0]
         root = QgsProject.instance().layerTreeRoot()
         self.groupMain = root.insertGroup(0, fileName)
-        symbolGroupA = self.groupMain.insertGroup(0, 'CALCO DE SITUACÃO DAS TROPAS ALIADAS')
-        symbolGroupE = self.groupMain.insertGroup(1, 'CALCO DE SITUACÃO DO INIMIGO')
         symbolGroupO = self.groupMain.insertGroup(2, 'OUTRAS CAMADAS')
-        subSimbol = {}
-        for key, value in self.grupos.items() :
-            subSimbol[key] = symbolGroupA.insertGroup(0, value['nome'])
         for name in self.getDataBaseLayerName():
             if name == 'limite_entre_fracoes':
                 workname = ['limite_entre_fracoes_esquerdo','limite_entre_fracoes_direito']
@@ -139,12 +86,7 @@ class BaseDeDados(QObject):
                         for labels in layer.labeling().rootRule().children():
                             if 'esquerda' in labels.description():
                                 labels.setActive(False)
-                    if i[-2:] == '_i':
-                        symbolGroupE.addLayer(layer)
-                    else:
-                        for key, value in self.grupos.items() :
-                            if i in value['classes']:
-                                subSimbol[key].addLayer(layer)
+                    self.groupMain.addLayer(layer)
                 elif i not in ['metadata', 'layer_styles']:
                     layer = QgsVectorLayer(self.Database + "|layername=" + i, i, 'ogr')
                     QgsProject.instance().addMapLayer(layer, False)
