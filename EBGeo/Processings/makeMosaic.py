@@ -27,11 +27,21 @@ from qgis import processing
 
 class MakeMosaic(QgsProcessingAlgorithm): 
 
+    INPUT_FRAME = 'INPUT_FRAME'
     INPUT_LAYERS = 'INPUT_LAYERS'
     STOP_SCALE = 'STOP_SCALE'
     OUTPUT = 'OUTPUT'
 
     def initAlgorithm(self, config=None):
+        self.addParameter(
+            QgsProcessingParameterVectorLayer(
+                self.INPUT_FRAME,
+                self.tr('Selecionar camada de moldura'),
+                [QgsProcessing.TypeVectorPolygon],
+                optional=True
+            )
+        )
+
         self.addParameter(
             QgsProcessingParameterMultipleLayers(
                 self.INPUT_LAYERS,
@@ -68,15 +78,56 @@ class MakeMosaic(QgsProcessingAlgorithm):
         feedback.setProgressText('Construindo mosaico...')
         layers = self.parameterAsLayerList(parameters, self.INPUT_LAYERS, context)
         stopScaleIdx = self.parameterAsEnum(parameters, self.STOP_SCALE, context)
+        inputFrameUser = self.parameterAsVectorLayer(parameters, self.INPUT_FRAME, context)
 
         featureHandler = FeatureHandler()
         
         # Scale
         stopScale = self.scales[stopScaleIdx]
         stopScale = int(stopScale.replace("k", ""))
+        crs = layers[1].crs()
 
         # Crs raster layer
-        crs = layers[1].crs()
+        if not inputFrameUser or inputFrameUser.featureCount()==0:
+            inputFrame = self.getInputFrame(crs, layers, featureHandler, stopScale, feedback)
+        else:
+            inputFrame = self.reprojectLayer(inputFrameUser, crs)
+
+        frameLayer = self.matchLayerAndFrame(inputFrame, layers)
+        nameField = 'nome'
+        frameGrid = frameLayer
+        countGrid = frameGrid.featureCount()
+
+        if not inputFrameUser or inputFrameUser.featureCount()==0:
+            QgsProject.instance().removeMapLayer(inputFrame.id())
+        
+        listLayerSize = len(layers)
+        listSize = listLayerSize*countGrid+1
+        progressStep = 100/listSize if listSize else 0
+        
+        mergeLayers = []
+        i=1
+        for feat in frameGrid.getFeatures():
+            frameGrid.removeSelection()
+            for step,pctLayer in enumerate(layers):
+                if feedback.isCanceled():
+                        return {self.OUTPUT: 'cancelado'}
+                if (feat[nameField] == pctLayer.name()):
+                    frameGrid.select(feat.id())
+                    frameSelected = frameGrid.materialize(QgsFeatureRequest().setFilterFids(frameGrid.selectedFeatureIds()))
+                    if pctLayer.bandCount() == 1:
+                        rgbLayer = self.pctToRgb(context, feedback, pctLayer)
+                    else:
+                        rgbLayer = pctLayer
+                    clippedLayer = self.clipLayer(context, feedback, rgbLayer, frameSelected)
+                    mergeLayers.append(clippedLayer)
+                    frameGrid.removeSelection()
+                feedback.setProgress( ((i-1)*listLayerSize+step+1)  * progressStep )
+            i+=1
+        merged = self.mergeAll(context, parameters, feedback, mergeLayers)
+        return{"OUTPUT": merged}
+
+    def getInputFrame(self, crs, layers, featureHandler, stopScale, feedback):
         stringCrs = str(crs).split(" ")[1].split(">")[0]
         rasterRange = QgsVectorLayer("Polygon?crs=" + stringCrs, "raster_range", "memory")
         QgsProject.instance().addMapLayer(rasterRange)
@@ -128,41 +179,8 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 featureList,
             )
         )
-
-        frameGrid = inputFrame
-        frameLayer = self.matchLayerAndFrame(inputFrame, layers)
-        nameField = 'nome'
-        frameGrid = frameLayer
-        countGrid = frameGrid.featureCount()
-
         QgsProject.instance().removeMapLayer(rasterRange.id())
-        QgsProject.instance().removeMapLayer(inputFrame.id())
-        
-        listLayerSize = len(layers)
-        listSize = listLayerSize*countGrid+1
-        progressStep = 100/listSize if listSize else 0
-        
-        mergeLayers = []
-        i=1
-        for feat in frameGrid.getFeatures():
-            frameGrid.removeSelection()
-            for step,pctLayer in enumerate(layers):
-                if feedback.isCanceled():
-                        return {self.OUTPUT: 'cancelado'}
-                if (feat[nameField] == pctLayer.name()):
-                    frameGrid.select(feat.id())
-                    frameSelected = frameGrid.materialize(QgsFeatureRequest().setFilterFids(frameGrid.selectedFeatureIds()))
-                    if pctLayer.bandCount() == 1:
-                        rgbLayer = self.pctToRgb(context, feedback, pctLayer)
-                    else:
-                        rgbLayer = pctLayer
-                    clippedLayer = self.clipLayer(context, feedback, rgbLayer, frameSelected)
-                    mergeLayers.append(clippedLayer)
-                    frameGrid.removeSelection()
-                feedback.setProgress( ((i-1)*listLayerSize+step+1)  * progressStep )
-            i+=1
-        merged = self.mergeAll(context, parameters, feedback, mergeLayers)
-        return{"OUTPUT": merged}
+        return inputFrame
     
 
     
@@ -174,6 +192,15 @@ class MakeMosaic(QgsProcessingAlgorithm):
                     'OUTPUT': 'TEMPORARY_OUTPUT'
                 })['OUTPUT']
         return frameLayer
+    
+    def reprojectLayer(self, layer, crs):
+        reprojLayer = processing.run('native:reprojectlayer',
+                {
+                    'INPUT': layer,
+                    'TARGET_CRS': crs,
+                    'OUTPUT': 'TEMPORARY_OUTPUT'
+                })['OUTPUT']
+        return reprojLayer
         
     
     def pctToRgb(self, context, feedback, inputlayer):
