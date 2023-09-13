@@ -10,30 +10,39 @@ from math import *
 
 class AzimuthTool(QObject):
 
-    def __init__(self, iface):
+    def __init__(self, iface: QgisInterface):
         QObject.__init__(self)
         self.iface = iface
         self.canvas = self.iface.mapCanvas()
         self.initVariables()
         self.initSignals()
 
-    def initGui(self):
-        iconPath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icons', 'azimuth.png')
-        self.enableAction = QAction( QIcon(iconPath), u"Ativar criação de ponto por azimute e distância", self.iface.mainWindow())
-        self.enableAction.setCheckable(True)
-        self.toolbar = self.iface.addToolBar(u'Criação de ponto por azimute e distância')
-        self.toolbar.addAction(self.enableAction)
-        self.enableAction.changed.connect(self.maptoolChanged)
+    def initGui(self, az_action):
+        self.az_action = az_action
+        self.loadUnload(True)
 
     def unload(self):
-        self.toolbar.removeAction(self.enableAction)
-        del self.toolbar
+        self.loadUnload(False)
 
-    def maptoolChanged(self):
-        if self.enableAction.isChecked():
+    def loadUnload(self, ver):
+        if ver:
             self.canvas.setMapTool(self.myTool)
+            self.canvas.mapToolSet.connect(self.maptoolChanged)
         else:
             self.canvas.unsetMapTool(self.myTool)
+            try:
+                self.canvas.mapToolSet.disconnect(self.maptoolChanged)
+            except TypeError:
+                pass
+            try:
+                self.myTool.canvasClicked.disconnect(self.maptoolChanged)
+            except TypeError:
+                pass
+            self.az_action.setChecked(False)
+
+    def maptoolChanged(self, m1):
+        if not bool(m1==self.myTool):
+            self.loadUnload(False)
 
     def initVariables(self):
         self.myTool = QgsMapToolEmitPoint(self.canvas)

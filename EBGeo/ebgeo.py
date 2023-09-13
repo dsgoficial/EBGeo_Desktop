@@ -396,7 +396,7 @@ class EBGeo:
         Adds icons to toolbar for creating points from given point, distance and azymuth
         """
 		if self.az_action.isChecked():
-			self.mainAzimuthTool.initGui()
+			self.mainAzimuthTool.initGui(self.az_action)
 		else:
 			self.mainAzimuthTool.unload()
 			
