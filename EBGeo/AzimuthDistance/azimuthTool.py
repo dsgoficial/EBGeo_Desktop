@@ -50,6 +50,7 @@ class AzimuthTool(QObject):
             while dist_check:
                 inp_dist = QInputDialog.getText(qid, "Digite a distância", "Distância (unidades da camada): ", QLineEdit.Normal)[0]
                 if not inp_dist:
+                    self.calculating = False
                     return
                 try:
                     dist = float(inp_dist.replace(",", "."))
@@ -59,6 +60,7 @@ class AzimuthTool(QObject):
             while ang_check:
                 inp_ang = QInputDialog.getText(qid, "Digite o azimute", "Azimute (GG.MM.SS,SSS, GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
                 if not inp_ang:
+                    self.calculating = False
                     return
                 if len(inp_ang.split(".")) == 3:
                     try:
@@ -82,13 +84,12 @@ class AzimuthTool(QObject):
         bufferRect = QgsRectangle(point.x() - d, point.y() - d, point.x() + d, point.y() + d)
         layerlist = self.iface.mapCanvas().layers()
         for layer in layerlist:
+            if not isinstance(layer, QgsVectorLayer):
+                continue
             if layer.geometryType() == 0:
                 for feature in layer.getFeatures():
                     transf = QgsCoordinateTransform(layer.crs(), self.canvas.mapSettings().destinationCrs(), QgsProject.instance())
-                    if feature.geometry().isMultipart():
-                        workgeom = feature.geometry().coerceToType(1)[0].asPoint()
-                    else:
-                        workgeom = feature.geometry().asPoint()
+                    workgeom = self.getWorkgeom(feature)
                     geom = QgsPoint(workgeom)
                     geom.transform(transf)
                     geom = QgsGeometry.fromPointXY(QgsPointXY(geom))
@@ -97,25 +98,35 @@ class AzimuthTool(QObject):
             else:
                 continue
 
+    def getWorkgeom(self, feature):
+        if feature.geometry().isMultipart():
+            workgeom = feature.geometry().coerceToType(1)[0].asPoint()
+        else:
+            workgeom = feature.geometry().asPoint()
+        return workgeom
+
     def doWork(self, point, button):
         if button == QtCore.Qt.LeftButton:
+            self.calculating = True
             layerFeat = self.getLayerFeature(point)
             if not layerFeat:
                 return
             else:
                 worklayer, workgeom = layerFeat
-            inputs = self.getInput()
-            if not inputs:
-                return
-            else:
-                d, ang = inputs
-            pt_new = QgsPointXY(workgeom.x() + d * sin(radians(ang)), workgeom.y() + d * cos(radians(ang)))
-            feat_new = QgsFeature()
-            feat_new.setGeometry(QgsGeometry.fromPointXY(pt_new))
-            worklayer.startEditing()
-            worklayer.dataProvider().addFeatures([feat_new])
-            worklayer.triggerRepaint()
-            QMessageBox.information(None , u"Aviso", u"Ponto criado com\n\nAzimute: {} º\n\nDistância: {}".format(ang, d))
+            while self.calculating:
+                inputs = self.getInput()
+                if not inputs:
+                    return
+                else:
+                    d, ang = inputs
+                pt_new = QgsPointXY(workgeom.x() + d * sin(radians(ang)), workgeom.y() + d * cos(radians(ang)))
+                feat_new = QgsFeature()
+                feat_new.setGeometry(QgsGeometry.fromPointXY(pt_new))
+                worklayer.startEditing()
+                worklayer.addFeature(feat_new)
+                worklayer.triggerRepaint()
+                QMessageBox.information(None , u"Aviso", u"Ponto criado com\n\nAzimute: {} º\n\nDistância: {}".format(ang, d))
+                workgeom = self.getWorkgeom(feat_new)
             return
         else:
             return
