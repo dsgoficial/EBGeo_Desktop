@@ -8,7 +8,7 @@ import os
 
 class AreaRange(QObject):
 
-    def __init__(self, iface):
+    def __init__(self, iface: QgisInterface):
         QObject.__init__(self)
         self.iface = iface
         self.canvas = self.iface.mapCanvas()
@@ -16,23 +16,32 @@ class AreaRange(QObject):
         self.initSignals()
 
     # Definir caminho de imagem e texto auxiliar.
-    def initGui(self):
-        iconPath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icons', 'arearange.png')
-        self.enableAction = QAction(QIcon(iconPath), u"Ativar geração de área de alcance de armamento", self.iface.mainWindow())
-        self.enableAction.setCheckable(True)
-        self.toolbar = self.iface.addToolBar(u'Alcance do Armamento')
-        self.toolbar.addAction(self.enableAction)
-        self.enableAction.changed.connect(self.maptoolChanged)
-
+    def initGui(self, ar_action):
+        self.ar_action = ar_action
+        self.loadUnload(True)
+    
     def unload(self):
-        self.toolbar.removeAction(self.enableAction)
-        del self.toolbar
+        self.loadUnload(False)
 
-    def maptoolChanged(self):
-        if self.enableAction.isChecked():
+    def loadUnload(self, ver):
+        if ver:
             self.canvas.setMapTool(self.myTool)
+            self.canvas.mapToolSet.connect(self.maptoolChanged)
         else:
             self.canvas.unsetMapTool(self.myTool)
+            try:
+                self.canvas.mapToolSet.disconnect(self.maptoolChanged)
+            except TypeError:
+                pass
+            try:
+                self.myTool.canvasClicked.disconnect(self.maptoolChanged)
+            except TypeError:
+                pass
+            self.ar_action.setChecked(False)
+
+    def maptoolChanged(self, m1):
+        if not bool(m1 == self.myTool):
+            self.loadUnload(False)
 
     def initVariables(self):
         self.myTool = QgsMapToolEmitPoint(self.canvas)

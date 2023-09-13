@@ -405,7 +405,7 @@ class EBGeo:
         Adds icons to toolbar for generating gun range area
         """
 		if self.ar_action.isChecked():
-			self.mainAreaRange.initGui()
+			self.mainAreaRange.initGui(self.ar_action)
 		else:
 			self.mainAreaRange.unload()
 
