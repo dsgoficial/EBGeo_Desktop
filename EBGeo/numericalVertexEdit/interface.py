@@ -1,7 +1,7 @@
 import os
 from math import copysign
 from qgis.PyQt import uic, QtGui, QtCore, QtWidgets
-from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsProject
+from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsProject, Qgis
 from qgis.PyQt.QtWidgets import QDialogButtonBox
 from qgis.utils import iface
 
@@ -28,7 +28,7 @@ class Interface(QtWidgets.QDialog, GUI):
     
     def setCoords(self, coords):
         self.coords = coords
-        if self.coords[2].isGeographic() == True:
+        if self.coords[2].isGeographic():
             self.coords[1] = self.conv_dec_gms(float(str(self.coords[1])))
             self.coords[0] = self.conv_dec_gms(float(str(self.coords[0])))
         self.latitudeEdit.setText(str(self.coords[1]))
@@ -63,16 +63,17 @@ class Interface(QtWidgets.QDialog, GUI):
         return conv_exp_str
 
     def sendCoords(self):
-        if self.projectionCombo.crs().isGeographic() == True:
+        if self.projectionCombo.crs().isGeographic():
             self.longitudeEdit.setText(self.conv_gms_dec(self.longitudeEdit.text()))
             self.latitudeEdit.setText(self.conv_gms_dec(self.latitudeEdit.text()))
+        if not self.longitudeEdit.text().replace('.','',1).isdigit() or not self.latitudeEdit.text().replace('.','',1).isdigit():
+                iface.messageBar().pushMessage("Error", "Confira se os valores inseridos nos campos de latitude e longitude são compatíveis com o sistema de coordenadas selecionado no campo SRC.", level=Qgis.Critical)
+                return
         x = float(self.longitudeEdit.text())
         y = float(self.latitudeEdit.text())
         point = QgsPointXY(x, y)
         newCrs = self.projectionCombo.crs()
-        transformer = QgsCoordinateTransform(newCrs, self.coords[2], QgsProject.instance())
-        newPoint = transformer.transform(point)
-        self.finished.emit(newPoint, newCrs)
+        self.finished.emit(point, newCrs)
         
     def removeSelection(self):
         self.iface.mapCanvas().currentLayer().selectByIds([])
