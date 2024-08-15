@@ -55,6 +55,20 @@
         </property>
        </widget>
       </item>
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Link para criar simbologia militar: &lt;a href=&quot;https://simbologia.eb.mil.br/&quot;&gt;&lt;span style=&quot; color:#0000ff;&quot;/&gt;&lt;/a&gt;&lt;a href=&quot;https://simbologia.eb.mil.br/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0000ff;&quot;&gt;Portal de Simbologia Militar&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="openExternalLinks">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
