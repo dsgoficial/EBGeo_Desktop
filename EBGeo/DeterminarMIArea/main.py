@@ -8,11 +8,18 @@ from .interface_dialog import InterfaceDialog
 from .find_dialog import FindDialog
 import processing, os, requests, tempfile, string, math, csv
 from osgeo import gdal
+import os
+import webbrowser
+import json
 from PIL import Image
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'detMIArea_dockwidget_base.ui'))
 
+def carregarjson(caminho_arquivo, objeto):
+        with open(caminho_arquivo, 'r') as arquivo:
+            dados = json.load(arquivo)
+            return dados.get(objeto)
 
 class Main(QtWidgets.QDockWidget, FORM_CLASS):
 
@@ -62,13 +69,14 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.closeEvent = self.closeDock
         self.boxButton.clicked.connect(self.getFromBox)
         self.geometryButton.clicked.connect(self.getFromGeometry)
+        self.tutorialButton.clicked.connect(self.getFromTutorial)
         self.myToolBox.boxCreated.connect(self.findDialog)
         self.myToolGeom.geometrySelected.connect(self.findDialog)
         self.dialogFind.finished.connect(self.doWorkBox)
         self.downloadButton.clicked.connect(self.selectScale)
         self.dialog.finished.connect(self.downloadMaps)
         self.txtButton.clicked.connect(self.exportTxt)
-        self.csvButton.clicked.connect(self.exportCsv) 
+        self.csvButton.clicked.connect(self.exportCsv)
 
     def getFromBox(self, state):
         if state:
@@ -91,6 +99,16 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         else:
             self.canvas.unsetMapTool(self.myToolGeom)
             self.clearLayersSelections()
+
+    def getFromTutorial(self):
+        objeto='tutorial_link'
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file = os.path.join(script_dir, 'links.json')
+        url = carregarjson(file, objeto)
+        if url:
+            webbrowser.open(url)
+        else:
+            print("URL não encontrado.")
 
     def clearLayersSelections(self):
         layers = self.iface.mapCanvas().layers()
