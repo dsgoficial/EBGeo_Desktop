@@ -322,10 +322,10 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
 
     def openFiles(self):
         filePath = os.path.dirname(os.path.dirname(__file__))
-        filePath250 = os.path.join(filePath, "auxiliar", "csv", "MIR250.csv")
-        filePath100 = os.path.join(filePath, "auxiliar", "csv", "MI100.csv")
-        pathCsvExceptions25k = os.path.join(filePath, "auxiliar", "csv", "exclusionList25k.csv")
-        pathCsvExceptions50k = os.path.join(filePath, "auxiliar", "csv", "exclusionList50k.csv")
+        filePath250 = os.path.join(filePath, "Auxiliar", "csv", "MIR250.csv")
+        filePath100 = os.path.join(filePath, "Auxiliar", "csv", "MI100.csv")
+        pathCsvExceptions25k = os.path.join(filePath, "Auxiliar", "csv", "exclusionList25k.csv")
+        pathCsvExceptions50k = os.path.join(filePath, "Auxiliar", "csv", "exclusionList50k.csv")
         with open(filePath250, 'r') as file:
             self.file250 = {x[0]: x[1] for x in csv.reader(file, delimiter=';')}
         with open(filePath100, 'r') as file:

@@ -1,12 +1,12 @@
 # -*- coding: UTF-8 -*-
 import os
 import processing
+from ..Auxiliar.sunposition.sunposition import sunpos
 from qgis.PyQt import QtGui, uic, QtCore, QtWidgets
 from qgis.PyQt.QtCore import QDateTime
 from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsMapLayerProxyModel, QgsRasterLayer
 from qgis.PyQt.QtWidgets import QMessageBox
-from ..auxiliar.sunposition.sunposition import sunpos
 
 GUI, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'window.ui'))

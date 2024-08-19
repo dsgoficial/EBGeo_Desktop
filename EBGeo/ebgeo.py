@@ -1,25 +1,35 @@
 # -*- coding: utf-8 -*-
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt import QtGui, QtCore, uic
 import os, sys, webbrowser
 from qgis.utils import iface
 from qgis.core import QgsMapLayer, QgsProject, QgsApplication
-from qgis.PyQt.QtWidgets import QToolBar, QAction, QMessageBox, QMenu
+from qgis.PyQt.QtWidgets import QAction, QMessageBox, QMenu
 from qgis.PyQt.QtGui import QIcon
 from .BDGEx.bdgexGuiManager import BDGExGuiManager
 from .Processings.pluginProvider import pluginProvider
+from qgis.gui import QgisInterface
+from qgis.PyQt.QtCore import pyqtSignal, QObject
+from qgis.core import QgsVectorLayer
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'auxiliar'))
+# sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'auxiliar'))
 
-class EBGeo:
-	def __init__(self, iface):
+class EBGeo(QObject):
+
+	editingStarted = pyqtSignal()
+	editingStopped = pyqtSignal()
+
+	def __init__(self, iface: QgisInterface):
+		super(EBGeo, self).__init__()
 		self.iface = iface
+		self.currentLayer = None
+		self.resetCurrentLayerSignals()
+		self.iface.currentLayerChanged.connect(self.resetCurrentLayerSignals)
 		self.actions = []
     	
 	def initGui(self):
 		self.initVariables()
 		self.loadTools()
 		pluginProvider.initProcessing(self)
+		self.initiateToolsSignals()
 
 	def initPlugin(self):
 		pass
@@ -33,6 +43,17 @@ class EBGeo:
 		self.menuBar.insertMenu(self.iface.firstRightStandardMenu().menuAction(), self.ebGeo)
 
 	def unload(self):
+		self.iface.currentLayerChanged.disconnect(self.resetCurrentLayerSignals)
+		for tool in [
+			self.measureTool,
+		]:
+			# connect current layer changed signal to all tools that use it
+			self.iface.currentLayerChanged.disconnect(tool.setToolEnabled)
+			# connect editing started/stopped signals to all tools that use it
+			self.editingStarted.disconnect(tool.setToolEnabled)
+			self.editingStopped.disconnect(tool.setToolEnabled)
+			# connect edit button toggling signal to all tools that use it
+			self.iface.actionToggleEditing().triggered.disconnect(tool.setToolEnabled)
 		QgsApplication.processingRegistry().removeProvider(self.provider)
 		for action in self.actions:
 			self.iface.removePluginMenu(u'EBGeo',	action)
@@ -206,17 +227,17 @@ class EBGeo:
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.auc_action)
 
+		from .measureTool.measureTool import MeasureTool as Main_MeasureTool
+		self.measureTool = Main_MeasureTool(iface)
 		self.mt_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'measuretool.png'),
 			text=u'Medição durante aquisição vetorial',
-			callback=self.loadMeasureTool,
+			callback=self.measureTool.activateTool,
 			parent=self.ebGeo,
 			add_to_menu=False,
 			add_to_toolbar=False)
-		self.mt_action.setCheckable(True)
+		self.measureTool.setAction(self.mt_action)
 		self.ebGeo.addAction(self.mt_action)
-		from .measureTool.measureTool import MeasureTool as Main_MeasureTool
-		self.mainMeasureTool = Main_MeasureTool(iface)
 
 		self.miA_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'findmiarea.png'),
@@ -346,15 +367,6 @@ class EBGeo:
 		dlg.setGeometry(700, 500, 100, 50)
 		if dlg:
 			dlg.show()
-
-	def loadMeasureTool(self):
-		"""
-        Add icons to toolbar for measuring features during their acquisition
-        """
-		if self.mt_action.isChecked():
-			self.mainMeasureTool.initGui()
-		else:
-			self.mainMeasureTool.unload()
         
 	def loadProfileTool(self):
 		"""
@@ -451,3 +463,35 @@ class EBGeo:
 		from .About.about import About
 		dialogAbout = About()
 		dialogAbout.exec_()
+	
+	def initiateToolsSignals(self):
+		"""
+        Connects all maptools' signals.
+        """
+		for tool in [ #adicionar mapTools
+            self.measureTool, 
+        ]:
+            # connect current layer changed signal to all tools that use it
+			self.iface.currentLayerChanged.connect(tool.setToolEnabled)
+			# connect editing started/stopped signals to all tools that use it
+			self.editingStarted.connect(tool.setToolEnabled)
+			self.editingStopped.connect(tool.setToolEnabled)
+			# connect edit button toggling signal to all tools that use it
+			self.iface.actionToggleEditing().triggered.connect(tool.setToolEnabled)
+
+	def resetCurrentLayerSignals(self):
+		"""
+		Resets all signals used from current layer connected to maptools to current selection.
+		"""
+		if isinstance(self.currentLayer, QgsVectorLayer):
+			# disconnect previous selection's signals, if any
+			try:
+				self.currentLayer.editingStarted.disconnect(self.editingStarted)
+				self.currentLayer.editingStopped.disconnect(self.editingStopped)
+			except:
+				pass
+		# now retrieve current selection and reset signal connection
+		self.currentLayer = self.iface.mapCanvas().currentLayer()
+		if isinstance(self.currentLayer, QgsVectorLayer):
+			self.currentLayer.editingStarted.connect(self.editingStarted)
+			self.currentLayer.editingStopped.connect(self.editingStopped)

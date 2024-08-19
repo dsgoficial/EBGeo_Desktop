@@ -39,7 +39,7 @@ from qgis.gui import QgsMessageBar
 import os, sys
 #print(os.path.join(os.path.dirname(os.path.abspath(__file__)),'dependencies'))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'dependencies'))
-from ..auxiliar.geopy.geocoders import *
+from ..Auxiliar.geopy.geocoders import *
 
 # CSV parsing lib
 import csv

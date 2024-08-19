@@ -5,7 +5,7 @@ from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsExpressionContextUtils
-from ...auxiliar import geomag  # @UnresolvedImport
+from ...Auxiliar import geomag  # @UnresolvedImport
 import math
 
 GUI, _ = uic.loadUiType(os.path.join(
