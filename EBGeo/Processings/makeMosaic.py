@@ -106,26 +106,29 @@ class MakeMosaic(QgsProcessingAlgorithm):
         progressStep = 100/listSize if listSize else 0
         
         mergeLayers = []
-        i=1
+        i = 1
+        multiStepFeedback = QgsProcessingMultiStepFeedback(listSize, feedback)
+
         for feat in frameGrid.getFeatures():
             frameGrid.removeSelection()
-            for step,pctLayer in enumerate(layers):
-                if feedback.isCanceled():
-                        return {self.OUTPUT: 'cancelado'}
+            for step, pctLayer in enumerate(layers):
+                if multiStepFeedback.isCanceled():
+                    return {self.OUTPUT: 'cancelado'}
                 if (feat[nameField] == pctLayer.name()):
                     frameGrid.select(feat.id())
                     frameSelected = frameGrid.materialize(QgsFeatureRequest().setFilterFids(frameGrid.selectedFeatureIds()))
                     if pctLayer.bandCount() == 1:
-                        rgbLayer = self.pctToRgb(context, feedback, pctLayer)
+                        rgbLayer = self.pctToRgb(context, multiStepFeedback, pctLayer)
                     else:
                         rgbLayer = pctLayer
-                    clippedLayer = self.clipLayer(context, feedback, rgbLayer, frameSelected)
+                    clippedLayer = self.clipLayer(context, multiStepFeedback, rgbLayer, frameSelected)
                     mergeLayers.append(clippedLayer)
                     frameGrid.removeSelection()
-                feedback.setProgress( ((i-1)*listLayerSize+step+1)  * progressStep )
-            i+=1
-        merged = self.mergeAll(context, parameters, feedback, mergeLayers)
-        return{"OUTPUT": merged}
+                multiStepFeedback.setCurrentStep((i-1)*listLayerSize + step + 1)
+            i += 1
+
+        merged = self.mergeAll(context, parameters, multiStepFeedback, mergeLayers)
+        return {"OUTPUT": merged}
 
     def getInputFrame(self, crs, layers, featureHandler, stopScale, feedback):
         stringCrs = str(crs).split(" ")[1].split(">")[0]
