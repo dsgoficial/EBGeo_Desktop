@@ -69,7 +69,7 @@ class AzimuthTool(QObject):
                 except:
                     QMessageBox.critical(None , u"Erro", u"Entre um valor numérico para a distância.")
             while ang_check:
-                inp_ang = QInputDialog.getText(qid, "Digite o azimute", "Azimute (GG.MM.SS,SSS, GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
+                inp_ang = QInputDialog.getText(qid, "Digite o azimute", "Azimute (GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
                 if not inp_ang:
                     self.calculating = False
                     return

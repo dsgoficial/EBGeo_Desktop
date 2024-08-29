@@ -50,7 +50,7 @@
          </sizepolicy>
         </property>
         <property name="text">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;justify&quot;&gt;Selecione um arquivo csv com, pelo menos, os campos&lt;br/&gt;&lt;/p&gt;&lt;p align=&quot;justify&quot;&gt;Azimute (GG.MM.SS,SSS, GG.MM.SS ou Decimal)&lt;/p&gt;&lt;p align=&quot;justify&quot;&gt;Distancia (unidades da camada)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;justify&quot;&gt;Selecione um arquivo csv com, pelo menos, os campos&lt;br/&gt;&lt;/p&gt;&lt;p align=&quot;justify&quot;&gt;Azimute (GG.MM.SS ou Decimal)&lt;/p&gt;&lt;p align=&quot;justify&quot;&gt;Distancia (unidades da camada)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="textFormat">
          <enum>Qt::RichText</enum>

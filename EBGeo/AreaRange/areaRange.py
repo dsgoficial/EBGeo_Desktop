@@ -78,7 +78,7 @@ class AreaRange(QObject):
                 except:
                     QMessageBox.critical(None , u"Erro", u"Entre um valor numérico para a distância.")
             while ang_check:
-                inp_ang = QInputDialog.getText(qid, "Digite o azimute de disparo", "Azimute (GG.MM.SS,SSS, GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
+                inp_ang = QInputDialog.getText(qid, "Digite o azimute de disparo", "Azimute (GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
                 if not inp_ang:
                     return
                 if len(inp_ang.split(".")) == 3:
@@ -94,7 +94,7 @@ class AreaRange(QObject):
                     except:
                         QMessageBox.critical(None , u"Erro", u"Entre um formato válido para o azimute.")
             while ang_op_check:
-                inp_op_ang = QInputDialog.getText(qid, "Digite o ângulo de abertura", "Ângulo de abertura (GG.MM.SS,SSS, GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
+                inp_op_ang = QInputDialog.getText(qid, "Digite o ângulo de abertura", "Ângulo de abertura (GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
                 if not inp_op_ang:
                     return
                 if len(inp_op_ang.split(".")) == 3:
