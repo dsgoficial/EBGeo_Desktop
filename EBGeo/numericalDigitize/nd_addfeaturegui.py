@@ -24,8 +24,8 @@ class NdAddFeatureGui(QDialog, GUI):
         self.iface = iface
         self.setupUi(self)
         
-        self.twPoints.setColumnWidth(0,self.twPoints.width()/2)
-        self.twPoints.setColumnWidth(1,self.twPoints.width()/2)
+        self.twPoints.setColumnWidth(0,int(self.twPoints.width()/2))
+        self.twPoints.setColumnWidth(1,int(self.twPoints.width()/2))
         self.twPoints.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
         self.twPoints.horizontalHeader().setSectionResizeMode(1,QHeaderView.Stretch)
         
