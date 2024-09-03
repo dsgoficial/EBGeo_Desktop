@@ -52,16 +52,16 @@ class MakeMosaic(QgsProcessingAlgorithm):
         )
 
         self.scales = [
-            "250k",
-            "100k",
-            "50k",
-            "25k",
+            "1:250.000",
+            "1:100.000",
+            "1:50.000",
+            "1:25.000",
         ]
 
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.STOP_SCALE,
-                self.tr("Desired scale"),
+                self.tr("Escala das cartas:"),
                 options = self.scales,
                 defaultValue=0,
             )
@@ -84,7 +84,8 @@ class MakeMosaic(QgsProcessingAlgorithm):
         
         # Scale
         stopScale = self.scales[stopScaleIdx]
-        stopScale = int(stopScale.replace("k", ""))
+        stopScale = stopScale[2:]
+        stopScale = int(stopScale.replace(".", ""))/1000
         crs = layers[1].crs()
 
         # Crs raster layer
@@ -276,11 +277,9 @@ class MakeMosaic(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr("""
-        Mosaica as camadas selcionadas baseada na camada de póligono 'moldura', que é responsável por limitar a área a ser mosaicada de cada imagem. Portanto, deve existir um polígono associado a cada imagem.
-
-        Pode-se associar a imagem aos polígonos de forma automática ou informando o campo da camada de moldura que contém o nome da imagem, nesse caso será usado o campo 'nome' na moldura, portanto, é necessário que este campo já esteja preenchido com o nome da imagem correspondente. 
+        Mosaica as camadas selecionadas baseada na camada de polígono 'moldura', que é responsável por limitar a área a ser mosaicada de cada imagem. Caso não seja colocado nenhuma moldura, a moldura será calculada automaticamente, o que pode resultar em problemas para cartas mais antigas que não estão em SAD69.
         
-        No caso de imagens com paleta pode-se corrigir automaticamente. 
+        No caso de imagens com paleta será corrigido automaticamente. 
         
-        Atenção: não corrigir paleta automaticamente quando selecionar outras camadas de apenas uma banda sem ser paleta, como MDS ou MDT.
+        Atenção: não mosaicar cartas com outras camadas como MDS ou MDT.
         """)
