@@ -453,9 +453,11 @@ class EBGeo(QObject):
 			
 	def loadHelp(self):
 		"""
-        Open github wiki page
+        Open "help" window
         """
-		webbrowser.open('https://github.com/dsgoficial/EBGeo/wiki')
+		from .Help.help import Help
+		dialogHelp = Help()
+		dialogHelp.exec_()
 
 	def loadAbout(self):
 		"""
