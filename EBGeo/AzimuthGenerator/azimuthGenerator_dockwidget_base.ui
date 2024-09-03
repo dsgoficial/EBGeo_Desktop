@@ -173,24 +173,6 @@
         </widget>
     </item>
     <item row="8" column="0">
-        <layout class="QHBoxLayout" name="horizontalLayout_6">
-            <item>
-                <widget class="QLabel" name="fontSizeLabel">
-                    <property name="text">
-                        <string>Tamanho da fonte HTML</string>
-                    </property>
-                </widget>
-            </item>
-            <item>
-                <widget class="QComboBox" name="fontSizeComboBox">
-                    <property name="editable">
-                        <bool>true</bool>
-                    </property>
-                </widget>
-            </item>
-        </layout>
-    </item>
-    <item row="9" column="0">
      <widget class="QTreeWidget" name="mapList">
       <property name="enabled">
        <bool>true</bool>
@@ -242,7 +224,7 @@
       </column>
      </widget>
     </item>
-    <item row="10" column="0">
+    <item row="9" column="0">
      <layout class="QHBoxLayout" name="horizontalLayout_5">
       <item>
        <widget class="QPushButton" name="csvButton">

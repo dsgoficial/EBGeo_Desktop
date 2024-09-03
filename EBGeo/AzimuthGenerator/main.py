@@ -8,7 +8,7 @@ from qgis.core import (
 )
 from qgis.gui import QgsMapToolIdentifyFeature, QgsMapToolIdentify
 from qgis.PyQt import uic, QtWidgets, QtCore
-from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QMessageBox
+from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QDialog, QVBoxLayout, QLabel, QSpinBox, QPushButton
 from qgis.PyQt.QtCore import pyqtSignal
 import os
 from math import *
@@ -16,6 +16,30 @@ from math import *
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'azimuthGenerator_dockwidget_base.ui'))
 
+class FontSizeDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Selecione o Tamanho da Fonte")
+        
+        layout = QVBoxLayout()
+        
+        self.label = QLabel("Tamanho da Fonte:")
+        layout.addWidget(self.label)
+        
+        self.spinBox = QSpinBox()
+        self.spinBox.setRange(6, 96)
+        self.spinBox.setSingleStep(1)
+        self.spinBox.setValue(12)
+        layout.addWidget(self.spinBox)
+        
+        self.okButton = QPushButton("OK")
+        self.okButton.clicked.connect(self.accept)
+        layout.addWidget(self.okButton)
+        
+        self.setLayout(layout)
+    
+    def getFontSize(self):
+        return round(self.spinBox.value(), 1)
 
 class Main(QtWidgets.QDockWidget, FORM_CLASS):
 
@@ -33,11 +57,6 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.initSignals()
         self.openWindow()
         self.isOpen = True
-        self.fontSizeComboBox = self.findChild(QtWidgets.QComboBox, "fontSizeComboBox")
-        self.fontSizeComboBox.setEditable(True)
-        self.fontSizeComboBox.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
-        self.fontSizeComboBox.lineEdit().editingFinished.connect(self.validateFontSize)
-        self.populateFontSizeComboBox(self.fontSizeComboBox)
         self.displayXYCheckBox = self.findChild(QtWidgets.QCheckBox, "displayXYCheckBox")
 
     def openWindow(self):
@@ -104,32 +123,6 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         is_checked = self.displayXYCheckBox.isChecked()
         self.mapList.setColumnHidden(1, not is_checked)
         self.mapList.setColumnHidden(2, not is_checked)
-
-    def populateFontSizeComboBox(self, combo_box):
-        font_sizes = [8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72]
-        combo_box.clear()
-        for size in font_sizes:
-            combo_box.addItem(str(size))
-        index = combo_box.findText("12")
-        if index != -1:
-            combo_box.setCurrentIndex(index)
-
-    def validateFontSize(self):
-        try:
-            value = self.fontSizeComboBox.currentText()
-            int_value = int(value)
-            if int_value < 8 or int_value > 72:
-                QMessageBox.warning(self, "Valor Inválido", "O tamanho da fonte deve estar entre 8 e 72")
-                if int_value < 8:
-                    self.fontSizeComboBox.setCurrentText("8")
-                else:
-                    self.fontSizeComboBox.setCurrentText("72")
-            else:
-                self.fontSizeComboBox.setCurrentText(str(int_value))
-                
-        except ValueError:
-            QMessageBox.warning(self, "Entrada Inválida", "Por favor, insira um número inteiro")
-            self.fontSizeComboBox.setCurrentText("12")
 
     def doWork(self, pointList):
         self.mapList.clear()
@@ -274,6 +267,12 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         txtFile.close()
 
     def exportHtml(self):
+        fontSizeDlg = FontSizeDialog(self)
+        if fontSizeDlg.exec_() == QDialog.Accepted:
+            fontSize = fontSizeDlg.getFontSize()
+        else:
+            return
+        
         fileDlg = QFileDialog()
         filePath = fileDlg.getSaveFileName(None, u"Selecionar arquivo de saída", "", u"Arquivo HTML (*.html)")[0]
         
@@ -284,12 +283,6 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             htmlFile = open(filePath, 'w')
         else:
             return
-        
-        fontSize = self.fontSizeComboBox.currentText()
-        try:
-            fontSize = int(fontSize)
-        except ValueError:
-            fontSize = 12
 
         htmlFile.write(u'<html>\n<head>\n<title>Dados Azimute Distancia</title>\n')
         htmlFile.write(u'<style>\n')
