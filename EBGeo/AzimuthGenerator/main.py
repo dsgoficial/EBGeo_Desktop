@@ -1,24 +1,15 @@
 # -*- coding: utf-8 -*-
 from qgis.core import (
-    QgsCoordinateTransform, 
-    QgsVectorLayer, 
-    QgsGeometry, 
-    QgsProject, 
-    QgsRectangle, 
-    QgsGeometry, 
     QgsMapLayer, 
-    QgsWkbTypes, 
-    QgsPointXY,
     QgsDistanceArea,
     QgsCoordinateTransformContext,
     QgsUnitTypes,
     QgsCoordinateReferenceSystem,
 )
-from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker, QgsMapToolIdentifyFeature, QgsMapToolIdentify, QgsMapMouseEvent, QgsRubberBand
+from qgis.gui import QgsMapToolIdentifyFeature, QgsMapToolIdentify
 from qgis.PyQt import uic, QtWidgets, QtCore
-from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QHeaderView
-from qgis.PyQt.QtCore import pyqtSignal, Qt
-from PyQt5.QtWidgets import QLineEdit, QMessageBox
+from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QMessageBox
+from qgis.PyQt.QtCore import pyqtSignal
 import os
 from math import *
 
@@ -128,7 +119,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             value = self.fontSizeComboBox.currentText()
             int_value = int(value)
             if int_value < 8 or int_value > 72:
-                QtWidgets.QMessageBox.warning(self, "Valor Inválido", "O tamanho da fonte deve estar entre 8 e 72")
+                QMessageBox.warning(self, "Valor Inválido", "O tamanho da fonte deve estar entre 8 e 72")
                 if int_value < 8:
                     self.fontSizeComboBox.setCurrentText("8")
                 else:
@@ -137,7 +128,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
                 self.fontSizeComboBox.setCurrentText(str(int_value))
                 
         except ValueError:
-            QtWidgets.QMessageBox.warning(self, "Entrada Inválida", "Por favor, insira um número inteiro")
+            QMessageBox.warning(self, "Entrada Inválida", "Por favor, insira um número inteiro")
             self.fontSizeComboBox.setCurrentText("12")
 
     def doWork(self, pointList):
