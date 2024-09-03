@@ -32,9 +32,8 @@ O EBGeo tem a finalidade facilitar o uso da geoinformação digital pelas OM de 
 ## Créditos
 1. **Declinação magnética** - valor obtido por meio do geomag.py por Christopher Weiss cmweiss@gmail.com, https://github.com/cmweiss/geomag.  Utilizando modelo de coeficientes WMM 2020.0 do NOAA.
 NCEI Geomagnetic Modeling Team and British Geological Survey. 2019. World Magnetic Model 2020. NOAA National Centers for Environmental Information. doi: 10.25921/11v3-da71, 2020, 01/14/2020.
-2. **Perfil do terreno** - adaptação do plugin feito em 2008 por Borys Jurgiel e em 2012 por Borys Jurgiel e Patrice Verchere, https://github.com/etiennesky/profiletool/ .
-3. **Criação de pontos por coordenadas** - adaptação do Trace Digitize Action Copyright (C) 2010  Cédric Möri, with stuff from Stefan Ziegler EMAIL: cmoe@geoing.ch. WEB: www.geoing.ch
-4. **Sombreamento do terreno** - valores de posição solar obtidos a partir do sunposition.py por Samuel Bear Powell, https://github.com/s-bear/sun-position.
+2. **Criação de pontos por coordenadas** - adaptação do Trace Digitize Action Copyright (C) 2010  Cédric Möri, with stuff from Stefan Ziegler EMAIL: cmoe@geoing.ch. WEB: www.geoing.ch
+3. **Sombreamento do terreno** - valores de posição solar obtidos a partir do sunposition.py por Samuel Bear Powell, https://github.com/s-bear/sun-position.
 
 ---
 Última versão estável no QGIS: 3.20.0
