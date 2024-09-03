@@ -18,6 +18,7 @@ from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker, QgsMapToolIdentifyFea
 from qgis.PyQt import uic, QtWidgets, QtCore
 from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QHeaderView
 from qgis.PyQt.QtCore import pyqtSignal, Qt
+from PyQt5.QtWidgets import QLineEdit, QMessageBox
 import os
 from math import *
 
@@ -41,6 +42,12 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.initSignals()
         self.openWindow()
         self.isOpen = True
+        self.fontSizeComboBox = self.findChild(QtWidgets.QComboBox, "fontSizeComboBox")
+        self.fontSizeComboBox.setEditable(True)
+        self.fontSizeComboBox.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+        self.fontSizeComboBox.lineEdit().editingFinished.connect(self.validateFontSize)
+        self.populateFontSizeComboBox(self.fontSizeComboBox)
+        self.displayXYCheckBox = self.findChild(QtWidgets.QCheckBox, "displayXYCheckBox")
 
     def openWindow(self):
         self.iface.addDockWidget(QtCore.Qt.RightDockWidgetArea, self)
@@ -73,6 +80,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.csvButton.clicked.connect(self.exportCsv)
         self.txtButton.clicked.connect(self.exportTxt)
         self.htmlButton.clicked.connect(self.exportHtml)
+        self.displayXYCheckBox.toggled.connect(self.updateColumnVisibility)
 
     def getFromGeometry(self, state):
         if state:
@@ -100,6 +108,37 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         gms = str(xg) + u"° " + str(xm) + "' " + str(xs) + '"'
         gms = gms.encode('utf8')
         return gms.decode('utf8')
+    
+    def updateColumnVisibility(self):
+        is_checked = self.displayXYCheckBox.isChecked()
+        self.mapList.setColumnHidden(1, not is_checked)
+        self.mapList.setColumnHidden(2, not is_checked)
+
+    def populateFontSizeComboBox(self, combo_box):
+        font_sizes = [8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72]
+        combo_box.clear()
+        for size in font_sizes:
+            combo_box.addItem(str(size))
+        index = combo_box.findText("12")
+        if index != -1:
+            combo_box.setCurrentIndex(index)
+
+    def validateFontSize(self):
+        try:
+            value = self.fontSizeComboBox.currentText()
+            int_value = int(value)
+            if int_value < 8 or int_value > 72:
+                QtWidgets.QMessageBox.warning(self, "Valor Inválido", "O tamanho da fonte deve estar entre 8 e 72")
+                if int_value < 8:
+                    self.fontSizeComboBox.setCurrentText("8")
+                else:
+                    self.fontSizeComboBox.setCurrentText("72")
+            else:
+                self.fontSizeComboBox.setCurrentText(str(int_value))
+                
+        except ValueError:
+            QtWidgets.QMessageBox.warning(self, "Entrada Inválida", "Por favor, insira um número inteiro")
+            self.fontSizeComboBox.setCurrentText("12")
 
     def doWork(self, pointList):
         self.mapList.clear()
@@ -188,14 +227,28 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             csvFile = open(filePath, 'w')
         else:
             return
-
-        csvFile.write(u'Ponto;X;Y;Azimute;Distancia;Destino\n')
-
-        for i in range(0, self.mapList.topLevelItemCount()):
-            csvFile.write(u'{};{};{};{};{};{}\n'.format(self.mapList.topLevelItem(i).data(0, 0), self.mapList.topLevelItem(i).data(1, 0), self.mapList.topLevelItem(i).data(2, 0), self.mapList.topLevelItem(i).data(3, 0), self.mapList.topLevelItem(i).data(4, 0), self.mapList.topLevelItem(i).data(5, 0)))
-            
+        
+        if self.displayXYCheckBox.isChecked():
+            csvFile.write(u'Ponto;X;Y;Azimute;Distancia;Destino\n')
+            for i in range(0, self.mapList.topLevelItemCount()):
+                csvFile.write(u'{};{};{};{};{};{}\n'.format(
+                    self.mapList.topLevelItem(i).data(0, 0),
+                    self.mapList.topLevelItem(i).data(1, 0),
+                    self.mapList.topLevelItem(i).data(2, 0),
+                    self.mapList.topLevelItem(i).data(3, 0),
+                    self.mapList.topLevelItem(i).data(4, 0),
+                    self.mapList.topLevelItem(i).data(5, 0)))
+        else:
+            csvFile.write(u'Ponto;Azimute;Distancia;Destino\n')
+            for i in range(0, self.mapList.topLevelItemCount()):
+                csvFile.write(u'{};{};{};{}\n'.format(
+                    self.mapList.topLevelItem(i).data(0, 0),
+                    self.mapList.topLevelItem(i).data(3, 0),
+                    self.mapList.topLevelItem(i).data(4, 0),
+                    self.mapList.topLevelItem(i).data(5, 0)))
+        
         csvFile.close()
-    
+
     def exportTxt(self):
         fileDlg = QFileDialog()
         filePath = fileDlg.getSaveFileName(None, u"Selecionar arquivo de saída", "", u"Arquivo TXT (*.txt)")[0]
@@ -208,11 +261,25 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         else:
             return
         
-        txtFile.write(u'Ponto;X;Y;Azimute;Distancia;Destino\n')
-
-        for i in range(0, self.mapList.topLevelItemCount()):
-            txtFile.write(u'{};{};{};{};{};{}\n'.format(self.mapList.topLevelItem(i).data(0, 0), self.mapList.topLevelItem(i).data(1, 0), self.mapList.topLevelItem(i).data(2, 0), self.mapList.topLevelItem(i).data(3, 0), self.mapList.topLevelItem(i).data(4, 0), self.mapList.topLevelItem(i).data(5, 0)))
-
+        if self.displayXYCheckBox.isChecked():
+            txtFile.write(u'Ponto;X;Y;Azimute;Distancia;Destino\n')
+            for i in range(0, self.mapList.topLevelItemCount()):
+                txtFile.write(u'{};{};{};{};{};{}\n'.format(
+                    self.mapList.topLevelItem(i).data(0, 0),
+                    self.mapList.topLevelItem(i).data(1, 0),
+                    self.mapList.topLevelItem(i).data(2, 0),
+                    self.mapList.topLevelItem(i).data(3, 0),
+                    self.mapList.topLevelItem(i).data(4, 0),
+                    self.mapList.topLevelItem(i).data(5, 0)))
+        else:
+            txtFile.write(u'Ponto;Azimute;Distancia;Destino\n')
+            for i in range(0, self.mapList.topLevelItemCount()):
+                txtFile.write(u'{};{};{};{}\n'.format(
+                    self.mapList.topLevelItem(i).data(0, 0),
+                    self.mapList.topLevelItem(i).data(3, 0),
+                    self.mapList.topLevelItem(i).data(4, 0),
+                    self.mapList.topLevelItem(i).data(5, 0)))
+        
         txtFile.close()
 
     def exportHtml(self):
@@ -226,20 +293,38 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             htmlFile = open(filePath, 'w')
         else:
             return
-
-        htmlFile.write(u'<html>\n<head>\n<title>Dados Azimute Distancia</title>\n</head>\n<body>\n')
-        htmlFile.write(u'<table border="1" cellspacing="0" cellpadding="5">\n')
-        htmlFile.write(u'<tr><th>Ponto</th><th>X</th><th>Y</th><th>Azimute</th><th>Distancia</th><th>Destino</th></tr>\n')
         
-        for i in range(self.mapList.topLevelItemCount()):
-            htmlFile.write(u'<tr>')
-            for j in range(6):
-                data = self.mapList.topLevelItem(i).data(j, 0)
-                htmlFile.write(u'<td>{}</td>'.format(data if data is not None else ''))
-            htmlFile.write(u'</tr>\n')
+        fontSize = self.fontSizeComboBox.currentText()
+        try:
+            fontSize = int(fontSize)
+        except ValueError:
+            fontSize = 12
+
+        htmlFile.write(u'<html>\n<head>\n<title>Dados Azimute Distancia</title>\n')
+        htmlFile.write(u'<style>\n')
+        htmlFile.write(f'th, td {{ font-size: {fontSize}px; }}\n')
+        htmlFile.write(u'</style>\n')
+        htmlFile.write(u'</head>\n<body>\n')
+        htmlFile.write(u'<table border="1" cellspacing="0" cellpadding="5">\n')
+
+        if self.displayXYCheckBox.isChecked():
+            htmlFile.write(u'<tr><th>Ponto</th><th>X</th><th>Y</th><th>Azimute</th><th>Distancia</th><th>Destino</th></tr>\n')
+            for i in range(self.mapList.topLevelItemCount()):
+                htmlFile.write(u'<tr>')
+                for j in range(6):
+                    data = self.mapList.topLevelItem(i).data(j, 0)
+                    htmlFile.write(u'<td>{}</td>'.format(data if data is not None else ''))
+                htmlFile.write(u'</tr>\n')
+        else:
+            htmlFile.write(u'<tr><th>Ponto</th><th>Azimute</th><th>Distancia</th><th>Destino</th></tr>\n')
+            for i in range(self.mapList.topLevelItemCount()):
+                htmlFile.write(u'<tr>')
+                for j in [0, 3, 4, 5]:
+                    data = self.mapList.topLevelItem(i).data(j, 0)
+                    htmlFile.write(u'<td>{}</td>'.format(data if data is not None else ''))
+                htmlFile.write(u'</tr>\n')
         
         htmlFile.write(u'</table>\n</body>\n</html>')
-            
         htmlFile.close()
 
 class GeometryMapTool(QgsMapToolIdentifyFeature):

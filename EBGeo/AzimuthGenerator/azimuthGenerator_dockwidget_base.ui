@@ -162,41 +162,35 @@
       </item>
      </layout>
     </item>
-    <item row="8" column="0">
-     <layout class="QHBoxLayout" name="horizontalLayout_5">
-      <item>
-       <widget class="QPushButton" name="csvButton">
-        <property name="text">
-         <string>Exportar como CSV</string>
-        </property>
-        <attribute name="buttonGroup">
-         <string notr="true">exportar</string>
-        </attribute>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="txtButton">
-        <property name="text">
-         <string>Exportar como TXT</string>
-        </property>
-        <attribute name="buttonGroup">
-         <string notr="true">exportar</string>
-        </attribute>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="htmlButton">
-        <property name="text">
-         <string>Exportar como HTML</string>
-        </property>
-        <attribute name="buttonGroup">
-         <string notr="true">exportar</string>
-        </attribute>
-       </widget>
-      </item>
-     </layout>
-    </item>
     <item row="7" column="0">
+        <widget class="QCheckBox" name="displayXYCheckBox">
+            <property name="text">
+                <string>Gerar coordenadas X e Y do primeiro ponto</string>
+            </property>
+            <property name="checked">
+                <bool>true</bool>
+            </property>
+        </widget>
+    </item>
+    <item row="8" column="0">
+        <layout class="QHBoxLayout" name="horizontalLayout_6">
+            <item>
+                <widget class="QLabel" name="fontSizeLabel">
+                    <property name="text">
+                        <string>Tamanho da fonte</string>
+                    </property>
+                </widget>
+            </item>
+            <item>
+                <widget class="QComboBox" name="fontSizeComboBox">
+                    <property name="editable">
+                        <bool>true</bool>
+                    </property>
+                </widget>
+            </item>
+        </layout>
+    </item>
+    <item row="9" column="0">
      <widget class="QTreeWidget" name="mapList">
       <property name="enabled">
        <bool>true</bool>
@@ -247,6 +241,40 @@
        </property>
       </column>
      </widget>
+    </item>
+    <item row="10" column="0">
+     <layout class="QHBoxLayout" name="horizontalLayout_5">
+      <item>
+       <widget class="QPushButton" name="csvButton">
+        <property name="text">
+         <string>Exportar como CSV</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">exportar</string>
+        </attribute>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="txtButton">
+        <property name="text">
+         <string>Exportar como TXT</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">exportar</string>
+        </attribute>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="htmlButton">
+        <property name="text">
+         <string>Exportar como HTML</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">exportar</string>
+        </attribute>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>
