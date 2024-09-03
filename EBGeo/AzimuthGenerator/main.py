@@ -9,7 +9,7 @@ from qgis.core import (
 from qgis.gui import QgsMapToolIdentifyFeature, QgsMapToolIdentify
 from qgis.PyQt import uic, QtWidgets, QtCore
 from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton
-from qgis.PyQt.QtCore import pyqtSignal, Qt
+from qgis.PyQt.QtCore import pyqtSignal, Qt, QEvent
 import os
 from math import *
 
@@ -20,9 +20,8 @@ class FontSizeDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Selecione o Tamanho da Fonte")
-        self.setFixedSize(225, 100)
+        
         layout = QVBoxLayout()
-
         
         fontSizeLayout = QHBoxLayout()
         
@@ -30,29 +29,42 @@ class FontSizeDialog(QDialog):
         fontSizeLayout.addWidget(self.label)
         
         self.spinBox = QSpinBox()
+        self.spinBox.setRange(0, 1000)        
         self.spinBox.setSingleStep(1)
+        self.spinBox.setStepType(1)        
         self.spinBox.setValue(12)
+        self.spinBox.valueChanged.connect(self.updateValidation)
+        self.spinBox.installEventFilter(self)
         fontSizeLayout.addWidget(self.spinBox)
         
         layout.addLayout(fontSizeLayout)
-        self.infoLabel = QLabel("Valores entre 6 e 96")
-        self.infoLabel.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.infoLabel)
         
-        self.spinBox.valueChanged.connect(self.validateFontSize)
+        self.errorLabel = QLabel("")
+        self.errorLabel.setAlignment(Qt.AlignCenter)
+        self.errorLabel.setStyleSheet("color: red;")
+        layout.addWidget(self.errorLabel)
         
         self.okButton = QPushButton("OK")
         self.okButton.clicked.connect(self.accept)
         layout.addWidget(self.okButton)
         
         self.setLayout(layout)
-    
-    def validateFontSize(self):
+        self.updateValidation()
+
+    def eventFilter(self, obj, event):
+        if obj == self.spinBox and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Period:
+                return True
+        return super().eventFilter(obj, event)
+
+    def updateValidation(self):
         current_value = self.spinBox.value()
-        if current_value < 6:
-            self.spinBox.setValue(6)
-        elif current_value > 96:
-            self.spinBox.setValue(96)
+        if 6 <= current_value <= 96:
+            self.okButton.setEnabled(True)
+            self.errorLabel.setText("")
+        else:
+            self.okButton.setEnabled(False)
+            self.errorLabel.setText("Valores devem estar entre 6 e 96")
     
     def getFontSize(self):
         return self.spinBox.value()
