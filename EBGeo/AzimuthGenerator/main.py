@@ -72,6 +72,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.FinishPointsButton.pressed.connect(self.getWorkPoints)
         self.csvButton.clicked.connect(self.exportCsv)
         self.txtButton.clicked.connect(self.exportTxt)
+        self.htmlButton.clicked.connect(self.exportHtml)
 
     def getFromGeometry(self, state):
         if state:
@@ -213,6 +214,33 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             txtFile.write(u'{};{};{};{};{};{}\n'.format(self.mapList.topLevelItem(i).data(0, 0), self.mapList.topLevelItem(i).data(1, 0), self.mapList.topLevelItem(i).data(2, 0), self.mapList.topLevelItem(i).data(3, 0), self.mapList.topLevelItem(i).data(4, 0), self.mapList.topLevelItem(i).data(5, 0)))
 
         txtFile.close()
+
+    def exportHtml(self):
+        fileDlg = QFileDialog()
+        filePath = fileDlg.getSaveFileName(None, u"Selecionar arquivo de saída", "", u"Arquivo HTML (*.html)")[0]
+        
+        if filePath != "" and filePath[-4:].lower() != ".html":
+            filePath += ".html"
+        
+        if filePath != "":
+            htmlFile = open(filePath, 'w')
+        else:
+            return
+
+        htmlFile.write(u'<html>\n<head>\n<title>Dados Azimute Distancia</title>\n</head>\n<body>\n')
+        htmlFile.write(u'<table border="1" cellspacing="0" cellpadding="5">\n')
+        htmlFile.write(u'<tr><th>Ponto</th><th>X</th><th>Y</th><th>Azimute</th><th>Distancia</th><th>Destino</th></tr>\n')
+        
+        for i in range(self.mapList.topLevelItemCount()):
+            htmlFile.write(u'<tr>')
+            for j in range(6):
+                data = self.mapList.topLevelItem(i).data(j, 0)
+                htmlFile.write(u'<td>{}</td>'.format(data if data is not None else ''))
+            htmlFile.write(u'</tr>\n')
+        
+        htmlFile.write(u'</table>\n</body>\n</html>')
+            
+        htmlFile.close()
 
 class GeometryMapTool(QgsMapToolIdentifyFeature):
 
