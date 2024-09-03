@@ -9,6 +9,7 @@ from .Processings.pluginProvider import pluginProvider
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import pyqtSignal, QObject
 from qgis.core import QgsVectorLayer
+from .auxiliar.auxDeclConv import AuxiliarDeclConv
 
 # sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'auxiliar'))
 
@@ -207,16 +208,16 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.mosaic_action)
 
-		# self.sd_action = self.add_action(
-		# 	os.path.join(os.path.dirname(__file__), 'icons', 'shaderIcon.png'),
-		# 	text=u'Sombreador do terreno',
-		# 	callback=self.loadShaderTool,
-		# 	parent=self.ebGeo,
-		# 	add_to_menu=False,
-		# 	add_to_toolbar=False)
-		# self.ebGeo.addAction(self.sd_action)
-		# from .Shader.main import Main as Main_Shader
-		# self.mainShaderTool = Main_Shader(iface)
+		self.sd_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'shaderIcon.png'),
+			text=u'Sombreador do terreno',
+			callback=self.loadShaderTool,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.sd_action)
+		from .Shader.main import Main as Main_Shader
+		self.mainShaderTool = Main_Shader(iface)
 		
 		self.auc_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'convang.png'),
@@ -259,16 +260,16 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.vfaction)
         
-		# self.dec_action = self.add_action(
-		# 	os.path.join(os.path.dirname(__file__), 'icons', 'declconv.png'),
-		# 	text=u'Calculadora de Declinação magnética e convergência meridiana',
-		# 	callback=self.loadDeclinacaoConvergencia,
-		# 	parent=self.ebGeo,
-		# 	add_to_menu=False,
-		# 	add_to_toolbar=False)
-		# self.ebGeo.addAction(self.dec_action)
-		# from .DeclinacaoConvergencia.main import Main as Main_DecConv
-		# self.mainDecConv = Main_DecConv(iface)
+		self.dec_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'declconv.png'),
+			text=u'Calculadora de Declinação magnética e convergência meridiana',
+			callback=self.loadDeclinacaoConvergencia,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.dec_action)
+		from .DeclinacaoConvergencia.main import Main as Main_DecConv
+		self.mainDecConv = Main_DecConv(iface)
 
 		# self.geo_action = self.add_action(
 		#  	os.path.join(os.path.dirname(__file__), 'icons', 'geocoder.png'),

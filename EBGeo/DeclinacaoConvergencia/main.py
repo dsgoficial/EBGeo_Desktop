@@ -12,7 +12,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.core import *
 from qgis.gui import *
 from .UI.interface import Interface
-from ..Auxiliar.auxDeclConv import AuxiliarDeclConv
+from ..auxiliar.auxDeclConv import AuxiliarDeclConv
 
 import math
 

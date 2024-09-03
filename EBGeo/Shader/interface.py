@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 import os
 import processing
-from ..Auxiliar.sunposition.sunposition import sunpos
+from ..auxiliar.sunposition.sunposition import sunpos
 from qgis.PyQt import QtGui, uic, QtCore, QtWidgets
 from qgis.PyQt.QtCore import QDateTime
 from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker
