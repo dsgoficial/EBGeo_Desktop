@@ -9,7 +9,6 @@ from .Processings.pluginProvider import pluginProvider
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import pyqtSignal, QObject
 from qgis.core import QgsVectorLayer
-from .auxiliar.auxDeclConv import AuxiliarDeclConv
 
 # sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'auxiliar'))
 
@@ -156,7 +155,7 @@ class EBGeo(QObject):
 
 		self.azgen_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'azimuthgen.png'),
-			text=u'Gerador de azimute e distância',
+			text=u'Calcula azimute e distância (tabela)',
 			callback=self.loadAzimuthGenerator,
 			parent=self.ebGeo,
 			add_to_menu=False,
@@ -177,16 +176,16 @@ class EBGeo(QObject):
 		from .AreaRange.areaRange import AreaRange as Main_AreaRange
 		self.mainAreaRange = Main_AreaRange(iface)
 
-		self.pt_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'profileIcon.png'),
-			text=u'Gerador de perfil do terreno',
-			callback=self.loadProfileTool,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False)
-		self.ebGeo.addAction(self.pt_action)
-		from .ProfileTool.profileplugin import ProfilePlugin as Main_ProfileTool
-		self.mainProfileTool = Main_ProfileTool(iface)
+		# self.pt_action = self.add_action(
+		# 	os.path.join(os.path.dirname(__file__), 'icons', 'profileIcon.png'),
+		# 	text=u'Gerador de perfil do terreno',
+		# 	callback=self.loadProfileTool,
+		# 	parent=self.ebGeo,
+		# 	add_to_menu=False,
+		# 	add_to_toolbar=False)
+		# self.ebGeo.addAction(self.pt_action)
+		# from .ProfileTool.profileplugin import ProfilePlugin as Main_ProfileTool
+		# self.mainProfileTool = Main_ProfileTool(iface)
 
 		self.vis_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'visib.png'),
@@ -453,9 +452,11 @@ class EBGeo(QObject):
 			
 	def loadHelp(self):
 		"""
-        Open github wiki page
+        Open "help" window
         """
-		webbrowser.open('https://github.com/dsgoficial/EBGeo/wiki')
+		from .Help.help import Help
+		dialogHelp = Help()
+		dialogHelp.exec_()
 
 	def loadAbout(self):
 		"""
