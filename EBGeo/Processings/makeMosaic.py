@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from typing import List
 from EBGeo.Utils.featureHandler import FeatureHandler
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
@@ -97,39 +98,55 @@ class MakeMosaic(QgsProcessingAlgorithm):
         frameLayer = self.matchLayerAndFrame(inputFrame, layers)
         nameField = 'nome'
         frameGrid = frameLayer
-        countGrid = frameGrid.featureCount()
+        
 
         if not inputFrameUser or inputFrameUser.featureCount()==0:
             QgsProject.instance().removeMapLayer(inputFrame.id())
         
-        listLayerSize = len(layers)
-        listSize = listLayerSize*countGrid+1
-        progressStep = 100/listSize if listSize else 0
         
-        mergeLayers = []
-        i = 1
-        multiStepFeedback = QgsProcessingMultiStepFeedback(listSize, feedback)
+        
+        
+        
+        multiStepFeedback = QgsProcessingMultiStepFeedback(3, feedback)
+        multiStepFeedback.setCurrentStep(0)
+        multiStepFeedback.pushInfo(self.tr("Selecionando camadas"))
 
+        mergeLayers = self.mergeLayers(context, multiStepFeedback, frameGrid, layers, nameField)
+        
+        multiStepFeedback.setCurrentStep(1)
+        multiStepFeedback.pushInfo(self.tr("Mesclado camadas"))
+        merged = self.mergeAll(context, multiStepFeedback, mergeLayers)
+        multiStepFeedback.setCurrentStep(2)
+        multiStepFeedback.pushInfo(self.tr("Comprimindo saída"))
+        compressed = self.compress(context, parameters, multiStepFeedback, merged)
+        return {"OUTPUT": compressed}
+
+    def mergeLayers(self, context, feedback:QgsProcessingMultiStepFeedback, frameGrid:QgsVectorLayer, layers:List[QgsVectorLayer], nameField)->List[QgsVectorLayer]:
+        mergeLayers = []
+        countGrid = frameGrid.featureCount()
+        listLayerSize = len(layers)
+        listSize = listLayerSize*countGrid
+        progressStep = 100/listSize if listSize else 0
+        i = 0
+        multiStepFeedback = QgsProcessingMultiStepFeedback(listSize, feedback)
         for feat in frameGrid.getFeatures():
             frameGrid.removeSelection()
             for step, pctLayer in enumerate(layers):
-                if multiStepFeedback.isCanceled():
+                if feedback.isCanceled():
                     return {self.OUTPUT: 'cancelado'}
                 if (feat[nameField] == pctLayer.name()):
                     frameGrid.select(feat.id())
                     frameSelected = frameGrid.materialize(QgsFeatureRequest().setFilterFids(frameGrid.selectedFeatureIds()))
                     if pctLayer.bandCount() == 1:
-                        rgbLayer = self.pctToRgb(context, multiStepFeedback, pctLayer)
+                        rgbLayer = self.pctToRgb(context, pctLayer, multiStepFeedback)
                     else:
                         rgbLayer = pctLayer
-                    clippedLayer = self.clipLayer(context, multiStepFeedback, rgbLayer, frameSelected)
+                    clippedLayer = self.clipLayer(context, rgbLayer, frameSelected, multiStepFeedback)
                     mergeLayers.append(clippedLayer)
                     frameGrid.removeSelection()
                 multiStepFeedback.setCurrentStep((i-1)*listLayerSize + step + 1)
             i += 1
-
-        merged = self.mergeAll(context, parameters, multiStepFeedback, mergeLayers)
-        return {"OUTPUT": merged}
+        return mergeLayers
 
     def getInputFrame(self, crs, layers, featureHandler, stopScale, feedback):
         stringCrs = str(crs).split(" ")[1].split(">")[0]
@@ -188,7 +205,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
     
 
     
-    def matchLayerAndFrame(self, inputFrame, layers):
+    def matchLayerAndFrame(self, inputFrame, layers)->QgsVectorLayer:
         frameLayer = processing.run('EBGeoProvider:matchlayerandframe',
                 {
                     'INPUT_LAYERS': layers,
@@ -207,7 +224,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
         return reprojLayer
         
     
-    def pctToRgb(self, context, feedback, inputlayer):
+    def pctToRgb(self, context, inputlayer, feedback=None):
         rgbLayer =processing.run('gdal:pcttorgb', 
                 {
                     'INPUT': inputlayer,
@@ -218,7 +235,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 context=context,
                 feedback=feedback)['OUTPUT']
         return rgbLayer
-    def clipLayer(self, context, feedback, inputlayer, inputGrid):
+    def clipLayer(self, context, inputlayer, inputGrid, feedback=None):
         clippedLayer = processing.run('gdal:cliprasterbymasklayer', 
                 {
                     'INPUT': inputlayer,
@@ -241,22 +258,36 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 context=context,
                 feedback=feedback)['OUTPUT']
         return clippedLayer
-    def mergeAll(self, context, parameters, feedback, mergeLayers):
+    def mergeAll(self, context, feedback, mergeLayers):
         rgbLayer =processing.run('gdal:merge', 
                 {
                     'INPUT': mergeLayers,
-                    'DATA_TYPE': 5,
+                    'DATA_TYPE': 0,
                     'EXTRA': '',
                     'NODATA_INPUT' : None, 
                     'NODATA_OUTPUT' : None, 
                     'OPTIONS' : '', 
                     'PCT' : False, 
                     'SEPARATE' : False ,
-                    'OUTPUT': parameters['OUTPUT']
+                    'OUTPUT': 'TEMPORARY_OUTPUT'
                 },
                 context=context,
                 feedback=feedback)
         return rgbLayer['OUTPUT']
+    def compress(self, context, parameters, feedback, layer):
+        compressedLayer = processing.run("gdal:translate", 
+                       {'INPUT':layer,
+                        'TARGET_CRS':None,
+                        'NODATA':None,
+                        'COPY_SUBDATASETS':False,
+                        'OPTIONS':'COMPRESS=JPEG',
+                        'EXTRA':'-co PHOTOMETRIC=YCBCR -co TILED=YES -b 1 -b 2 -b 3',
+                        'DATA_TYPE':0,
+                        'OUTPUT':parameters['OUTPUT']
+                        },
+                context=context,
+                feedback=feedback)
+        return compressedLayer['OUTPUT']
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)
 
