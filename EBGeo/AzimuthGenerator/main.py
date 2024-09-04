@@ -8,63 +8,33 @@ from qgis.core import (
 )
 from qgis.gui import QgsMapToolIdentifyFeature, QgsMapToolIdentify
 from qgis.PyQt import uic, QtWidgets, QtCore
-from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton
-from qgis.PyQt.QtCore import pyqtSignal, Qt, QEvent
+from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton
+from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, Qt, QEvent
 import os
 from math import *
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'azimuthGenerator_dockwidget_base.ui'))
 
-class FontSizeDialog(QDialog):
+BOX_CLASS, _ = uic.loadUiType(os.path.join(
+    os.path.dirname(__file__), 'fontSizeBox.ui'))
+
+class FontSizeDialog(QDialog, BOX_CLASS):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Selecione o Tamanho da Fonte")
-        
-        layout = QVBoxLayout()
-        
-        fontSizeLayout = QHBoxLayout()
-        
-        self.label = QLabel("Tamanho da Fonte:")
-        fontSizeLayout.addWidget(self.label)
-        
-        self.spinBox = QSpinBox()
-        self.spinBox.setRange(0, 1000)        
-        self.spinBox.setSingleStep(1)
-        self.spinBox.setStepType(1)        
-        self.spinBox.setValue(12)
+        self.setupUi(self)
         self.spinBox.valueChanged.connect(self.updateValidation)
-        self.spinBox.installEventFilter(self)
-        fontSizeLayout.addWidget(self.spinBox)
-        
-        layout.addLayout(fontSizeLayout)
-        
-        self.errorLabel = QLabel("")
-        self.errorLabel.setAlignment(Qt.AlignCenter)
-        self.errorLabel.setStyleSheet("color: red;")
-        layout.addWidget(self.errorLabel)
-        
-        self.okButton = QPushButton("OK")
-        self.okButton.clicked.connect(self.accept)
-        layout.addWidget(self.okButton)
-        
-        self.setLayout(layout)
         self.updateValidation()
 
-    def eventFilter(self, obj, event):
-        if obj == self.spinBox and event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Period:
-                return True
-        return super().eventFilter(obj, event)
-
     def updateValidation(self):
-        current_value = self.spinBox.value()
+        
+        current_value = int(self.spinBox.value())
         if 6 <= current_value <= 96:
-            self.okButton.setEnabled(True)
-            self.errorLabel.setText("")
+            self.error.setVisible(False)
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
         else:
-            self.okButton.setEnabled(False)
-            self.errorLabel.setText("Valores devem estar entre 6 e 96")
+            self.error.setVisible(True)
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
     
     def getFontSize(self):
         return self.spinBox.value()
@@ -300,7 +270,6 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             fontSize = fontSizeDlg.getFontSize()
         else:
             return
-        
         fileDlg = QFileDialog()
         filePath = fileDlg.getSaveFileName(None, u"Selecionar arquivo de saída", "", u"Arquivo HTML (*.html)")[0]
         
