@@ -4,6 +4,7 @@ from processing.core.ProcessingConfig import ProcessingConfig, Setting
 from qgis.PyQt.QtGui import QIcon
 import os
 from .makeMosaic import MakeMosaic
+from .makeFrame import MakeFrame
 from .matchLayerAndFrame import MatchLayerAndFrame
 from .insertMASACODE import ConvertEDGVtoMASACODE
 from .simbmilLoader import SimbMilAlgorithm
@@ -14,6 +15,7 @@ class Provider(QgsProcessingProvider):
 
     def loadAlgorithms(self, *args, **kwargs):
         self.addAlgorithm(MakeMosaic())
+        self.addAlgorithm(MakeFrame())
         self.addAlgorithm(MatchLayerAndFrame())
         self.addAlgorithm(ConvertEDGVtoMASACODE())
         self.addAlgorithm(ConvertBDGExZIPtoMASACODE())

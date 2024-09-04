@@ -207,6 +207,15 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.mosaic_action)
 
+		self.frame_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'GerarMoldura.png'),
+			text=u'Gerador de Molduras',
+			callback=self.loadMakeFrame,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.frame_action)
+
 		self.sd_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'shaderIcon.png'),
 			text=u'Sombreador do terreno',
@@ -414,6 +423,10 @@ class EBGeo(QObject):
 	def loadMakeMosaic(self):
 		from qgis import processing
 		processing.execAlgorithmDialog('EBGeoProvider:mosaic')
+
+	def loadMakeFrame(self):
+		from qgis import processing
+		processing.execAlgorithmDialog('EBGeoProvider:frame')
 
 	def loadShaderTool(self):
 		"""
