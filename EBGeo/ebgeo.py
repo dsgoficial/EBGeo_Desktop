@@ -8,7 +8,7 @@ from .BDGEx.bdgexGuiManager import BDGExGuiManager
 from .Processings.pluginProvider import pluginProvider
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import pyqtSignal, QObject
-from qgis.core import QgsVectorLayer
+from qgis.core import QgsVectorLayer, Qgis
 
 # sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'auxiliar'))
 
@@ -292,6 +292,15 @@ class EBGeo(QObject):
 		# from .Rendezvous.main import Main as Main_Rendezvous
 		# self.mainRendezvous = Main_Rendezvous(iface)
 
+		self.labelPointsaLongLines = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'distanciaLinha.png'),
+			text=u'Distância ao longo da linha',
+			callback=self.loadPontosNaLinha,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.labelPointsaLongLines)
+
 		self.ms_action = self.add_action(
 		 	os.path.join(os.path.dirname(__file__), 'icons', 'help.png'),
 		 	text=u'Ajuda',
@@ -341,6 +350,16 @@ class EBGeo(QObject):
         """
 		if self.mainDecConv.isOpen == False:
 			self.mainDecConv.initGui()
+
+	def loadPontosNaLinha(self):
+		"""
+        Computes magnetic heading and meridian convergence
+        """
+		from .LineLabelsPerDistance.view.LineLabelsPerDistanceInterface import LineLabelsPerDistance
+		dlg = LineLabelsPerDistance()
+		if dlg:
+			dlg.mapLayerSelection.setFilters(Qgis.LayerFilter.LineLayer)
+			dlg.exec()
     
 	def loadAngleUnitConverter(self):
 		"""
