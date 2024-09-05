@@ -54,7 +54,7 @@ class MakeFrame(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterVectorLayer(
                 self.INPUT,
-                self.tr("Input Polygon Layer"),
+                self.tr("Camada de entrada"),
                 [QgsProcessing.TypeVectorPolygon],
             )
         )
@@ -69,7 +69,7 @@ class MakeFrame(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.STOP_SCALE,
-                self.tr("Desired scale"),
+                self.tr("Escala das cartas:"),
                 options=self.scales,
                 defaultValue=0,
             )

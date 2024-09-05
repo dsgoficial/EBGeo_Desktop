@@ -8,9 +8,9 @@
 
 [general]
 name=EBGeo
-qgisMinimumVersion=3.22
+qgisMinimumVersion=3.34
 description=Ferramentas para planejamento militar do Exército Brasileiro
-version=2.2.2
+version=2.3.0
 author=Exército Brasileiro - Diretoria de Serviço Geográfico
 email=suporte.dsgtools@dsg.eb.mil.br
 about=
