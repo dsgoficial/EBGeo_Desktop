@@ -20,7 +20,20 @@ class BaseDeDados(QObject):
                     'limite_entre_fracoes_esquerdo': u'Limite entre frações - texto esquerdo',
                     'linha_de_controle': u'Linha de controle',
                     'seta_situacao': u'Seta de situação',
-                    'simbolos_pontos': u'Símbolos (pontos)',
+                    'barreiras': u'Barreiras',
+                    'ponto_coordenacao': u'Ponto de coordenação',
+                    'fortificacoes': u'Fortificações',
+                    'redes': u'Redes',
+                    'fortificacoes_ot': u'Fortificações - Trabahos de OT',
+                    'concentracao_explosao': u'Alvos',
+            
+                    'simbolos_pontos': u'Calungas, Armamentos, Viaturas e Outros',
+                    'objetivo': u'Objetivo',
+                    'area_coordenacao': u'Área de coordenação',
+                    'obstaculos': u'Obstáculos',
+                    'campos_minados': u'Campos Minados',
+                    'fumaca': u'Fumaça',
+                    'minas': u'Minas',
                    }
         self.Database = None
 
