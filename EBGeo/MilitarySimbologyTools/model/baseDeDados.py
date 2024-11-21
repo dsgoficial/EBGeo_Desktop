@@ -13,14 +13,24 @@ class BaseDeDados(QObject):
 
     def initVariables(self):
         self.listName = {
-                    'coord_ap_fogo': u'Coordenação de Apoio de Fogo',
-                    'eixo_de_direcao': u'Eixo de direcao',
-                    'fortificacoes_pf': u'Fortificações - Pontos Fortes',
-                    'limite_entre_fracoes_direito': u'Limite entre frações - texto direito',
-                    'limite_entre_fracoes_esquerdo': u'Limite entre frações - texto esquerdo',
+                    'coord_apoio_fogo': u'Coordenação de Apoio de Fogo',
+                    'eixo_de_direcao': u'Eixo de direçao',
+                    'limite': u'Limite entre frações',
                     'linha_de_controle': u'Linha de controle',
+                    'simbolos': u'Calungas, Armamentos, Viaturas e Outros',
+                    'ponto_coordenacao': u'Ponto de coordenação',
                     'seta_situacao': u'Seta de situação',
-                    'simbolos_pontos': u'Símbolos (pontos)',
+                    'fortificacoes': u'Fortificações',
+                    'alvos': u'Alvos',
+                    'fortificacoes_pf': u'Fortificações - Pontos Fortes',
+                    'redes': u'Redes',
+                    'barreiras': u'Barreiras',
+                    'objetivo': u'Objetivo',
+                    'obstaculos': u'Obstáculos',
+                    'fumaca': u'Fumaça',
+                    'minas': u'Minas',
+                    'campos_minados': u'Campos Minados',
+                    'fortificacoes_ot': u'Fortificações - Trabahos de OT',
                    }
         self.Database = None
 
