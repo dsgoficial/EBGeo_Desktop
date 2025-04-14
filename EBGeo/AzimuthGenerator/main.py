@@ -5,11 +5,20 @@ from qgis.core import (
     QgsCoordinateTransformContext,
     QgsUnitTypes,
     QgsCoordinateReferenceSystem,
+    QgsProject,
+    QgsCoordinateTransform,
+    QgsVectorFileWriter,
+    QgsGeometry,
+    QgsVectorLayer,
+    QgsFeature,
+    QgsWkbTypes,
+    QgsField,
+    QgsPointXY,
 )
 from qgis.gui import QgsMapToolIdentifyFeature, QgsMapToolIdentify
 from qgis.PyQt import uic, QtWidgets, QtCore
 from qgis.PyQt.QtWidgets import QFileDialog, QTreeWidgetItem, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton
-from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, Qt, QEvent
+from qgis.PyQt.QtCore import QVariant, pyqtSignal, Qt, QEvent
 import os
 from math import *
 
@@ -49,6 +58,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.setupUi(self)
         self.iface = iface
         self.isOpen = False
+        self.vertices = None
 
     def initGui(self):
         self.initVariables()
@@ -88,6 +98,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.csvButton.clicked.connect(self.exportCsv)
         self.txtButton.clicked.connect(self.exportTxt)
         self.htmlButton.clicked.connect(self.exportHtml)
+        self.gpxButton.clicked.connect(self.exportGpx)
         self.displayXYCheckBox.toggled.connect(self.updateColumnVisibility)
 
     def getFromGeometry(self, state):
@@ -127,6 +138,8 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         item = []
         for i in range (0, len(pointList)-1):
             dist = pointList[i].distance(pointList[i + 1])
+            if dist == 0:
+                continue
             azimuth = degrees(acos((pointList[i + 1].y() - pointList[i].y()) / dist))
             if pointList[i].x() > pointList[i + 1].x():
                 azimuth = 360 - azimuth
@@ -197,6 +210,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.doWork(pointList)
         self.getFromGeometry(False)
         self.listFeatureId= list()
+        self.vertices = pointList
 
     def exportCsv(self):
         fileDlg = QFileDialog()
@@ -307,6 +321,77 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         
         htmlFile.write(u'</table>\n</body>\n</html>')
         htmlFile.close()
+    
+    def exportGpx(self):
+        fileDlg = QFileDialog()
+        filePath = fileDlg.getSaveFileName(None, u"Selecione arquivo de saída", "", u"Arquivo GPX (*.gpx)")[0]
+
+        if filePath != "" and filePath[-4:].lower() != ".gpx":
+            filePath += ".gpx"
+        
+        if not filePath:
+            return
+        
+        if filePath != "":
+            gpxFile = open(filePath, 'w')
+        
+        gpxFile.write(u'<?xml version="1.0"?>\n<gpx version="1.1" creator="GDAL 3.10.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogr="http://osgeo.org/gdal" xmlns="http://www.topografix.com/GPX/1/1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n')
+        gpxFile.write(u'<metadata>\n')
+
+        crs = QgsProject.instance().crs()
+        crsWgs84 = QgsCoordinateReferenceSystem('EPSG:4326')
+
+        transform = QgsCoordinateTransform(crs, crsWgs84, QgsProject.instance().transformContext())
+
+        dictPoints = dict()
+        minlat, maxlat, minlon, maxlon = (9999, -9999, 9999, -9999)
+
+        for i in range(0, self.mapList.topLevelItemCount()):
+            pointName = self.mapList.topLevelItem(i).data(0, 0)
+            azimute = self.mapList.topLevelItem(i).data(3, 0)
+            distance = self.mapList.topLevelItem(i).data(4, 0)
+            destino = self.mapList.topLevelItem(i).data(5, 0)
+            featVertice = self.vertices[i]
+            geomTrans = transform.transform(QgsPointXY(featVertice.x(), featVertice.y()))
+
+            lat = geomTrans.y()
+            lon = geomTrans.x()
+
+            if lat < minlat:
+                minlat = lat
+            elif lat > maxlat:
+                maxlat = lat
+            elif lon < minlon:
+                minlon = lon
+            elif lon > maxlon:
+                maxlon = lon
+        
+            if self.displayXYCheckBox.isChecked():
+                dictPoints[i] = [lat, lon, pointName, str(featVertice.x()), str(featVertice.y()), azimute, distance, destino]
+            else:
+                dictPoints[i] = [lat, lon, pointName, azimute, distance, destino]
+    
+        gpxFile.write(f'<bounds minlat="{minlat}" minlon="{minlon}" maxlat="{maxlat}" maxlon="{maxlon}"/>\n')
+        gpxFile.write(u'</metadata>\n')
+
+        for i, infoPoint in dictPoints.items():
+            gpxFile.write(f'<wpt lat="{infoPoint[0]}" lon="{infoPoint[1]}">\n')
+            gpxFile.write(f'<name>{infoPoint[2]}</name>\n')
+            gpxFile.write(u'<cmt>')
+            if self.displayXYCheckBox.isChecked():
+                gpxFile.write(f'Coord X: {infoPoint[3]}\n')
+                gpxFile.write(f'Coord Y: {infoPoint[4]}\n')
+                gpxFile.write(f'Azimute: {infoPoint[5]}\n')
+                gpxFile.write(f'Distancia: {infoPoint[6]}\n')
+                gpxFile.write(f'Ponto de Destino: {infoPoint[7]}\n')
+            else:
+                gpxFile.write(f'Azimute: {infoPoint[3]}\n')
+                gpxFile.write(f'Distancia: {infoPoint[4]}\n')
+                gpxFile.write(f'Ponto de Destino: {infoPoint[5]}')
+            gpxFile.write(u'</cmt>\n')
+            gpxFile.write(u'</wpt>\n')
+        
+        gpxFile.close()      
 
 class GeometryMapTool(QgsMapToolIdentifyFeature):
 

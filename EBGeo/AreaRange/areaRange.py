@@ -14,6 +14,7 @@ class AreaRange(QObject):
         self.canvas = self.iface.mapCanvas()
         self.initVariables()
         self.initSignals()
+        self.firstAreaRangeLayerCrs = None
 
     # Definir caminho de imagem e texto auxiliar.
     def initGui(self, ar_action):
@@ -53,7 +54,19 @@ class AreaRange(QObject):
 
     # Criar camada vetorial do tipo polígono com as informações de Alcance, Azimute e Abertura.
     def createlayer(self, worklayer):
+        existingLayers = QgsProject.instance().mapLayersByName("Alcance do Armamento")
+        if existingLayers:
+            output_layer = existingLayers[0]
+            self.firstAreaRangeLayerCrs = output_layer.crs()
+            dtprovider = output_layer.dataProvider()
+            if len(output_layer.fields()) == 0:
+                dtprovider.addAttributes([QgsField("Alcance", QVariant.Double),
+                QgsField("Azimute", QVariant.Double),
+                QgsField("Abertura", QVariant.Double)])
+                output_layer.updateFields()
+            return output_layer, dtprovider
         output_layer = QgsVectorLayer("Polygon?crs={}".format(worklayer.crs().authid()), "Alcance do Armamento", "memory")
+        self.firstAreaRangeLayerCrs = output_layer.crs()
         dtprovider = output_layer.dataProvider()
         QgsProject.instance().addMapLayer(output_layer)
         dtprovider.addAttributes([QgsField("Alcance", QVariant.Double),
@@ -144,7 +157,7 @@ class AreaRange(QObject):
                 for feature in layer.getFeatures():
                     transf = QgsCoordinateTransform(layer.crs(), self.canvas.mapSettings().destinationCrs(), QgsProject.instance())
                     if feature.geometry().isMultipart():
-                        workgeom = feature.geometry().coerceToType(1)[0].asPoint()
+                        workgeom = feature.geometry().coerceToType(QgsWkbTypes.Point)[0].asPoint()
                     else:
                         workgeom = feature.geometry().asPoint()
                     geom = QgsPoint(workgeom)
@@ -215,6 +228,9 @@ class AreaRange(QObject):
                 d, ang, op = inputs
 
             area_geom = self.generateArea(workgeom, d, ang, op)
+            if self.firstAreaRangeLayerCrs != None:
+                transf = QgsCoordinateTransform(worklayer.crs(), self.firstAreaRangeLayerCrs, QgsProject.instance())
+                area_geom.transform(transf)
             output_layer, dtprovider = self.createlayer(worklayer)
             output_feature = QgsFeature()
             output_feature.setGeometry(area_geom)

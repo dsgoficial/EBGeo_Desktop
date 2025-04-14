@@ -155,7 +155,7 @@ class EBGeo(QObject):
 
 		self.azgen_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'azimuthgen.png'),
-			text=u'Calcula azimute e distância (tabela)',
+			text=u'Quadro Auxiliar de Navegação (QAN)',
 			callback=self.loadAzimuthGenerator,
 			parent=self.ebGeo,
 			add_to_menu=False,
@@ -166,7 +166,7 @@ class EBGeo(QObject):
 
 		self.ar_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'arearange.png'),
-			text=u'Geração de área de alcance de armamento',
+			text=u'Alcance de armamento',
 			callback=self.loadAreaRange,
 			parent=self.ebGeo,
 			add_to_menu=False,
@@ -189,7 +189,7 @@ class EBGeo(QObject):
 
 		self.vis_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'visib.png'),
-			text=u'Gerador de Mapa de visibilidade',
+			text=u'Mapa de visibilidade',
 			callback=self.loadVisibility,
 			parent=self.ebGeo,
 			add_to_menu=False,
@@ -209,7 +209,7 @@ class EBGeo(QObject):
 
 		self.frame_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'GerarMoldura.png'),
-			text=u'Gerador de Molduras',
+			text=u'Grid (grade) de coordenadas da carta',
 			callback=self.loadMakeFrame,
 			parent=self.ebGeo,
 			add_to_menu=False,
@@ -250,7 +250,7 @@ class EBGeo(QObject):
 
 		self.miA_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'findmiarea.png'),
-			text=u'Localizador de carta topográfca (MI) por região',
+			text=u'Download de Cartas do BDGEx',
 			callback=self.loadDeterminarMIArea,
 			parent=self.ebGeo,
 			add_to_menu=False,

@@ -163,7 +163,7 @@ class PlottingTool:
 
 
     def outSVG(self, iface, wdg, mdl, library):
-        fileName = QFileDialog.getSaveFileName(iface.mainWindow(), u"Salvar como",u"Perfil do terreno" + u".png", "Scalable Vector Graphics (*.svg)")
+        fileName = QFileDialog.getSaveFileName(iface.mainWindow(), u"Salvar como",u"Análise do Perfil do Terreno" + u".png", "Scalable Vector Graphics (*.svg)")
         if fileName:
             if isinstance(fileName,tuple):  #pyqt5 case
                 fileName = fileName[0]
@@ -175,7 +175,7 @@ class PlottingTool:
                 exporter.export(fileName = fileName)
             
     def outPNG(self, iface, wdg, mdl, library):
-        fileName = QFileDialog.getSaveFileName(iface.mainWindow(), u"Salvar como",u"Perfil do terreno" + u".png", "Portable Network Graphics (*.png)")[0]
+        fileName = QFileDialog.getSaveFileName(iface.mainWindow(), u"Salvar como",u"Análise do Perfil do Terreno" + u".png", "Portable Network Graphics (*.png)")[0]
         if fileName:
             if library == "PyQtGraph":
                 exporter =  exporters.ImageExporter(wdg.plotWdg.getPlotItem())

@@ -36,7 +36,7 @@ class TableViewTool(QtCore.QObject):
                     templist +=  [[layer, layer.name()]]
                         
             if len(templist) == 0:
-                QMessageBox.warning(iface.mainWindow(), u"Perfil do terreno", u"Não há camadas raster para adicionar.")
+                QMessageBox.warning(iface.mainWindow(), u"Análise do Perfil do Terreno", u"Não há camadas raster para adicionar.")
                 return
             else:    
                 testqt, ok = QInputDialog.getItem(iface.mainWindow(), u"Seletor de camadas", u"Selecione uma camada", [templist[k][1] for k in range( len(templist) )], False)
@@ -50,7 +50,7 @@ class TableViewTool(QtCore.QObject):
             if isProfilable(layer1):
                 layer2 = layer1
             else:
-                QMessageBox.warning(iface.mainWindow(), u"Perfil do terreno", u"Camada ativa não pode ser usada para gerar perfis.")
+                QMessageBox.warning(iface.mainWindow(), u"Análise do Perfil do Terreno", u"Camada ativa não pode ser usada para gerar perfis.")
                 return
 
         # Ask the Band by a input dialog
@@ -82,7 +82,7 @@ class TableViewTool(QtCore.QObject):
             elif int(QtCore.QT_VERSION_STR[0]) == 5 :    #qgis3
                 fields = [field.name() for field in layer2.fields() if field.isNumeric()]
             if len(fields)==0:
-                QMessageBox.warning(iface.mainWindow(), u"Perfil do terreno", u"Camada ativa não pode ser usada para gerar perfis.")
+                QMessageBox.warning(iface.mainWindow(), u"Análise do Perfil do Terreno", u"Camada ativa não pode ser usada para gerar perfis.")
                 return
             elif len(fields) == 1 :
                 choosenBand = fieldstemp.index(fields[0])

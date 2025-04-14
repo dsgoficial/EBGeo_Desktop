@@ -41,7 +41,8 @@ class Main(QtWidgets.QDialog, FORM_CLASS):
         fields = workingLayer.fields()
         workingField = self.attributeSelection.currentField()
         
-        if(not (fields.field(workingField).typeName() in ('Real', 'integer', 'Integer64'))):
+        if(not (fields.field(workingField).typeName() in ('Real', 'integer', 'Integer64', 'real', 'integer - 64bit', 'double', '32 bit', '64 bit', 'integer - 32bit',
+                                                          'numeric', 'decimal'))):
             QMessageBox.critical(self, u"Erro", u"O atributo selecionado não é numérico. Selecione um atributo numérico para a conversão.")
             return
         

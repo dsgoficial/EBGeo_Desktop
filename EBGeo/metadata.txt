@@ -23,8 +23,8 @@ about=
 	- Criação de pontos por coordenadas
 	- Relocação de pontos por coordenadas 
 	- Declinação magnética e convergência meridiana
-	- Determinação de MI (índice de nomenclatura) de carta
-	- Perfil do terreno
+	- Download de Cartas do BDGEx
+	- Análise do Perfil do Terreno
 	- Geocodificação (direta e reversa)
 	- Medição na aquisição vetorial
 	- Mosaicar
@@ -46,8 +46,8 @@ about=
 	- Coordinate-based point creator
 	- Coordinate-based point relocation
 	- Magnetic declination and meridian convergence calculator
-	- Chart MI (map naming index) determination
-	- Profile tool
+	- Download BDGEx Letters
+	- Profile tool Analysis
 	- Geocoding (direct and reverse)
 	- In-digitize measure tool
 	- Make Mosaic

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>360</width>
+    <width>444</width>
     <height>591</height>
    </rect>
   </property>
@@ -18,7 +18,7 @@
   </property>
   <property name="minimumSize">
    <size>
-    <width>302</width>
+    <width>444</width>
     <height>332</height>
    </size>
   </property>
@@ -163,14 +163,14 @@
      </layout>
     </item>
     <item row="7" column="0">
-        <widget class="QCheckBox" name="displayXYCheckBox">
-            <property name="text">
-                <string>Gerar coordenadas X e Y do primeiro ponto</string>
-            </property>
-            <property name="checked">
-                <bool>true</bool>
-            </property>
-        </widget>
+     <widget class="QCheckBox" name="displayXYCheckBox">
+      <property name="text">
+       <string>Gerar coordenadas X e Y do primeiro ponto</string>
+      </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
+     </widget>
     </item>
     <item row="8" column="0">
      <widget class="QTreeWidget" name="mapList">
@@ -256,6 +256,13 @@
         </attribute>
        </widget>
       </item>
+      <item>
+       <widget class="QPushButton" name="gpxButton">
+        <property name="text">
+         <string>Exportar como GPX</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </item>
    </layout>
@@ -271,7 +278,7 @@
    </property>
   </buttongroup>
   <buttongroup name="formatacao"/>
-  <buttongroup name="delimitador"/>
   <buttongroup name="medidor"/>
+  <buttongroup name="delimitador"/>
  </buttongroups>
 </ui>

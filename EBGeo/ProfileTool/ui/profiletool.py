@@ -188,7 +188,7 @@ class Ui_ProfileTool(object):
         QtCore.QMetaObject.connectSlotsByName(ProfileTool)
 
     def retranslateUi(self, ProfileTool):
-        ProfileTool.setWindowTitle(_translate("ProfileTool", "Perfil do Terreno", None))
+        ProfileTool.setWindowTitle(_translate("ProfileTool", "Análise do Perfil do Terreno", None))
         self.activateButton.setText(_translate("ProfileTool", "A\n"
 "t\n"
 "i\n"
