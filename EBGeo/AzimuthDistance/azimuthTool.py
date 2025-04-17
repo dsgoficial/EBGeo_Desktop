@@ -9,6 +9,7 @@ import os
 from math import *
 import csv
 from qgis.PyQt import uic
+import re
 
 class AzimuthTool(QObject):
 
@@ -128,8 +129,12 @@ class AzimuthTool(QObject):
                     dId = row.index(self.distColumn)
                 ang = row[angId]
                 d = row[dId]
-                if not (ang.isnumeric() and d.isnumeric()):
+                if re.search(r'[a-zA-Z]', ang) or re.search(r'[a-zA-Z]', d):
                     continue
+                if ',' in ang:
+                    ang = ang.replace(',', '.')
+                if ',' in d:
+                    d = d.replace(',', '.')
                 ang=float(ang)
                 d=float(d)
                 feat_new = self.calcNewFeat(worklayer, workgeom, d, ang)
