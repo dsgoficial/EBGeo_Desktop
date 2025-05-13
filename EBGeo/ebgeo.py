@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 import os, sys, webbrowser
 from qgis.utils import iface
+currentPath = os.path.dirname(__file__)
+sys.path.append(os.path.abspath(currentPath))
 from qgis.core import QgsMapLayer, QgsProject, QgsApplication
 from qgis.PyQt.QtWidgets import QAction, QMessageBox, QMenu
 from qgis.PyQt.QtGui import QIcon
 from .BDGEx.bdgexGuiManager import BDGExGuiManager
 from .Processings.pluginProvider import pluginProvider
+from .VisibilityAnalysis.visibilityAnalysis import VisibilityAnalysis as Main_VisibilityAnalisys
 from qgis.gui import QgisInterface
-from qgis.PyQt.QtCore import pyqtSignal, QObject
+from qgis.PyQt.QtCore import pyqtSignal, QObject, Qt
 from qgis.core import QgsVectorLayer, Qgis
 
 # sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'auxiliar'))
@@ -278,6 +281,16 @@ class EBGeo(QObject):
 		self.ebGeo.addAction(self.dec_action)
 		from .DeclinacaoConvergencia.main import Main as Main_DecConv
 		self.mainDecConv = Main_DecConv(iface)
+		
+		self.visibilityAnalysisToolBox = None
+		self.mt_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'visibilityAnalisis.png'),
+			text=u'Análise de Visibilidade',
+			callback=self.visibilityAnalysis,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.mt_action)
 
 		# self.geo_action = self.add_action(
 		#  	os.path.join(os.path.dirname(__file__), 'icons', 'geocoder.png'),
@@ -529,3 +542,14 @@ class EBGeo(QObject):
 		if isinstance(self.currentLayer, QgsVectorLayer):
 			self.currentLayer.editingStarted.connect(self.editingStarted)
 			self.currentLayer.editingStopped.connect(self.editingStopped)
+		
+	def visibilityAnalysis(self):
+		if self.visibilityAnalysisToolBox is not None:
+			self.iface.removeDockWidget(self.visibilityAnalysisToolBox)
+		else:
+			self.visibilityAnalysisToolBox = Main_VisibilityAnalisys(
+				self.iface
+			)
+		self.iface.addDockWidget(
+			Qt.RightDockWidgetArea, self.visibilityAnalysisToolBox
+		)

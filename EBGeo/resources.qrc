@@ -13,5 +13,8 @@
     <file>icons/numericaldigitize.png</file>
     <file>icons/numericalvertexedit.png</file>
     <file>icons/profileIcon.png</file>
+    <file>icons/reload.png</file>
+    <file>icons/criarCamada.png</file>
+    <file>icons/visibilityAnalisis.png</file>
   </qresource>
 </RCC>
