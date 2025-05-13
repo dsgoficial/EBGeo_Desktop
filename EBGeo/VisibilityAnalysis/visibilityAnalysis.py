@@ -17,6 +17,7 @@ from qgis.core import (
     QgsProject,
     QgsProcessingUtils,
     QgsProject,
+    QgsProcessingFeatureSourceDefinition,
     QgsGeometry,
     QgsRasterShader,
     QgsColorRampShader,
@@ -339,18 +340,16 @@ class VisibilityAnalysis(
                 return
             viewshed_result = QgsRasterLayer(viewshed_result)
 
-            tempLyrForEachFeat = QgsVectorLayer("Polygon?crs={}".format(layer.crs().authid()), "featLayer", "memory")
-            provider = tempLyrForEachFeat.dataProvider()
-            provider.addFeature(feat)
+            layer.selectByIds([feat.id()])
             clip_result_path = processing.run("gdal:cliprasterbymasklayer",
                 {
                     'INPUT': viewshed_result,
-                    'MASK': layer,
+                    'MASK': QgsProcessingFeatureSourceDefinition(layer.source(), selectedFeaturesOnly=True),
                     'SOURCE_CRS': mds.crs(),
                     'TARGET_CRS': layer.crs(),
                     'NODATA': None,
                     'ALPHA_BAND': False,
-                    'CROP_TO_CUTLINE': True,
+                    'CROP_TO_CUTLINE': False,
                     'KEEP_RESOLUTION': False,
                     'SET_RESOLUTION': False,
                     'X_RESOLUTION': None,
@@ -364,6 +363,7 @@ class VisibilityAnalysis(
             )['OUTPUT']
             clip_result = QgsRasterLayer(clip_result_path)
             rasterList.append(clip_result)
+            layer.removeSelection()
         
         if len(rasterList) == 0:
             QMessageBox.warning(
