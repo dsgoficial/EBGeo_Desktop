@@ -261,6 +261,15 @@ class VisibilityAnalysis(
             )
             return
 
+        temp_mask_layer = processing.run(
+                "native:polygonfromlayerextent",
+                {
+                    'INPUT':layer,
+                    'ROUND_TO':0,
+                    'OUTPUT':'TEMPORARY_OUTPUT'
+                },
+            )["OUTPUT"]
+
         for feat in layer.getFeatures():
             altura_obs = feat["altura_obs"]
             central_point = self.getCentralPointTargetSector(feat)
@@ -281,43 +290,10 @@ class VisibilityAnalysis(
                 )
                 return
 
-            temp_mask_layer = processing.run(
-                "native:polygonfromlayerextent",
-                {
-                    'INPUT':layer,
-                    'ROUND_TO':0,
-                    'OUTPUT':'TEMPORARY_OUTPUT'
-                },
-            )["OUTPUT"]
-
-            reproject_layer = processing.run("native:reprojectlayer", 
-                {
-                    'INPUT':temp_mask_layer,
-                    'TARGET_CRS':QgsCoordinateReferenceSystem('EPSG:3857'),
-                    'CONVERT_CURVED_GEOMETRIES':False,
-                    'OPERATION':'+proj=noop',
-                    'OUTPUT':'TEMPORARY_OUTPUT'
-                }
-            )["OUTPUT"]
-
-            buffer_layer = processing.run("native:buffer", 
-                {
-                    'INPUT':reproject_layer,
-                    'DISTANCE':90,
-                    'SEGMENTS':5,
-                    'END_CAP_STYLE':0,
-                    'JOIN_STYLE':0,
-                    'MITER_LIMIT':2,
-                    'DISSOLVE':False,
-                    'SEPARATE_DISJOINT':False,
-                    'OUTPUT':'TEMPORARY_OUTPUT'
-                }
-            )["OUTPUT"]
-
             clip_result_path = processing.run("gdal:cliprasterbymasklayer",
                 {
                     'INPUT': mds,
-                    'MASK': buffer_layer,
+                    'MASK': temp_mask_layer,
                     'SOURCE_CRS': None,
                     'TARGET_CRS': None,
                     'NODATA': None,
@@ -353,6 +329,7 @@ class VisibilityAnalysis(
                         'OUTPUT': temp_output,
                     },
                 )['OUTPUT']
+
             except:
                 QMessageBox.warning(
                     self.iface.mainWindow(),
@@ -361,19 +338,19 @@ class VisibilityAnalysis(
                 )
                 return
             viewshed_result = QgsRasterLayer(viewshed_result)
- 
+
             tempLyrForEachFeat = QgsVectorLayer("Polygon?crs={}".format(layer.crs().authid()), "featLayer", "memory")
             provider = tempLyrForEachFeat.dataProvider()
             provider.addFeature(feat)
             clip_result_path = processing.run("gdal:cliprasterbymasklayer",
                 {
                     'INPUT': viewshed_result,
-                    'MASK': tempLyrForEachFeat,
+                    'MASK': layer,
                     'SOURCE_CRS': mds.crs(),
-                    'TARGET_CRS': tempLyrForEachFeat.crs(),
+                    'TARGET_CRS': layer.crs(),
                     'NODATA': None,
                     'ALPHA_BAND': False,
-                    'CROP_TO_CUTLINE': False,
+                    'CROP_TO_CUTLINE': True,
                     'KEEP_RESOLUTION': False,
                     'SET_RESOLUTION': False,
                     'X_RESOLUTION': None,
@@ -387,7 +364,7 @@ class VisibilityAnalysis(
             )['OUTPUT']
             clip_result = QgsRasterLayer(clip_result_path)
             rasterList.append(clip_result)
-
+        
         if len(rasterList) == 0:
             QMessageBox.warning(
                 self.iface.mainWindow(),
@@ -397,7 +374,7 @@ class VisibilityAnalysis(
                 ),
             )
             return
-            
+
         finalRasterLayer = self.sumRasters(rasterList)
 
         clip_result_path = processing.run("gdal:cliprasterbymasklayer",
