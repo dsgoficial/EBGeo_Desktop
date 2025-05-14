@@ -271,26 +271,36 @@ class VisibilityAnalysis(
                 },
             )["OUTPUT"]
 
+        for feat in temp_mask_layer.getFeatures():
+            geom = feat.geometry()
+            bbox = geom.boundingBox()
+            width = bbox.width()
+            height = bbox.height()
+            if width > height:
+                dist_max = width
+            else:
+                dist_max = height
+
         for feat in layer.getFeatures():
             altura_obs = feat["altura_obs"]
             central_point = self.getCentralPointTargetSector(feat)
             max_distance = self.getMaxDistance(feat)
 
-            centralPointGeometry = QgsGeometry.fromPointXY(central_point)
+            featGeom = feat.geometry()
             transform = QgsCoordinateTransform(
                 layer.crs(), mds.crs(), QgsProject.instance()
             )
-            centralPointGeometry.transform(transform)
+            featGeom.transform(transform)
             extentRaster = mds.extent()
             geomExtentRaster = QgsGeometry.fromRect(extentRaster)
-            if not centralPointGeometry.intersects(geomExtentRaster):
+            if not featGeom.within(geomExtentRaster):
                 QMessageBox.warning(
                     self.iface.mainWindow(),
                     self.tr("Erro!"),
                     self.tr("Há setores de visada fora do Modelo Digital de Superfície")
                 )
                 return
-
+            
             clip_result_path = processing.run("gdal:cliprasterbymasklayer",
                 {
                     'INPUT': mds,
@@ -312,9 +322,6 @@ class VisibilityAnalysis(
                 },
             )['OUTPUT']
 
-            temp_output = QgsProcessingUtils.generateTempFilename(
-                    f"local_viewshed_{str(uuid4().hex)}.tif"
-                )
             try:
                 viewshed_result = processing.run(
                     "gdal:viewshed",
@@ -322,12 +329,12 @@ class VisibilityAnalysis(
                         'INPUT': clip_result_path,
                         'BAND' : 1,
                         'EXTRA' : '',
-                        'MAX_DISTANCE' : max_distance,
+                        'MAX_DISTANCE' : dist_max,
                         'OBSERVER': f"{central_point.x()},{central_point.y()} [{layer.crs().authid()}]",
                         'OBSERVER_HEIGHT': altura_obs,
                         'TARGET_HEIGHT': 0.0,
                         'OPTIONS' : None,
-                        'OUTPUT': temp_output,
+                        'OUTPUT': 'TEMPORARY_OUTPUT',
                     },
                 )['OUTPUT']
 

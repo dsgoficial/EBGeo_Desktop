@@ -134,6 +134,14 @@ class ViewshedTool(QgsMapTool):
         if event.key() == Qt.Key_Escape:
             self.reset()
             return
+        
+    def textDistanceToolTip(self, txt, distance, event):
+        txt = f"<b>Raio: {distance:.2f}{txt}</b>"
+        QToolTip.showText(
+            self.canvas.mapToGlobal(event.pos()),
+            txt,
+            self.canvas
+        )
     
     def canvasMoveEvent(self, event):
         """Captura o movimento do mouse no canvas"""
@@ -158,6 +166,12 @@ class ViewshedTool(QgsMapTool):
                     self.temp_line.reset(QgsWkbTypes.LineGeometry)
                     self.temp_line.addPoint(self.center_point)
                     self.temp_line.addPoint(current_point)
+
+                    distance = self.center_point.distance(current_point)
+                    if self.layer.crs().isGeographic():
+                        self.textDistanceToolTip("°", distance, event)
+                    else:
+                        self.textDistanceToolTip("m", distance, event)
 
             elif self.phase == 2:  # Pré-visualizando o setor circular
                 # Atualiza o setor de visualização
