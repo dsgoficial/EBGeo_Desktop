@@ -4,6 +4,7 @@ from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt.QtWidgets import QMessageBox, QFileDialog
 from qgis.gui import QgsProjectionSelectionDialog
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, Qt, QObject
+from .selectLayersInterface import SelectLayersInterface
 from ..model.baseDeDados import BaseDeDados
 import os
 
@@ -45,23 +46,54 @@ class CreateDataBaseInterface(QtWidgets.QDialog, FORM_CLASS):
         self.fileNameLineEdit.clear()
 
     def doCreateDataBase(self):
-        if self.folder and self.name:
-            path = os.path.join(self.folder, self.name)+'.gpkg'
-            self.baseDeDados.createDataBase(path)
-            if os.path.isfile(path):
-                QMessageBox.warning(self, u"Aviso:", u'Arquivo de simbologia militar criado com sucesso!\nAguarde o carregamento automático')
-                self.baseDeDados.setCurrentDatabase(path)
-                if self.baseDeDados.loadDatabase():
-                    QMessageBox.warning(self, u"Aviso:", u'Arquivo de simbologia militar carregado com sucesso!')
-                    return 1
-                else:
-                    QMessageBox.warning(self, u"Aviso:", u'Erro ao carregar o arquivo de simbologia militar.')
-                    return 0
-            else:
-                QMessageBox.warning(self, u"Aviso:", u'Erro na criação do arquivo de simbologia militar!')
-                return 1
+        if not self.folder or not self.name:
+            QMessageBox.warning(self, u"Aviso:", u"Preencha todos os campos!")
+            return 0
+    
+        path = os.path.join(self.folder, self.name) + '.gpkg'
+    
+        # Obter lista de camadas disponíveis no template
+        template_layers = self.baseDeDados.getTemplateLayerList()
+    
+        # Exibir diálogo de seleção de camadas diretamente
+        select_dialog = SelectLayersInterface(self, template_layers)
+        select_dialog.setWindowTitle("Selecionar Camadas para Criação")
+        select_dialog.setEditMode(True)
+    
+        # Se o usuário cancelar a seleção
+        if not select_dialog.exec_():
+            return 0
+    
+        selected_layers = select_dialog.selectedLayers
+        duplicate_info = select_dialog.get_duplicate_info()
+    
+        if not selected_layers:
+            QMessageBox.warning(self, u"Aviso:", u"Nenhuma camada foi selecionada.")
+            return 0
+    
+        # Criar banco de dados (copia template)
+        result = self.baseDeDados.createDataBase(path)
+    
+        if not os.path.isfile(path):
+            QMessageBox.warning(self, u"Aviso:", u"Erro na criação do arquivo de simbologia militar!")
+            return 0
+    
+        # Arquivo criado com sucesso, definir o banco de dados atual
+        self.baseDeDados.setCurrentDatabase(path)
+    
+        # Carregar apenas as camadas selecionadas, incluindo duplicatas
+        # IMPORTANTE: NÃO passar existing_geopackage=True pois é um geopackage novo
+        QMessageBox.information(self, u"Sucesso:", u"Arquivo de simbologia militar criado com sucesso!\nAguarde o carregamento das camadas selecionadas")
+        
+        if self.baseDeDados.loadSelectedLayersWithDuplicates(
+            selected_layers, 
+            duplicate_info, 
+            existing_geopackage=False  # False para geopackages novos
+        ):
+            QMessageBox.information(self, u"Sucesso:", u"Camadas selecionadas carregadas com sucesso!")
+            return 1
         else:
-            QMessageBox.warning(self, u"Aviso:", u"Preencha todos os campos !")
+            QMessageBox.warning(self, u"Aviso:", u"Erro ao carregar o arquivo de simbologia militar.")
             return 0
 
     @pyqtSlot(bool)

@@ -49,6 +49,13 @@
        </widget>
       </item>
       <item>
+        <widget class="QPushButton" name="addToExistingButton">
+          <property name="text">
+            <string>Adicionar simbologia militar em arquivo existente</string>
+          </property>
+        </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="loadDatabaseButton">
         <property name="text">
          <string>Abrir arquivo de simbologia militar existente</string>
