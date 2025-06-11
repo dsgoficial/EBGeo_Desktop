@@ -20,7 +20,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from DsgTools.core.GeometricTools.featureHandler import FeatureHandler
+from EBGeo.Utils.featureHandler import FeatureHandler
 from qgis.PyQt.Qt import QVariant
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import (
@@ -28,7 +28,7 @@ from qgis.core import (
     QgsFeatureSink,
     QgsProcessingAlgorithm,
     QgsProcessingParameterFeatureSink,
-    QgsProcessingParameterVectorLayer,
+    QgsProcessingParameterMapLayer,
     QgsWkbTypes,
     QgsProcessingParameterEnum,
     QgsProcessingParameterNumber,
@@ -38,42 +38,75 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsField,
     QgsFields,
+    QgsProcessingParameterDefinition,
+    QgsMapLayer,
+    QgsVectorLayer,
+    QgsGeometry,
+    QgsFeature,
 )
-
+import processing
 
 class MakeFrame(QgsProcessingAlgorithm):
     INPUT = "INPUT"
     STOP_SCALE = "STOP_SCALE"
+    XSUBDIVISIONS = "XSUBDIVISIONS"
+    YSUBDIVISIONS = "YSUBDIVISIONS"
     OUTPUT = "OUTPUT"
 
-    def initAlgorithm(self, config=None):
+    def initAlgorithm(self, config):
         """
         Parameter setting.
         """
 
         self.addParameter(
-            QgsProcessingParameterVectorLayer(
+            QgsProcessingParameterMapLayer(
                 self.INPUT,
-                self.tr("Camada de entrada"),
-                [QgsProcessing.TypeVectorPolygon],
+                self.tr("Input Layer (Vector or Raster)"),
             )
         )
 
         self.scales = [
-            "1:250.000",
-            "1:100.000",
-            "1:50.000",
-            "1:25.000",
+            "1000k",
+            "500k",
+            "250k",
+            "100k",
+            "50k",
+            "25k",
+            "10k",
+            "5k",
+            "2k",
+            "1k",
         ]
 
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.STOP_SCALE,
-                self.tr("Escala das cartas:"),
+                self.tr("Desired scale"),
                 options=self.scales,
                 defaultValue=0,
             )
         )
+
+        param = QgsProcessingParameterNumber(
+            self.XSUBDIVISIONS,
+            self.tr("Number of subdivisions on x-axis"),
+            minValue=1,
+            type=QgsProcessingParameterNumber.Integer,
+            optional=True,
+        )
+        param.setFlags(param.flags() | QgsProcessingParameterDefinition.FlagAdvanced)
+
+        self.addParameter(param)
+
+        param = QgsProcessingParameterNumber(
+            self.YSUBDIVISIONS,
+            self.tr("Number of subdivisions on y-axis"),
+            minValue=1,
+            type=QgsProcessingParameterNumber.Integer,
+            optional=True,
+        )
+        param.setFlags(param.flags() | QgsProcessingParameterDefinition.FlagAdvanced)
+        self.addParameter(param)
 
         self.addParameter(
             QgsProcessingParameterFeatureSink(self.OUTPUT, self.tr("Created Frames"))
@@ -84,22 +117,87 @@ class MakeFrame(QgsProcessingAlgorithm):
         Here is where the processing itself takes place.
         """
         featureHandler = FeatureHandler()
-        inputLyr = self.parameterAsVectorLayer(parameters, self.INPUT, context)
+        inputLyr = self.parameterAsLayer(parameters, self.INPUT, context)
+        inputOld = inputLyr
         if inputLyr is None:
             raise QgsProcessingException(
                 self.invalidSourceError(parameters, self.INPUT)
             )
-        inputLyr.updateExtents()
-        stopScaleIdx = self.parameterAsEnum(parameters, self.STOP_SCALE, context)
-        # Scale
-        stopScale = self.scales[stopScaleIdx]
-        stopScale = stopScale[2:]
-        stopScale = int(stopScale.replace(".", ""))/1000
 
+        # Verificar se é uma camada raster
+        if inputLyr.type() == QgsMapLayer.RasterLayer:
+            # Obter o extent do raster e convertê-lo em um polígono
+            extent = inputLyr.extent()
+            rasterGeom = QgsGeometry.fromRect(extent)
+
+            # Criar uma camada temporária de polígono com esse extent
+            fields = QgsFields()
+            tempLayer = QgsVectorLayer(
+                "Polygon?crs=" + inputLyr.crs().authid(), "temp", "memory"
+            )
+            provider = tempLayer.dataProvider()
+            tempLayer.startEditing()
+            feat = QgsFeature()
+            feat.setGeometry(rasterGeom)
+            provider.addFeature(feat)
+            tempLayer.commitChanges()
+
+            # Usar essa camada temporária como entrada
+            inputLyr = tempLayer
+
+        geomTypeLyr = (
+            inputLyr.geometryType()
+            if hasattr(inputLyr, "geometryType")
+            else QgsWkbTypes.PolygonGeometry
+        )
+        if (
+            geomTypeLyr == QgsWkbTypes.PointGeometry
+            or geomTypeLyr == QgsWkbTypes.LineGeometry
+        ):
+            inputLyr = processing.run("native:buffer", 
+                {
+                    'INPUT': inputLyr, 
+                    'DISTANCE': 10 ** (-5), 
+                    'SEGMENTS': 5, 
+                    'END_CAP_STYLE':0, 
+                    'JOIN_STYLE': 0, 
+                    'MITER_LIMIT': 2, 
+                    'DISSOLVE': False, 
+                    'SEPARATE_DISJOINT': False, 
+                    'OUTPUT': 'TEMPORARY_OUTPUT'
+                },
+                context=context,
+                feedback=feedback,
+            )['OUTPUT']
+        stopScaleIdx = self.parameterAsEnum(parameters, self.STOP_SCALE, context)
+        stopScale = self.scales[stopScaleIdx]
+        stopScale = int(stopScale.replace("k", ""))
         fields = QgsFields()
         fields.append(QgsField("inom", QVariant.String))
         fields.append(QgsField("mi", QVariant.String))
         crs = inputLyr.crs()
+
+        xSubdivisions = self.parameterAsInt(parameters, self.XSUBDIVISIONS, context)
+        ySubdivisions = self.parameterAsInt(parameters, self.YSUBDIVISIONS, context)
+
+        default_x = 1
+        default_y = 1
+
+        if stopScale == 50:
+            default_x = 2
+            default_y = 2
+        elif stopScale == 100:
+            default_x = 4
+            default_y = 4
+        elif stopScale == 250:
+            default_x = 12
+            default_y = 8
+
+        if xSubdivisions is None or xSubdivisions == 0:
+            xSubdivisions = default_x
+        if ySubdivisions is None or ySubdivisions == 0:
+            ySubdivisions = default_y
+
         (output_sink, output_sink_id) = self.parameterAsSink(
             parameters, self.OUTPUT, context, fields, QgsWkbTypes.Polygon, crs
         )
@@ -115,14 +213,47 @@ class MakeFrame(QgsProcessingAlgorithm):
             stopScale,
             coordinateTransformer,
             fields,
+            xSubdivisions=xSubdivisions,
+            ySubdivisions=ySubdivisions,
             feedback=feedback,
         )
-        list(
-            map(
-                lambda x: output_sink.addFeature(x, QgsFeatureSink.FastInsert),
-                featureList,
+
+        # Função de filtro para remover MI que não intersectam com a camada original
+        def filterFunc(feat):
+            if hasattr(inputOld, "type") and inputOld.type() == QgsMapLayer.RasterLayer:
+                geom = feat.geometry()
+                extent_geom = QgsGeometry.fromRect(inputOld.extent())
+                return geom.intersects(extent_geom)
+            else:
+                geom = feat.geometry()
+                bbox = geom.boundingBox()
+                return any(
+                    geom.intersects(f.geometry()) for f in inputOld.getFeatures(bbox)
+                )
+
+        # Se a entrada original for um polígono, não precisamos filtrar
+        needsFiltering = True
+        if hasattr(inputOld, "type"):
+            if (
+                inputOld.type() == QgsMapLayer.VectorLayer
+                and inputOld.geometryType() == QgsWkbTypes.PolygonGeometry
+            ):
+                needsFiltering = False
+
+        if needsFiltering:
+            list(
+                map(
+                    lambda x: output_sink.addFeature(x, QgsFeatureSink.FastInsert),
+                    filter(filterFunc, featureList),
+                )
             )
-        )
+        else:
+            list(
+                map(
+                    lambda x: output_sink.addFeature(x, QgsFeatureSink.FastInsert),
+                    featureList,
+                )
+            )
 
         return {"OUTPUT": output_sink_id}
 
