@@ -194,7 +194,8 @@ class AzimuthTool(QObject):
 
     def calcNewFeat(self, worklayer, workgeom, d, ang):
         pt_new = QgsPointXY(workgeom.x() + d * sin(radians(ang)), workgeom.y() + d * cos(radians(ang)))
-        feat_new = QgsFeature()
+        fields = worklayer.fields()
+        feat_new = QgsFeature(fields)
         feat_new.setGeometry(QgsGeometry.fromPointXY(pt_new))
         worklayer.startEditing()
         worklayer.addFeature(feat_new)
