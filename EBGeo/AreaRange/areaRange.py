@@ -54,15 +54,19 @@ class AreaRange(QObject):
 
     # Criar camada vetorial do tipo polígono com as informações de Alcance, Azimute e Abertura.
     def createlayer(self, worklayer):
+        fields = worklayer.fields()
         existingLayers = QgsProject.instance().mapLayersByName("Alcance do Armamento")
         if existingLayers:
             output_layer = existingLayers[0]
             self.firstAreaRangeLayerCrs = output_layer.crs()
             dtprovider = output_layer.dataProvider()
             if len(output_layer.fields()) == 0:
-                dtprovider.addAttributes([QgsField("Alcance", QVariant.Double),
+                dtprovider.addAttributes([
+                QgsField("Alcance", QVariant.Double),
                 QgsField("Azimute", QVariant.Double),
-                QgsField("Abertura", QVariant.Double)])
+                QgsField("Abertura", QVariant.Double)
+                ] + [f for f in fields]
+                )
                 output_layer.updateFields()
             return output_layer, dtprovider
         output_layer = QgsVectorLayer("Polygon?crs={}".format(worklayer.crs().authid()), "Alcance do Armamento", "memory")
@@ -71,7 +75,7 @@ class AreaRange(QObject):
         QgsProject.instance().addMapLayer(output_layer)
         dtprovider.addAttributes([QgsField("Alcance", QVariant.Double),
         QgsField("Azimute", QVariant.Double),
-        QgsField("Abertura", QVariant.Double)])
+        QgsField("Abertura", QVariant.Double)] + [f for f in fields])
         output_layer.updateFields()
         return output_layer, dtprovider
     
@@ -164,7 +168,7 @@ class AreaRange(QObject):
                     geom.transform(transf)
                     geom = QgsGeometry.fromPointXY(QgsPointXY(geom))
                     if geom.intersects(bufferRect):
-                        return layer, workgeom
+                        return layer, workgeom, feature
             else:
                 continue
 
@@ -219,7 +223,7 @@ class AreaRange(QObject):
             if not layerFeat:
                 return
             else:
-                worklayer, workgeom = layerFeat
+                worklayer, workgeom, workfeat = layerFeat
 
             inputs = self.getInput()
             if not inputs:
@@ -232,9 +236,15 @@ class AreaRange(QObject):
                 transf = QgsCoordinateTransform(worklayer.crs(), self.firstAreaRangeLayerCrs, QgsProject.instance())
                 area_geom.transform(transf)
             output_layer, dtprovider = self.createlayer(worklayer)
+            attributesOutputLayer = [f.name() for f in output_layer.fields()]
+            attributes = [f.name() for f in worklayer.fields()]
+            if attributes != [] and attributes == attributesOutputLayer[3:]:
+                attrValues = [workfeat[attr] for attr in attributes]
+            else:
+                attrValues = []
             output_feature = QgsFeature()
             output_feature.setGeometry(area_geom)
-            output_feature.setAttributes([d, ang, op])
+            output_feature.setAttributes([d, ang, op] + attrValues)
             dtprovider.addFeatures([output_feature])
             output_layer.updateExtents()
             QMessageBox.information(None , u"Aviso", u"Ponto criado com\n\nAzimute: {} º\n\nDistância: {}\n\nAbertura: {} º".format(ang, d, op))
