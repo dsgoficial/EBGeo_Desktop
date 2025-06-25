@@ -151,13 +151,14 @@ class SelectLayersInterface(QtWidgets.QDialog):
 
                     checkbox.setProperty("rename_field", rename_field)
 
-                    # Todas as camadas agora têm botão de duplicar
-                    add_button = QPushButton("+")
-                    add_button.setMaximumWidth(30)
-                    add_button.setToolTip(f"Adicionar outra camada de {display_name}")
-                    add_button.setProperty("layer_name", name)
-                    add_button.clicked.connect(self.duplicate_layer)
-                    row_layout.addWidget(add_button)
+                    if "Template" in category:
+                        # Todas as camadas agora têm botão de duplicar
+                        add_button = QPushButton("+")
+                        add_button.setMaximumWidth(30)
+                        add_button.setToolTip(f"Adicionar outra camada de {display_name}")
+                        add_button.setProperty("layer_name", name)
+                        add_button.clicked.connect(self.duplicate_layer)
+                        row_layout.addWidget(add_button)
 
                 row_layout.addStretch()  # Para manter os widgets alinhados à esquerda
                 group_layout.addWidget(row_widget)
@@ -220,13 +221,14 @@ class SelectLayersInterface(QtWidgets.QDialog):
                     rename_field.textChanged.connect(self.update_original_name)
                     row_layout.addWidget(rename_field)
 
-                    # Botão de duplicar
-                    add_button = QPushButton("+")
-                    add_button.setMaximumWidth(30)
-                    add_button.setToolTip(f"Adicionar outra camada de {display_name}")
-                    add_button.setProperty("layer_name", name)
-                    add_button.clicked.connect(self.duplicate_layer)
-                    row_layout.addWidget(add_button)
+                    if "Template" in category:
+                        # Botão de duplicar
+                        add_button = QPushButton("+")
+                        add_button.setMaximumWidth(30)
+                        add_button.setToolTip(f"Adicionar outra camada de {display_name}")
+                        add_button.setProperty("layer_name", name)
+                        add_button.clicked.connect(self.duplicate_layer)
+                        row_layout.addWidget(add_button)
 
                 row_layout.addStretch()
                 uncategorized_layout.addWidget(row_widget)
@@ -409,7 +411,7 @@ class SelectLayersInterface(QtWidgets.QDialog):
                     category_base = "Template - Fortificações"
 
             # Limites e Controles
-            elif any(keyword in name_lower for keyword in ['limite', 'linha', 'controle', 'fraç']):
+            elif any(keyword in name_lower for keyword in ['limite', 'linha', 'controle', 'fraç', 'obstáculo', 'obstaculos', 'obstáculos', 'obstaculo']):
                 if is_existing:
                     category_base = "Camadas Existentes - Limites e Linhas"
                 elif is_template:
@@ -425,7 +427,7 @@ class SelectLayersInterface(QtWidgets.QDialog):
             # Fallback para nomes técnicos conhecidos
             elif original_name in [
                 'coord_ap_fogo', 'eixo_de_direcao', 'fortificacoes_pf',
-                'limite_entre_fracoes', 'linha_de_controle', 'seta_situacao', 'simbolos_pontos'
+                'limite_entre_fracoes', 'linha_de_controle', 'seta_situacao', 'simbolos_pontos', 'obstaculos'
             ]:
                 if is_existing:
                     category_base = "Camadas Existentes - Principais"

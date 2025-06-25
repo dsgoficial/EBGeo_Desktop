@@ -25,6 +25,7 @@ class BaseDeDados(QObject):
             'barreiras': u'Barreiras',
             'redes': u'Redes',
             'fortificacoes_ot': u'Fortificações - Outras Tropas',
+            'obstaculos': u'Obstáculos',
         }
         self.Database = None
 
@@ -774,6 +775,10 @@ class BaseDeDados(QObject):
             'situacao': 'seta_situacao',
             'símbolo': 'simbolos_pontos',
             'simbolo': 'simbolos_pontos',
+            'obstáculo': 'obstaculos',
+            'obstaculo': 'obstaculos',
+            'obstáculos': 'obstaculos',
+            'obstaculos': 'obstaculos'
         }
 
         # Procurar por palavras-chave no nome da camada
@@ -968,6 +973,10 @@ class BaseDeDados(QObject):
             layer.triggerRepaint()
         elif "Símbolos" in layer.name():
             path_qml = os.path.join(pasta_estilos, 'style_simbolos.qml')
+            layer.loadNamedStyle(path_qml)
+            layer.triggerRepaint()
+        elif "Obstáculos" in layer.name():
+            path_qml = os.path.join(pasta_estilos, 'style_obstaculos.qml')
             layer.loadNamedStyle(path_qml)
             layer.triggerRepaint()
     
@@ -1289,7 +1298,8 @@ class BaseDeDados(QObject):
             'limite_entre_fracoes': 'style_limite_entre_fracoes.qml',
             'linha_de_controle': 'style_linha_controle.qml',
             'seta_situacao': 'style_seta_situacao.qml',
-            'simbolos_pontos': 'style_simbolos.qml'
+            'simbolos_pontos': 'style_simbolos.qml',
+            'obstaculos': 'style_obstaculos.qml',
         }
 
         # Tentar aplicar estilo usando o nome base
