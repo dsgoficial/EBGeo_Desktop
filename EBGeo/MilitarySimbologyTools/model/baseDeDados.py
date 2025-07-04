@@ -1524,11 +1524,9 @@ class BaseDeDados(QObject):
                 if layer_name not in actual_layers_in_file:
                     print(f"Erro: Camada {layer_name} não existe no arquivo")
                     continue
-                
                 # Determinar nome de exibição
                 if layer_name in duplicate_info:
-                    info = duplicate_info[layer_name]
-                    display_name = info.get('custom_name', layer_name)
+                    display_name = self.listName[layer_name]
                 else:
                     display_name = self.listName.get(layer_name, layer_name)
 
