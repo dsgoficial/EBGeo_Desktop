@@ -8,6 +8,7 @@ from .makeFrame import MakeFrame
 from .matchLayerAndFrame import MatchLayerAndFrame
 from .insertMASACODE import ConvertEDGVtoMASACODE
 from .simbmilLoader import SimbMilAlgorithm
+from .pointsWithKmAndName import GeradorPontosQuilometragem
 class Provider(QgsProcessingProvider):
 
     def __init__(self):
@@ -20,6 +21,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(ConvertEDGVtoMASACODE())
         self.addAlgorithm(ConvertBDGExZIPtoMASACODE())
         self.addAlgorithm(SimbMilAlgorithm())
+        self.addAlgorithm(GeradorPontosQuilometragem())
 
     def load(self):
         ProcessingConfig.settingIcons[self.name()] = self.icon()
