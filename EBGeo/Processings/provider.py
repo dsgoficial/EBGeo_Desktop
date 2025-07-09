@@ -9,6 +9,7 @@ from .matchLayerAndFrame import MatchLayerAndFrame
 from .insertMASACODE import ConvertEDGVtoMASACODE
 from .simbmilLoader import SimbMilAlgorithm
 from .pointsWithKmAndName import GeradorPontosQuilometragem
+from .launchNOAA import LaunchNOAA
 class Provider(QgsProcessingProvider):
 
     def __init__(self):
@@ -22,6 +23,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(ConvertBDGExZIPtoMASACODE())
         self.addAlgorithm(SimbMilAlgorithm())
         self.addAlgorithm(GeradorPontosQuilometragem())
+        self.addAlgorithm(LaunchNOAA())
 
     def load(self):
         ProcessingConfig.settingIcons[self.name()] = self.icon()
