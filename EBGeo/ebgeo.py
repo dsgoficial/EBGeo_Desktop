@@ -323,6 +323,17 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.labelPointsaLongLines)
 
+		from .FrzSarp.frz_button import FrzPlugin as Main_FRZ
+		self.mainFRZ = Main_FRZ(iface)
+		self.mt_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'frzsarp.png'),
+			text=u'Criar Zonas de Restrição de Voo para Drones entorno de Aeródromos',
+			callback=self.mainFRZ.run_zonas,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.mt_action)
+
 		self.ms_action = self.add_action(
 		 	os.path.join(os.path.dirname(__file__), 'icons', 'help.png'),
 		 	text=u'Ajuda',
