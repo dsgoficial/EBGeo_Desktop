@@ -25,6 +25,7 @@ O EBGeo tem a finalidade facilitar o uso da geoinformação digital pelas OM de 
 15. **Calculadora de coordenadas e dimensões** - Calcula automaticamente as coordenadas geográficas e planas de uma camada de pontos. Importante na interação da tropa terrestre com apoio aéreo.
 16. **Calculadora de declinação magnética e convergência meridiana** - Selecionando-se um ponto, linha ou polígono são apresentadas a Declinação Magnética e Convergência Meridiana do dado selecionado.
 17. **Distância ao longo da linha** - Gera pontos ao longo das linhas de uma camada linha selecionada espaçados pela distância definida pelo usuário.
+18. **Gerador de Zonas de Restrição de Voo para Drones entorno de Aeródromos** - Gera polígonos que mostra as zonas de restrição de drones entorno de pistas de aeroportos conforme a ICA 100-40 da Força Aérea Brasileira.
 
 ---
 
