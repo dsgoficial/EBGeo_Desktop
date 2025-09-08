@@ -60,13 +60,19 @@ class AreaRange(QObject):
             output_layer = existingLayers[0]
             self.firstAreaRangeLayerCrs = output_layer.crs()
             dtprovider = output_layer.dataProvider()
-            if len(output_layer.fields()) == 0:
-                dtprovider.addAttributes([
+            existing_field_names = [f.name() for f in output_layer.fields()]
+            new_fields = []
+            #Garantir que sempre existam esses parâmetros
+            fixed_fields = [
                 QgsField("Alcance", QVariant.Double),
                 QgsField("Azimute", QVariant.Double),
                 QgsField("Abertura", QVariant.Double)
-                ] + [f for f in fields]
-                )
+            ]
+            for f in fixed_fields + [f for f in fields]:
+                if f.name() not in existing_field_names:
+                    new_fields.append(f)
+            if new_fields:
+                dtprovider.addAttributes(new_fields)
                 output_layer.updateFields()
             return output_layer, dtprovider
         output_layer = QgsVectorLayer("Polygon?crs={}".format(worklayer.crs().authid()), "Alcance do Armamento", "memory")
@@ -117,12 +123,18 @@ class AreaRange(QObject):
                 if len(inp_op_ang.split(".")) == 3:
                     try:
                         ang_op = float(inp_op_ang.split(".")[0]) + float(inp_op_ang.split(".")[1])/60 + float(inp_op_ang.split(".")[2].replace(",", "."))/3600
+                        if ang_op < 0:
+                            QMessageBox.warning(None, "Aviso", "O ângulo de abertura não pode ser negativo.")
+                            continue
                         ang_op_check = False
                     except:
                         QMessageBox.critical(None , u"Erro", u"Entre um formato válido para o ângulo de abertura.")
                 else:
                     try:
                         ang_op = float(inp_op_ang.replace(",", "."))
+                        if ang_op < 0:
+                            QMessageBox.warning(None, "Aviso", "O ângulo de abertura não pode ser negativo.")
+                            continue
                         ang_op_check = False
                     except:
                         QMessageBox.critical(None , u"Erro", u"Entre um formato válido para o ângulo de abertura.")
@@ -143,6 +155,10 @@ class AreaRange(QObject):
                     activeLayer = layer
                     worklayer = activeLayer
                     output_layer, dtprovider = self.createlayer(worklayer)
+                if activeLayer.crs().isGeographic() != self.canvas.mapSettings().destinationCrs().isGeographic():
+                    QMessageBox.warning(None, "Aviso",
+                    "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros).")
+            
         return output_layer, dtprovider, activeLayer
 
     # Coletar as informações da layer de pontos selecionada pelo usuário caso clique com o botão esquerdo do mouse.
@@ -160,6 +176,9 @@ class AreaRange(QObject):
             if layer.geometryType() == 0:
                 for feature in layer.getFeatures():
                     transf = QgsCoordinateTransform(layer.crs(), self.canvas.mapSettings().destinationCrs(), QgsProject.instance())
+                    if layer.crs().isGeographic() != self.canvas.mapSettings().destinationCrs().isGeographic():
+                        QMessageBox.warning(None, "Aviso", 
+                        "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros)." )
                     if feature.geometry().isMultipart():
                         workgeom = feature.geometry().coerceToType(QgsWkbTypes.Point)[0].asPoint()
                     else:
@@ -211,7 +230,20 @@ class AreaRange(QObject):
                 area_geom = self.generateArea(point, alcance, azimute, abertura)
                 output_feature = QgsFeature()
                 output_feature.setGeometry(area_geom)
-                output_feature.setAttributes([alcance, azimute, abertura])
+                values = []
+                for field in output_layer.fields():
+                    fname = field.name()
+                    if fname == "Alcance":
+                        values.append(alcance)
+                    elif fname == "Azimute":
+                        values.append(azimute)
+                    elif fname == "Abertura":
+                        values.append(abertura)
+                    elif fname in activeLayer.fields().names():  
+                        values.append(feature[fname])        
+                    else:
+                        values.append(None)
+                output_feature.setAttributes(values)
                 dtprovider.addFeatures([output_feature])
             output_layer.updateExtents()
             QMessageBox.information(None , u"Aviso", u"Camada de alcances criada com sucesso.")
@@ -236,15 +268,22 @@ class AreaRange(QObject):
                 transf = QgsCoordinateTransform(worklayer.crs(), self.firstAreaRangeLayerCrs, QgsProject.instance())
                 area_geom.transform(transf)
             output_layer, dtprovider = self.createlayer(worklayer)
-            attributesOutputLayer = [f.name() for f in output_layer.fields()]
-            attributes = [f.name() for f in worklayer.fields()]
-            if attributes != [] and attributes == attributesOutputLayer[3:]:
-                attrValues = [workfeat[attr] for attr in attributes]
-            else:
-                attrValues = []
             output_feature = QgsFeature()
             output_feature.setGeometry(area_geom)
-            output_feature.setAttributes([d, ang, op] + attrValues)
+            values = []
+            for field in output_layer.fields():
+                fname = field.name()
+                if fname == "Alcance":
+                     values.append(d)
+                elif fname == "Azimute":
+                    values.append(ang)
+                elif fname == "Abertura":
+                    values.append(op)
+                elif fname in worklayer.fields().names():  
+                    values.append(workfeat[fname])        
+                else:
+                    values.append(None)
+            output_feature.setAttributes(values)
             dtprovider.addFeatures([output_feature])
             output_layer.updateExtents()
             QMessageBox.information(None , u"Aviso", u"Ponto criado com\n\nAzimute: {} º\n\nDistância: {}\n\nAbertura: {} º".format(ang, d, op))
