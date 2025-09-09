@@ -87,17 +87,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
         stopScale = user_scales[stopScaleIdxUser]
         crs = layers[0].crs()
 
-        inputFrame = self.getInputFrame(crs, layers, stopScale, feedback, context)
-        
-        if inputFrameUser and inputFrameUser.featureCount() > 0:
-            userFrameReproj = self.reprojectLayer(inputFrameUser, crs)
-        else:
-            userFrameReproj = None
-
-        frameGrid = inputFrame
-
-        if not inputFrameUser or inputFrameUser.featureCount() == 0:
-            QgsProject.instance().removeMapLayer(inputFrame.id())
+        frameGrid = self.getInputFrame(crs, layers, stopScale, feedback, context)
 
         multiStepFeedback = QgsProcessingMultiStepFeedback(4, feedback)
         multiStepFeedback.setCurrentStep(0)
@@ -109,10 +99,11 @@ class MakeMosaic(QgsProcessingAlgorithm):
         multiStepFeedback.pushInfo(self.tr("Mesclado camadas"))
         merged = self.mergeAll(context, multiStepFeedback, mergeLayers)
 
-        if userFrameReproj and userFrameReproj.featureCount():
+        if inputFrameUser and inputFrameUser.featureCount():
             multiStepFeedback.setCurrentStep(2)
             multiStepFeedback.pushInfo(self.tr("Aplicando moldura final do usuário"))
 
+            userFrameReproj = self.reprojectLayer(inputFrameUser, crs)
             mask_file = os.path.join(tempfile.gettempdir(), "mask.shp")
             processing.run(
                 "native:savefeatures",
@@ -133,6 +124,8 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 context=context,
                 feedback=multiStepFeedback
             )["OUTPUT"]
+        else:
+            QgsProject.instance().removeMapLayer(frameGrid.id())
         
         multiStepFeedback.setCurrentStep(3)
         multiStepFeedback.pushInfo(self.tr("Comprimindo saída"))
