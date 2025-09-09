@@ -164,46 +164,88 @@ class VisibilityAnalysis(
             self.myTool = None
 
     def doWork(self, state):
+        """
+        Ativa ou desativa a ferramenta de visibilidade (ViewshedTool) quando o botão 'Ativar' é clicado.
+        Inclui validação de EPSG entre setor, MDE e projeto.
+        """
+        # Obtém a camada de visada selecionada
         viewshedLyr = self.targetSectorMapLayerComboBox.currentLayer()
-        self.sectorTargetAndElevationModelLayer()
+        self.sectorTargetAndElevationModelLayer()  # Atualiza estado dos botões
+
         if viewshedLyr is None:
             self.resetAtivarButton()
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 self.tr("Erro!"),
-                self.tr(
-                    "Selecione uma camada de visada"
-                ),
+                self.tr("Selecione uma camada de visada.")
             )
             return
-        
+
+        # Verifica se a camada tem o campo 'altura_obs'
         if "altura_obs" not in [f.name() for f in viewshedLyr.fields()]:
             self.resetAtivarButton()
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 self.tr("Erro!"),
-                self.tr(
-                    "A camada deve ter um campo chamado altura_obs"
-                ),
+                self.tr("A camada deve ter um campo chamado 'altura_obs'.")
             )
             return
-        
+
+        # Verifica se o botão foi desmarcado (desativação)
         if not state:
-            self.canvas.unsetMapTool(self.myTool)
+            if self.myTool is not None:
+                self.canvas.unsetMapTool(self.myTool)
             return
+
+        # Habilita o botão apenas se ambas camadas estiverem presentes
         self.ativarButton.setEnabled(True)
         self.viewshedLyrId = viewshedLyr.id()
+
+        # Obtém o MDE selecionado
+        mde_layer = self.elevationModelMapLayerComboBox.currentLayer()
+        if not mde_layer:
+            self.resetAtivarButton()
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                self.tr("Erro!"),
+                self.tr("Selecione um Modelo Digital de Elevação (MDE).")
+            )
+            return
+
+        # --- VALIDAÇÃO DE EPSG ---
+        setor_epsg = viewshedLyr.crs().authid()
+        mde_epsg = mde_layer.crs().authid()
+        projeto_epsg = self.canvas.mapSettings().destinationCrs().authid()
+
+        if setor_epsg != mde_epsg or setor_epsg != projeto_epsg:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "Erro de Projeção",
+                f"Combinação de projeções inválida!\n"
+                f"Setor: {setor_epsg}\n"
+                f"MDE: {mde_epsg}\n"
+                f"Projeto: {projeto_epsg}\n\n"
+                "Todas as camadas devem ter o mesmo EPSG."
+            )
+            self.resetAtivarButton()
+            return
+        # --- FIM VALIDAÇÃO EPSG ---
+
+        # Aplica estilo de visada
         caminho_atual = os.path.dirname(os.path.realpath(__file__))
         pasta_estilos = os.path.join(caminho_atual, 'style')
         path_qml = os.path.join(pasta_estilos, 'style_target_sector.qml')
         viewshedLyr.loadNamedStyle(path_qml)
         viewshedLyr.triggerRepaint()
+
+        # Cria e ativa a ferramenta ViewshedTool
         self.myTool = ViewshedTool(
             canvas=self.canvas,
             layer=viewshedLyr,
             observer_height_field_name="altura_obs",
         )
         self.canvas.setMapTool(self.myTool)
+
     
     def resetAtivarButton(self):
         """Reseta o botão de ativar quando a ferramenta é desativada externamente"""
