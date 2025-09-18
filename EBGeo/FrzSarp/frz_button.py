@@ -46,7 +46,7 @@ class FrzPlugin:
 
     def initGui(self):
         self.action = QAction(QIcon(os.path.join(self.plugin_dir, "icon.png")),
-                              "Gerar Zonas de Restrição de Voo de Drones", self.iface.mainWindow())
+                              "Gerar Zonas de Restrição de Voo para Drones em Aeródromos", self.iface.mainWindow())
         self.action.triggered.connect(self.run_zonas)
         self.iface.addToolBarIcon(self.action)
         self.iface.addPluginToMenu("FRZ", self.action)
@@ -61,254 +61,279 @@ class FrzPlugin:
             QMessageBox.warning(None, "FRZ", "Selecione uma única feição de pista.")
             return
 
-        feat = layer.selectedFeatures()[0]
-        self.gerar_zonas(layer, feat)
+        layer = processing.run(
+            "native:saveselectedfeatures",
+            {
+                "INPUT": layer,
+                "OUTPUT": "memory:feicao_selecionada"
+            }
+        )['OUTPUT']
 
-    def gerar_zonas(self, layer, feat):
-        # Criação de camada de Zonas de Restrição de Voo de Drone
-        frz = QgsVectorLayer("Polygon?crs=" + layer.crs().authid(), "Zonas de Restrição de Voo de Drones", "memory")
-        pr = frz.dataProvider()
-        pr.addAttributes([QgsField("limite_voo_proibido", QVariant.String)])
-        frz.updateFields()
+        self.gerar_zonas(layer)
 
-        # Definição dos estilos
-        plugin_dir = os.path.dirname(__file__)
-        frz_qml_path = os.path.join(plugin_dir, 'frz.qml')
-        runway_qml_path = os.path.join(plugin_dir, 'runway.qml')
+    def gerar_zonas(self, layer):
 
-
-        #1. Criação de um buffer planar de 150 em torno da linha da pista, a ICA amarrada uma pista com largura de 300m
-        runway =  processing.run("native:buffer", 
-                                 {'INPUT':layer,
-                                  'DISTANCE':150,
-                                  'SEGMENTS':5,
-                                  'END_CAP_STYLE':1,
-                                  'JOIN_STYLE':1,
-                                  'MITER_LIMIT':2,
-                                  'DISSOLVE':False,
-                                  'SEPARATE_DISJOINT':False,
-                                  'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
-        runway.setName('Runway')
-        runway.loadNamedStyle(runway_qml_path)
-        runway.triggerRepaint()
-        QgsProject.instance().addMapLayer(runway)
-
-
-        #2. Criação dos buffers de zona de restrição
-        """
-            As restrições obedecem ao previsto na ICA 100-40
-        """
-        lista_restricoes = {
-            'cabeceira': [6320, 5400, 4480, 3550],
-            'lado': [3570, 2960, 2350, 1740]
-        }
-
-        lista_voo_proibido = ['FRZ', '≤ 100ft', '≤ 200ft', '≤ 300ft', '≤ 400ft']
-
-        restricao_vector = QgsVectorLayer(f"{QgsWkbTypes.displayString(runway.wkbType())}?crs={runway.sourceCrs().authid()}", "buffer", "memory")
-        restricao_vector.dataProvider().addAttributes(runway.fields())
-        restricao_vector.dataProvider().addAttributes([QgsField("zona", QVariant.String)])
-        restricao_vector.dataProvider().addAttributes([QgsField("limite_voo_proibido", QVariant.String)])
-        restricao_vector.updateFields()
-
-        for feat in runway.getFeatures():
-            geom = feat.geometry()
-            cont = len(lista_voo_proibido)-2
-            for restricao in lista_restricoes['cabeceira']:
-
-                restricao_buffer_geom = geom.buffer(restricao, 8)
-                restricao_feat = QgsFeature()
-                restricao_feat.setGeometry(restricao_buffer_geom)
-
-                restricao_atri = feat.attributes()
-                restricao_atri.append('cabeceira')
-                restricao_atri.append(lista_voo_proibido[cont])
-
-                restricao_feat.setAttributes(restricao_atri)
-
-                restricao_vector.dataProvider().addFeatures([restricao_feat])
-                restricao_vector.updateExtents()
-
-                cont-=1
-            
-            cont = len(lista_voo_proibido)-2
-            for restricao in lista_restricoes['lado']:
-                restricao_buffer_geom = geom.buffer(restricao, 8)
-                restricao_feat = QgsFeature()
-                restricao_feat.setGeometry(restricao_buffer_geom)
-
-                restricao_atri = feat.attributes()
-                restricao_atri.append('lado')
-                restricao_atri.append(lista_voo_proibido[cont])
-
-                restricao_feat.setAttributes(restricao_atri)
-
-                restricao_vector.dataProvider().addFeatures([restricao_feat])
-                restricao_vector.updateExtents()
-                cont-=1
+        crs = layer.crs()
+        if layer.geometryType() != QgsWkbTypes.LineGeometry:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "Aviso de Tipo de Geometria",
+                "A camada selecionada deve ser do tipo Linha para gerar restrições de aeródromo.")
+            return
+    
+        elif crs.isGeographic():
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "Aviso do Sistema de Coordenadas",
+                "Para uma operação correta, a camada deve estar em um sistema de coordenadas projetado (por exemplo, UTM).\n"
+                f"Atualmente, a camada está em: {crs.authid()}"
+            )
+            return
         
-        #3. Criação das zonas de restrição por anéis
-        restricao_vector_recort = QgsVectorLayer(f"{QgsWkbTypes.displayString(restricao_vector.wkbType())}?crs={runway.sourceCrs().authid()}", "buffer", "memory")
-        restricao_vector_recort.dataProvider().addAttributes(restricao_vector.fields())
-        restricao_vector_recort.updateFields()
+        else:
+            # Criação de camada de Zonas de Restrição de Voo de Drone
+            frz = QgsVectorLayer("Polygon?crs=" + layer.crs().authid(), "Zonas de Restrição de Voo de Drones", "memory")
+            pr = frz.dataProvider()
+            pr.addAttributes([QgsField("limite_voo_proibido", QVariant.String)])
+            frz.updateFields()
 
-        for feat in restricao_vector.getFeatures():
-            geom = feat.geometry()
-            zona = feat['zona']
-            area = geom.area()
+            # Definição dos estilos
+            plugin_dir = os.path.dirname(__file__)
+            frz_qml_path = os.path.join(plugin_dir, 'frz.qml')
+            runway_qml_path = os.path.join(plugin_dir, 'runway.qml')
 
-            if feat["limite_voo_proibido"] == 'FRZ':
-                for feicao in runway.getFeatures():
-                    geom = geom.difference(feicao.geometry())
-            else:
-            # Subtrai todas as geometrias menores da mesma zona
-                for feicao in restricao_vector.getFeatures():
-                    if feicao['zona'] == zona and feicao.id() != feat.id():
-                        outra_geom = feicao.geometry()
-                        if outra_geom.area() < area:
-                            geom = geom.difference(outra_geom)
-                        
-            nova_feat = QgsFeature()
-            nova_feat.setGeometry(geom)
-            nova_feat.setAttributes(feat.attributes())
-            restricao_vector_recort.dataProvider().addFeatures([nova_feat])
 
-        restricao_vector_recort.updateExtents()
-
-        #5. Obtenção das linhas de cabeceira e de lado
-        # Criar camada memória para laterais (linhas maiores)
-        linhas_laterais = QgsVectorLayer(f"LineString?crs={runway.crs().authid()}", "linhas_laterais", "memory")
-        prov_laterais = linhas_laterais.dataProvider()
-
-        # Criar camada memória para cabeceiras (linhas menores)
-        linhas_cabeceira = QgsVectorLayer(f"LineString?crs={runway.crs().authid()}", "linhas_cabeceira", "memory")
-        prov_cabeceira = linhas_cabeceira.dataProvider()
-
-        for feat in runway.getFeatures():
-            geom = feat.geometry()
-
-            # Garantir polígono simples
-            if geom.isMultipart():
-                coords = geom.asMultiPolygon()[0][0]
-            else:
-                coords = geom.asPolygon()[0]
-
-            # Deve ter 5 pontos (retângulo fechado)
-            if len(coords) != 5:
-                print("Feição ignorada: não parece um retângulo.")
-                continue
-
-            # Criar as 4 arestas como QgsGeometry linha
-            arestas = []
-            for i in range(4):
-                linha = QgsGeometry.fromPolylineXY([coords[i], coords[i+1]])
-                comprimento = linha.length()
-                arestas.append((linha, comprimento, i))
-
-            # Ordenar por comprimento (maior para menor)
-            arestas_ordenadas = sorted(arestas, key=lambda x: x[1], reverse=True)
-
-            # Dois lados maiores (laterais)
-            lado_maior1 = arestas_ordenadas[0][0]
-            lado_maior2 = arestas_ordenadas[1][0]
-
-            # Dois lados menores (cabeceiras)
-            lado_menor1 = arestas_ordenadas[2][0]
-            lado_menor2 = arestas_ordenadas[3][0]
-
-            # Criar feições e adicionar na camada laterais
-            for linha_geom in [lado_maior1, lado_maior2]:
-                f = QgsFeature()
-                f.setGeometry(linha_geom)
-                prov_laterais.addFeature(f)
-
-            # Criar feições e adicionar na camada cabeceiras
-            for linha_geom in [lado_menor1, lado_menor2]:
-                f = QgsFeature()
-                f.setGeometry(linha_geom)
-                prov_cabeceira.addFeature(f)
-
-        # Atualizar extents e adicionar camadas no projeto
-        linhas_laterais.updateExtents()
-        linhas_cabeceira.updateExtents()
-
-        #7. Obtenção da intersecção das linhas
-        arcos = QgsVectorLayer(f"{QgsWkbTypes.displayString(runway.wkbType())}?crs={runway.sourceCrs().authid()}", "buffer", "memory")
-        
-        for feat_head in linhas_cabeceira.getFeatures():
-            geom_head = feat_head.geometry()
-            
-            for feat_side in linhas_laterais.getFeatures():
-                geom_side = feat_side.geometry()
-                intersec = geom_head.intersection(geom_side)
-
-                if intersec.isEmpty():
-                    continue
-                if intersec.type() != QgsWkbTypes.PointGeometry:
-                    continue
-                
-                center = intersec.asPoint()
-                angle = self.angle_of_line(geom_head)
-                radius = 6500
-                adjust = math.radians(10)
-     
-                angle_left = self.perpendicular_direction(angle, 'left')
-
-                if center.sqrDist(QgsPointXY(geom_head.vertexAt(0))) < 0.001:
-                    side_angle = angle_left + adjust
-                elif center.sqrDist(QgsPointXY(geom_head.vertexAt(1))) < 0.001:
-                    side_angle = angle_left - adjust
-                else:
-                    side_angle = angle  # fallback
-
-                arco_geom = self.create_sector_polygon(center, radius, side_angle, arc_angle_deg=20, segments=36)
-
-                feat_arco = QgsFeature()
-                feat_arco.setGeometry(arco_geom)
-                arcos.dataProvider().addFeature(feat_arco)
-        arcos.updateExtents()
-
-        #8. Criar buffer unilateral para esquerda, que é o que vai para fora da pista no lado da cabeceira
-        buffer_cabeceira = processing.run("native:singlesidedbuffer",
-                                {'INPUT': linhas_cabeceira,
-                                    'DISTANCE':6500,
-                                    'SIDE':0,
-                                    'SEGMENTS':8,
-                                    'JOIN_STYLE':0,
+            #1. Criação de um buffer planar de 150 em torno da linha da pista, a ICA amarrada uma pista com largura de 300m
+            runway =  processing.run("native:buffer", 
+                                    {'INPUT':layer,
+                                    'DISTANCE':150,
+                                    'SEGMENTS':5,
+                                    'END_CAP_STYLE':1,
+                                    'JOIN_STYLE':1,
                                     'MITER_LIMIT':2,
+                                    'DISSOLVE':False,
+                                    'SEPARATE_DISJOINT':False,
                                     'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+            runway.setName('Runway')
+            runway.loadNamedStyle(runway_qml_path)
+            runway.triggerRepaint()
+            QgsProject.instance().addMapLayer(runway)
 
-        cabeceira_area =  processing.run("native:union",
-                                    {'INPUT':arcos,
-                                    'OVERLAY':buffer_cabeceira,
-                                    'OVERLAY_FIELDS_PREFIX':'',
-                                    'OUTPUT':'TEMPORARY_OUTPUT',
-                                    'GRID_SIZE':None})['OUTPUT']
 
-        areas_unidas = QgsGeometry.unaryUnion([f.geometry() for f in cabeceira_area.getFeatures()])
-      
-        #9. Fazendo a diferença ou o recorte do buffer pela área de cabeceira
-        for buffer_feat in restricao_vector_recort.getFeatures():
-            buffer_geom = buffer_feat.geometry()
-            acao = buffer_feat['zona']  # campo que controla o tipo de operação
+            #2. Criação dos buffers de zona de restrição
+            """
+                As restrições obedecem ao previsto na ICA 100-40
+            """
+            lista_restricoes = {
+                'cabeceira': [6320, 5400, 4480, 3550],
+                'lado': [3570, 2960, 2350, 1740]
+            }
 
-            if acao == 'lado':
-                resultado = buffer_geom.difference(areas_unidas)
-            elif acao == 'cabeceira':
-                resultado = buffer_geom.intersection(areas_unidas)
+            lista_voo_proibido = ['FRZ', '≤ 100ft', '≤ 200ft', '≤ 300ft', '≤ 400ft']
 
-            if resultado and not resultado.isEmpty():
+            restricao_vector = QgsVectorLayer(f"{QgsWkbTypes.displayString(runway.wkbType())}?crs={runway.sourceCrs().authid()}", "buffer", "memory")
+            restricao_vector.dataProvider().addAttributes(runway.fields())
+            restricao_vector.dataProvider().addAttributes([QgsField("zona", QVariant.String)])
+            restricao_vector.dataProvider().addAttributes([QgsField("limite_voo_proibido", QVariant.String)])
+            restricao_vector.updateFields()
+
+            for feat in runway.getFeatures():
+                geom = feat.geometry()
+                cont = len(lista_voo_proibido)-2
+                for restricao in lista_restricoes['cabeceira']:
+
+                    restricao_buffer_geom = geom.buffer(restricao, 8)
+                    restricao_feat = QgsFeature()
+                    restricao_feat.setGeometry(restricao_buffer_geom)
+
+                    restricao_atri = feat.attributes()
+                    restricao_atri.append('cabeceira')
+                    restricao_atri.append(lista_voo_proibido[cont])
+
+                    restricao_feat.setAttributes(restricao_atri)
+
+                    restricao_vector.dataProvider().addFeatures([restricao_feat])
+                    restricao_vector.updateExtents()
+
+                    cont-=1
+                
+                cont = len(lista_voo_proibido)-2
+                for restricao in lista_restricoes['lado']:
+                    restricao_buffer_geom = geom.buffer(restricao, 8)
+                    restricao_feat = QgsFeature()
+                    restricao_feat.setGeometry(restricao_buffer_geom)
+
+                    restricao_atri = feat.attributes()
+                    restricao_atri.append('lado')
+                    restricao_atri.append(lista_voo_proibido[cont])
+
+                    restricao_feat.setAttributes(restricao_atri)
+
+                    restricao_vector.dataProvider().addFeatures([restricao_feat])
+                    restricao_vector.updateExtents()
+                    cont-=1
+            
+            #3. Criação das zonas de restrição por anéis
+            restricao_vector_recort = QgsVectorLayer(f"{QgsWkbTypes.displayString(restricao_vector.wkbType())}?crs={runway.sourceCrs().authid()}", "buffer", "memory")
+            restricao_vector_recort.dataProvider().addAttributes(restricao_vector.fields())
+            restricao_vector_recort.updateFields()
+
+            for feat in restricao_vector.getFeatures():
+                geom = feat.geometry()
+                zona = feat['zona']
+                area = geom.area()
+
+                if feat["limite_voo_proibido"] == 'FRZ':
+                    for feicao in runway.getFeatures():
+                        geom = geom.difference(feicao.geometry())
+                else:
+                # Subtrai todas as geometrias menores da mesma zona
+                    for feicao in restricao_vector.getFeatures():
+                        if feicao['zona'] == zona and feicao.id() != feat.id():
+                            outra_geom = feicao.geometry()
+                            if outra_geom.area() < area:
+                                geom = geom.difference(outra_geom)
+                            
                 nova_feat = QgsFeature()
-                nova_feat.setGeometry(resultado)
-                nova_feat.setAttributes([buffer_feat['limite_voo_proibido']])
-                #nova_feat.setAttributes(buffer_feat.attributes())
-                frz.dataProvider().addFeature(nova_feat)
-        frz.updateExtents()
-        frz.loadNamedStyle(frz_qml_path)
-        frz.triggerRepaint()
-        QgsProject.instance().addMapLayer(frz)
+                nova_feat.setGeometry(geom)
+                nova_feat.setAttributes(feat.attributes())
+                restricao_vector_recort.dataProvider().addFeatures([nova_feat])
 
-        iface.messageBar().pushMessage('A camada de Zonas de Restrição de Voo para Drones foi criada com sucesso.', level=Qgis.Success, duration = 10)
+            restricao_vector_recort.updateExtents()
+
+            #5. Obtenção das linhas de cabeceira e de lado
+            # Criar camada memória para laterais (linhas maiores)
+            linhas_laterais = QgsVectorLayer(f"LineString?crs={runway.crs().authid()}", "linhas_laterais", "memory")
+            prov_laterais = linhas_laterais.dataProvider()
+
+            # Criar camada memória para cabeceiras (linhas menores)
+            linhas_cabeceira = QgsVectorLayer(f"LineString?crs={runway.crs().authid()}", "linhas_cabeceira", "memory")
+            prov_cabeceira = linhas_cabeceira.dataProvider()
+
+            for feat in runway.getFeatures():
+                geom = feat.geometry()
+
+                # Garantir polígono simples
+                if geom.isMultipart():
+                    coords = geom.asMultiPolygon()[0][0]
+                else:
+                    coords = geom.asPolygon()[0]
+
+                # Deve ter 5 pontos (retângulo fechado)
+                if len(coords) != 5:
+                    print("Feição ignorada: não parece um retângulo.")
+                    continue
+
+                # Criar as 4 arestas como QgsGeometry linha
+                arestas = []
+                for i in range(4):
+                    linha = QgsGeometry.fromPolylineXY([coords[i], coords[i+1]])
+                    comprimento = linha.length()
+                    arestas.append((linha, comprimento, i))
+
+                # Ordenar por comprimento (maior para menor)
+                arestas_ordenadas = sorted(arestas, key=lambda x: x[1], reverse=True)
+
+                # Dois lados maiores (laterais)
+                lado_maior1 = arestas_ordenadas[0][0]
+                lado_maior2 = arestas_ordenadas[1][0]
+
+                # Dois lados menores (cabeceiras)
+                lado_menor1 = arestas_ordenadas[2][0]
+                lado_menor2 = arestas_ordenadas[3][0]
+
+                # Criar feições e adicionar na camada laterais
+                for linha_geom in [lado_maior1, lado_maior2]:
+                    f = QgsFeature()
+                    f.setGeometry(linha_geom)
+                    prov_laterais.addFeature(f)
+
+                # Criar feições e adicionar na camada cabeceiras
+                for linha_geom in [lado_menor1, lado_menor2]:
+                    f = QgsFeature()
+                    f.setGeometry(linha_geom)
+                    prov_cabeceira.addFeature(f)
+
+            # Atualizar extents e adicionar camadas no projeto
+            linhas_laterais.updateExtents()
+            linhas_cabeceira.updateExtents()
+
+            #7. Obtenção da intersecção das linhas
+            arcos = QgsVectorLayer(f"{QgsWkbTypes.displayString(runway.wkbType())}?crs={runway.sourceCrs().authid()}", "buffer", "memory")
+            
+            for feat_head in linhas_cabeceira.getFeatures():
+                geom_head = feat_head.geometry()
+                
+                for feat_side in linhas_laterais.getFeatures():
+                    geom_side = feat_side.geometry()
+                    intersec = geom_head.intersection(geom_side)
+
+                    if intersec.isEmpty():
+                        continue
+                    if intersec.type() != QgsWkbTypes.PointGeometry:
+                        continue
+                    
+                    center = intersec.asPoint()
+                    angle = self.angle_of_line(geom_head)
+                    radius = 6500
+                    adjust = math.radians(10)
+        
+                    angle_left = self.perpendicular_direction(angle, 'left')
+
+                    if center.sqrDist(QgsPointXY(geom_head.vertexAt(0))) < 0.001:
+                        side_angle = angle_left + adjust
+                    elif center.sqrDist(QgsPointXY(geom_head.vertexAt(1))) < 0.001:
+                        side_angle = angle_left - adjust
+                    else:
+                        side_angle = angle  # fallback
+
+                    arco_geom = self.create_sector_polygon(center, radius, side_angle, arc_angle_deg=20, segments=36)
+
+                    feat_arco = QgsFeature()
+                    feat_arco.setGeometry(arco_geom)
+                    arcos.dataProvider().addFeature(feat_arco)
+            arcos.updateExtents()
+
+            #8. Criar buffer unilateral para esquerda, que é o que vai para fora da pista no lado da cabeceira
+            buffer_cabeceira = processing.run("native:singlesidedbuffer",
+                                    {'INPUT': linhas_cabeceira,
+                                        'DISTANCE':6500,
+                                        'SIDE':0,
+                                        'SEGMENTS':8,
+                                        'JOIN_STYLE':0,
+                                        'MITER_LIMIT':2,
+                                        'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+
+            cabeceira_area =  processing.run("native:union",
+                                        {'INPUT':arcos,
+                                        'OVERLAY':buffer_cabeceira,
+                                        'OVERLAY_FIELDS_PREFIX':'',
+                                        'OUTPUT':'TEMPORARY_OUTPUT',
+                                        'GRID_SIZE':None})['OUTPUT']
+
+            areas_unidas = QgsGeometry.unaryUnion([f.geometry() for f in cabeceira_area.getFeatures()])
+        
+            #9. Fazendo a diferença ou o recorte do buffer pela área de cabeceira
+            for buffer_feat in restricao_vector_recort.getFeatures():
+                buffer_geom = buffer_feat.geometry()
+                acao = buffer_feat['zona']  # campo que controla o tipo de operação
+
+                if acao == 'lado':
+                    resultado = buffer_geom.difference(areas_unidas)
+                elif acao == 'cabeceira':
+                    resultado = buffer_geom.intersection(areas_unidas)
+
+                if resultado and not resultado.isEmpty():
+                    nova_feat = QgsFeature()
+                    nova_feat.setGeometry(resultado)
+                    nova_feat.setAttributes([buffer_feat['limite_voo_proibido']])
+                    frz.dataProvider().addFeature(nova_feat)
+            frz.updateExtents()
+            frz.loadNamedStyle(frz_qml_path)
+            frz.triggerRepaint()
+            QgsProject.instance().addMapLayer(frz)
+
+            iface.messageBar().pushMessage('A camada de Zonas de Restrição de Voo para Drones foi criada com sucesso.', level=Qgis.Success, duration = 10)
 
     def angle_of_line(self, line_geom):
         # Calcula o ângulo (em radianos) da linha entre seus dois pontos extremos
@@ -319,7 +344,7 @@ class FrzPlugin:
         return math.atan2(dy, dx)  # ângulo em radianos
    
     def perpendicular_direction(self, angle_rad, side='left'):
-    # Retorna ângulo perpendicular (90º) à esquerda ou direita da direção
+        # Retorna ângulo perpendicular (90º) à esquerda ou direita da direção
         if side == 'left':
             return angle_rad + math.pi / 2
         else:
