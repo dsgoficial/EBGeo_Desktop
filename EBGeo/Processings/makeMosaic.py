@@ -1,30 +1,30 @@
 # -*- coding: utf-8 -*-
 
+import os
+import tempfile
 from typing import List
-from EBGeo.Utils.featureHandler import FeatureHandler
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsProcessing,
                        QgsProject,
                        QgsVectorLayer,
                        QgsProcessingAlgorithm,
+                       QgsProcessingException,
                        QgsProcessingParameterMultipleLayers,
-                       QgsProcessingParameterBoolean,
                        QgsProcessingParameterEnum,
                        QgsProcessingParameterVectorLayer,
+                       QgsFeature,
                        QgsFeatureRequest,
+                       QgsFeatureSink,
                        QgsField,
                        QgsFields,
                        QgsGeometry,
-                       QgsCoordinateTransform,
-                       QgsCoordinateReferenceSystem,
-                       QgsFeatureSink,
                        QgsProcessingMultiStepFeedback,
-                       QgsFeature,
-                       QgsSpatialIndex,
+                       QgsProject,
                        QgsProcessingParameterRasterDestination,
-                       QgsProcessingParameterField
+                       QgsRasterLayer
                        )
 from qgis import processing
+
 
 class MakeMosaic(QgsProcessingAlgorithm): 
 
@@ -76,144 +76,152 @@ class MakeMosaic(QgsProcessingAlgorithm):
         ) 
         
     def processAlgorithm(self, parameters, context, feedback):      
+        
         feedback.setProgressText('Construindo mosaico...')
+        
         layers = self.parameterAsLayerList(parameters, self.INPUT_LAYERS, context)
-        stopScaleIdx = self.parameterAsEnum(parameters, self.STOP_SCALE, context)
+        stopScaleIdxUser = self.parameterAsEnum(parameters, self.STOP_SCALE, context)
         inputFrameUser = self.parameterAsVectorLayer(parameters, self.INPUT_FRAME, context)
+    
+        user_scales = [250000, 100000, 50000, 25000]  
+        stopScale = user_scales[stopScaleIdxUser]
+        crs = layers[0].crs()
 
-        featureHandler = FeatureHandler()
+        inputFrame = self.getInputFrame(crs, layers, stopScale, feedback, context)
         
-        # Scale
-        stopScale = self.scales[stopScaleIdx]
-        stopScale = stopScale[2:]
-        stopScale = int(stopScale.replace(".", ""))/1000
-        crs = layers[1].crs()
-
-        # Crs raster layer
-        if not inputFrameUser or inputFrameUser.featureCount()==0:
-            inputFrame = self.getInputFrame(crs, layers, featureHandler, stopScale, feedback)
+        if inputFrameUser and inputFrameUser.featureCount() > 0:
+            userFrameReproj = self.reprojectLayer(inputFrameUser, crs)
         else:
-            inputFrame = self.reprojectLayer(inputFrameUser, crs)
+            userFrameReproj = None
 
-        frameLayer = self.matchLayerAndFrame(inputFrame, layers)
-        nameField = 'nome'
-        frameGrid = frameLayer
-        
+        frameGrid = inputFrame
 
-        if not inputFrameUser or inputFrameUser.featureCount()==0:
+        if not inputFrameUser or inputFrameUser.featureCount() == 0:
             QgsProject.instance().removeMapLayer(inputFrame.id())
-        
-        
-        
-        
-        
-        multiStepFeedback = QgsProcessingMultiStepFeedback(3, feedback)
+
+        multiStepFeedback = QgsProcessingMultiStepFeedback(4, feedback)
         multiStepFeedback.setCurrentStep(0)
         multiStepFeedback.pushInfo(self.tr("Selecionando camadas"))
 
-        mergeLayers = self.mergeLayers(context, multiStepFeedback, frameGrid, layers, nameField)
-        
+        mergeLayers = self.mergeLayers(context, multiStepFeedback, frameGrid, layers)
+            
         multiStepFeedback.setCurrentStep(1)
         multiStepFeedback.pushInfo(self.tr("Mesclado camadas"))
         merged = self.mergeAll(context, multiStepFeedback, mergeLayers)
-        multiStepFeedback.setCurrentStep(2)
+
+        if userFrameReproj and userFrameReproj.featureCount():
+            multiStepFeedback.setCurrentStep(2)
+            multiStepFeedback.pushInfo(self.tr("Aplicando moldura final do usuário"))
+
+            mask_file = os.path.join(tempfile.gettempdir(), "mask.shp")
+            processing.run(
+                "native:savefeatures",
+                {"INPUT": userFrameReproj, "OUTPUT": mask_file},
+                context=context,
+                feedback=multiStepFeedback
+            )
+
+            merged = processing.run(
+                "gdal:cliprasterbymasklayer",
+                {
+                    "INPUT": merged,
+                    "MASK": mask_file,
+                    "CROP_TO_CUTLINE": True,
+                    "KEEP_RESOLUTION": True,
+                    "OUTPUT": "TEMPORARY_OUTPUT"
+                },
+                context=context,
+                feedback=multiStepFeedback
+            )["OUTPUT"]
+        
+        multiStepFeedback.setCurrentStep(3)
         multiStepFeedback.pushInfo(self.tr("Comprimindo saída"))
         compressed = self.compress(context, parameters, multiStepFeedback, merged)
+
         return {"OUTPUT": compressed}
 
-    def mergeLayers(self, context, feedback:QgsProcessingMultiStepFeedback, frameGrid:QgsVectorLayer, layers:List[QgsVectorLayer], nameField)->List[QgsVectorLayer]:
-        mergeLayers = []
-        countGrid = frameGrid.featureCount()
-        listLayerSize = len(layers)
-        listSize = listLayerSize*countGrid
-        progressStep = 100/listSize if listSize else 0
-        i = 0
-        multiStepFeedback = QgsProcessingMultiStepFeedback(listSize, feedback)
-        for feat in frameGrid.getFeatures():
-            frameGrid.removeSelection()
-            for step, pctLayer in enumerate(layers):
-                if feedback.isCanceled():
-                    return {self.OUTPUT: 'cancelado'}
-                if (feat[nameField] == pctLayer.name()):
-                    frameGrid.select(feat.id())
-                    frameSelected = frameGrid.materialize(QgsFeatureRequest().setFilterFids(frameGrid.selectedFeatureIds()))
-                    if pctLayer.bandCount() == 1:
-                        rgbLayer = self.pctToRgb(context, pctLayer, multiStepFeedback)
-                    else:
-                        rgbLayer = pctLayer
-                    clippedLayer = self.clipLayer(context, rgbLayer, frameSelected, multiStepFeedback)
-                    mergeLayers.append(clippedLayer)
-                    frameGrid.removeSelection()
-                multiStepFeedback.setCurrentStep((i-1)*listLayerSize + step + 1)
-            i += 1
-        return mergeLayers
 
-    def getInputFrame(self, crs, layers, featureHandler, stopScale, feedback):
-        stringCrs = str(crs).split(" ")[1].split(">")[0]
-        rasterRange = QgsVectorLayer("Polygon?crs=" + stringCrs, "raster_range", "memory")
-        QgsProject.instance().addMapLayer(rasterRange)
-        inputFrame = QgsVectorLayer("Polygon?crs=" + stringCrs, "grid_poligono", "memory")
-        QgsProject.instance().addMapLayer(inputFrame)
-        inputFrame.startEditing()
-        
-        # x and y of rasters
-        coordX = []
-        coordY = []
+    def mergeLayers(self, context, feedback:QgsProcessingMultiStepFeedback, frameGrid:QgsVectorLayer, layers:List[QgsVectorLayer])->List[QgsVectorLayer]:
+        for i, r in enumerate(layers):
+            if isinstance(r, str):
+                name = os.path.basename(r).rsplit('.', 1)[0]
+                layers[i] = QgsRasterLayer(r, name)
+            elif not isinstance(r, QgsRasterLayer):
+                raise TypeError(f"Elemento inválido em layers: {r} (esperado QgsRasterLayer)")
+            
+        clipped_outputs = []
+        total = len(layers)
+        local_feedback = QgsProcessingMultiStepFeedback(max(1,total), feedback)
+        step = 0
+
         for raster in layers:
-            extentRaster = raster.extent()
-            centerRaster = extentRaster.center()
-            xRaster = centerRaster.x()
-            yRaster = centerRaster.y()
-            coordX.append(xRaster)
-            coordY.append(yRaster)
-        sortedX = sorted(coordX)
-        sortedY = sorted(coordY)
-        xMin = sortedX[0]
-        xMax = sortedX[-1]
-        yMin = sortedY[0]
-        yMax = sortedY[-1]
-        feat = QgsFeature()
-        feat.setGeometry(QgsGeometry.fromWkt(f"POLYGON (({xMin} {yMin}, {xMin} {yMax}, {xMax} {yMax}, {xMax} {yMin}, {xMin} {yMin}))"))
-        rasterRange.startEditing()
-        rasterRange.addFeature(feat, QgsFeatureSink.FastInsert)
-        rasterRange.commitChanges()
-        crs = rasterRange.crs()
-        featureList = []
-        coordinateTransformer = QgsCoordinateTransform(
-            QgsCoordinateReferenceSystem(crs.geographicCrsAuthId()),
-            crs,
-            QgsProject.instance(),
-        )
-        featureHandler.getSystematicGridFeaturesWithConstraint(
-            featureList,
-            rasterRange,
-            stopScale,
-            coordinateTransformer,
-            xSubdivisions=1,
-            ySubdivisions=1,
-            feedback=feedback,
-        )
-        inputFrame.startEditing()
-        list(
-            map(
-                lambda x: inputFrame.addFeature(x, QgsFeatureSink.FastInsert),
-                featureList,
-            )
-        )
-        QgsProject.instance().removeMapLayer(rasterRange.id())
-        return inputFrame
-    
+            if feedback.isCanceled():
+                return[]
+            else:
+                center = raster.extent().center()
+                point = QgsGeometry.fromPointXY(center)
 
-    
-    def matchLayerAndFrame(self, inputFrame, layers)->QgsVectorLayer:
-        frameLayer = processing.run('EBGeoProvider:matchlayerandframe',
-                {
-                    'INPUT_LAYERS': layers,
-                    'INPUT_FRAME': inputFrame,
-                    'OUTPUT': 'TEMPORARY_OUTPUT'
-                })['OUTPUT']
-        return frameLayer
-    
+                request = QgsFeatureRequest().setFilterRect(raster.extent())
+                frameSelected = frameGrid.materialize(
+                    QgsFeatureRequest().setFilterFids([
+                        f.id() for f in frameGrid.getFeatures(request) if f.geometry().contains(point)
+                    ])
+                )
+                if frameSelected.featureCount() == 0:
+                    raise QgsProcessingException(f"Nenhuma feição do frameGrid contém o raster {raster.name()}")
+                rgbLayer = self.pctToRgb(context, raster, local_feedback) if raster.bandCount() == 1 else raster
+                clipped = self.clipLayer(context, rgbLayer, frameSelected, local_feedback)
+                clipped_outputs.append(clipped)
+
+                step += 1
+                local_feedback.setCurrentStep(step)
+
+        
+        return clipped_outputs
+
+    def getInputFrame(self, crs, layers, stopScale, feedback, context):
+        raster_points = QgsVectorLayer(f"Point?crs={crs.authid()}", "raster_points", "memory")
+        prov = raster_points.dataProvider()
+        fields = QgsFields()
+        fields.append(QgsField("mi", QVariant.String))
+        prov.addAttributes(fields)
+        raster_points.updateFields()
+
+        for raster in layers:
+            feat = QgsFeature()
+            center = raster.extent().center()
+            feat.setGeometry(QgsGeometry.fromPointXY(center))
+            feat.setAttributes([raster.name()])
+            prov.addFeature(feat, QgsFeatureSink.FastInsert)
+
+        raster_points.updateExtents()
+
+        internal_scales = ["1000k", "500k", "250k", "100k", "50k", "25k", "10k", "5k", "2k", "1k"]
+        stopScaleStr = f"{(stopScale//1000)}k"
+        if stopScaleStr not in internal_scales:
+            stopScaleStr = internal_scales[0] 
+        stopScaleIdx = internal_scales.index(stopScaleStr)
+
+        result = processing.run(
+            "EBGeoProvider:frame",
+            {
+                "INPUT": raster_points,
+                "STOP_SCALE": stopScaleIdx,
+                "XSUBDIVISIONS": 1,
+                "YSUBDIVISIONS": 1,
+                "OUTPUT": "TEMPORARY_OUTPUT"
+            },
+            context=context,
+            feedback=feedback
+        )
+
+        inputFrame = result["OUTPUT"]
+
+        if inputFrame is None:
+            raise QgsProcessingException("Falha ao criar a moldura automática (OUTPUT nulo).")
+
+        return inputFrame
+
     def reprojectLayer(self, layer, crs):
         reprojLayer = processing.run('native:reprojectlayer',
                 {
@@ -259,21 +267,31 @@ class MakeMosaic(QgsProcessingAlgorithm):
                 feedback=feedback)['OUTPUT']
         return clippedLayer
     def mergeAll(self, context, feedback, mergeLayers):
-        rgbLayer =processing.run('gdal:merge', 
-                {
-                    'INPUT': mergeLayers,
-                    'DATA_TYPE': 0,
-                    'EXTRA': '',
-                    'NODATA_INPUT' : None, 
-                    'NODATA_OUTPUT' : None, 
-                    'OPTIONS' : '', 
-                    'PCT' : False, 
-                    'SEPARATE' : False ,
-                    'OUTPUT': 'TEMPORARY_OUTPUT'
-                },
-                context=context,
-                feedback=feedback)
-        return rgbLayer['OUTPUT']
+        vrt_file = os.path.join(tempfile.gettempdir(), "temp_mosaic.vrt")
+        processing.run(
+            "gdal:buildvirtualraster",
+            {
+                "INPUT": mergeLayers,
+                "RESOLUTION": 0,
+                "SEPARATE": False,
+                "OUTPUT": vrt_file
+            },
+            context=context,
+            feedback=feedback
+        )
+        merged_tif = processing.run(
+            "gdal:translate",
+            {
+                "INPUT": vrt_file,
+                "OUTPUT": "TEMPORARY_OUTPUT",
+                "OPTIONS": "",
+                "DATA_TYPE": 0 
+            },
+            context=context,
+            feedback=feedback
+        )["OUTPUT"]
+
+        return merged_tif
     def compress(self, context, parameters, feedback, layer):
         compressedLayer = processing.run("gdal:translate", 
                        {'INPUT':layer,
