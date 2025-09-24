@@ -27,6 +27,7 @@ class EBGeo(QObject):
 		self.resetCurrentLayerSignals()
 		self.iface.currentLayerChanged.connect(self.resetCurrentLayerSignals)
 		self.actions = []
+		self.toolbar = self.iface.addToolBar("EBGeo")
     	
 	def initGui(self):
 		self.initVariables()
@@ -60,9 +61,21 @@ class EBGeo(QObject):
 		QgsApplication.processingRegistry().removeProvider(self.provider)
 		for action in self.actions:
 			self.iface.removePluginMenu(u'EBGeo',	action)
+			self.iface.removeToolBarIcon(action)
+			self.iface.unregisterMainWindowAction(action)
+			del action
+		if hasattr(self, "qgisLightPlugin"):
+			try:
+				self.qgisLightPlugin.unload()
+			except Exception as e:
+				QgsApplication.messageLog().logMessage(
+                f"Erro ao descarregar QGISLight: {e}", "EBGeo"
+            )
 		if self.ebGeo is not None:
 			self.menuBar.removeAction(self.ebGeo.menuAction())
+		del self.toolbar
 		del self.ebGeo
+
 
 	def addMenu(self, name, title, icon_file, parentMenu = None):
 		self.menuList = []
@@ -334,6 +347,26 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.mt_action)
 
+		self.simplifyInterface_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'qgis-green.svg'),
+			text=u'Simplificar Interface',
+			callback=self.loadSimplifyInterface,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=True
+		)
+		self.ebGeo.addAction(self.simplifyInterface_action)
+
+		self.hidde_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'hide.png'),
+			text=u'Ocultar Barra de Ferramentas',
+			callback=self.loadHideToolbar,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=True
+		)
+		self.ebGeo.addAction(self.hidde_action)
+
 		self.ms_action = self.add_action(
 		 	os.path.join(os.path.dirname(__file__), 'icons', 'help.png'),
 		 	text=u'Ajuda',
@@ -505,7 +538,22 @@ class EBGeo(QObject):
         """
 		if self.mainVisib.isOpen == False:
 			self.mainVisib.initGui()
-			
+
+	def loadSimplifyInterface(self):
+		from .SimplifyInterface.simplify_interface import SimplifyInterface
+		if not hasattr(self, "simplifyInterface"):	
+			self.simplifyInterface = SimplifyInterface(self.iface)
+		self.simplifyInterface.enable(store=True)
+
+	def loadHideToolbar(self):
+		from .HideToolbar.hideToolbar import HideToolbar
+		if not hasattr(self, 'hide_toolbar'):
+			self.hide_toolbar = HideToolbar(self.iface)
+		if not self.hide_toolbar.active:
+			self.hide_toolbar.enable()
+		else:
+			self.hide_toolbar.disable()
+
 	def loadHelp(self):
 		"""
         Open "help" window

@@ -10,6 +10,7 @@ from .insertMASACODE import ConvertEDGVtoMASACODE
 from .simbmilLoader import SimbMilAlgorithm
 from .pointsWithKmAndName import GeradorPontosQuilometragem
 from .launchNOAA import LaunchNOAA
+from .lineOfSight import LineOfSight
 class Provider(QgsProcessingProvider):
 
     def __init__(self):
@@ -24,6 +25,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(SimbMilAlgorithm())
         self.addAlgorithm(GeradorPontosQuilometragem())
         self.addAlgorithm(LaunchNOAA())
+        self.addAlgorithm(LineOfSight())
 
     def load(self):
         ProcessingConfig.settingIcons[self.name()] = self.icon()
