@@ -144,6 +144,7 @@ class AreaRange(QObject):
     def getInputRightButton(self):
         qid = QInputDialog()
         name_check = True
+        same_crs = True
         while name_check:
             input_name = QInputDialog.getText(qid, "Selecione a Camada", "Digite o nome da Camada de Pontos contendo os campos 'Alcance', 'Azimute' e 'Abertura'", QLineEdit.Normal)[0]
             if not input_name:
@@ -156,9 +157,10 @@ class AreaRange(QObject):
                     worklayer = activeLayer
                     output_layer, dtprovider = self.createlayer(worklayer)
                 if activeLayer.crs().isGeographic() != self.canvas.mapSettings().destinationCrs().isGeographic():
-                    QMessageBox.warning(None, "Aviso",
-                    "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros).")
-            
+                    same_crs = False
+        if not same_crs:
+            QMessageBox.warning(None, "Aviso",
+                    "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros).")    
         return output_layer, dtprovider, activeLayer
 
     # Coletar as informações da layer de pontos selecionada pelo usuário caso clique com o botão esquerdo do mouse.
@@ -175,10 +177,10 @@ class AreaRange(QObject):
                 continue
             if layer.geometryType() == 0:
                 for feature in layer.getFeatures():
+                    same_crs = True
                     transf = QgsCoordinateTransform(layer.crs(), self.canvas.mapSettings().destinationCrs(), QgsProject.instance())
                     if layer.crs().isGeographic() != self.canvas.mapSettings().destinationCrs().isGeographic():
-                        QMessageBox.warning(None, "Aviso", 
-                        "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros)." )
+                        same_crs = False
                     if feature.geometry().isMultipart():
                         workgeom = feature.geometry().coerceToType(QgsWkbTypes.Point)[0].asPoint()
                     else:
@@ -187,6 +189,9 @@ class AreaRange(QObject):
                     geom.transform(transf)
                     geom = QgsGeometry.fromPointXY(QgsPointXY(geom))
                     if geom.intersects(bufferRect):
+                        if not same_crs:
+                            QMessageBox.warning(None, "Aviso", 
+                        "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros)." )
                         return layer, workgeom, feature
             else:
                 continue
