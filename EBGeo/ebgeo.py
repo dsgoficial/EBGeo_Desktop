@@ -3,15 +3,18 @@ import os, sys, webbrowser
 from qgis.utils import iface
 currentPath = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(currentPath))
-from qgis.core import QgsMapLayer, QgsProject, QgsApplication
-from qgis.PyQt.QtWidgets import QAction, QMessageBox, QMenu
+from qgis.core import QgsMapLayer, QgsProject, QgsApplication, QgsProject
+from qgis.PyQt.QtWidgets import QAction, QMessageBox, QMenu, QDockWidget
 from qgis.PyQt.QtGui import QIcon
 from .BDGEx.bdgexGuiManager import BDGExGuiManager
 from .Processings.pluginProvider import pluginProvider
 from .VisibilityAnalysis.visibilityAnalysis import VisibilityAnalysis as Main_VisibilityAnalisys
+from .ZoomCoordenadas.zoomCoord_ui import Ui_ZoomDockWidgetBase
+from .ZoomCoordenadas.main import ZoomToDockWidget
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import pyqtSignal, QObject, Qt
 from qgis.core import QgsVectorLayer, Qgis
+
 
 # sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),'auxiliar'))
 
@@ -347,6 +350,16 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.mt_action)
 
+		self.zoom_to = None
+		self.zoom_to_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'zoom_to.png'),
+			text=u'Zoom para coordenada',
+			callback=self.loadZoomTool,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.zoom_to_action)
+
 		self.simplifyInterface_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'qgis-green.svg'),
 			text=u'Simplificar Interface',
@@ -384,6 +397,8 @@ class EBGeo(QObject):
 		 	add_to_menu=False,
 		 	add_to_toolbar=False)
 		self.ebGeo.addAction(self.ms_action)
+
+
 
 	def loadDeterminarMIArea(self):
 		"""
@@ -570,6 +585,15 @@ class EBGeo(QObject):
 		dialogAbout = About()
 		dialogAbout.exec_()
 	
+	def loadZoomTool(self):
+		# cria a dock apenas se ainda não existir
+		if self.zoom_to:
+			self.iface.removeDockWidget(self.zoom_to)
+			self.zoom_to=None
+		else:
+			self.zoom_to = ZoomToDockWidget(self.iface, plugin=self)
+			self.iface.addDockWidget(Qt.RightDockWidgetArea, self.zoom_to)
+
 	def initiateToolsSignals(self):
 		"""
         Connects all maptools' signals.

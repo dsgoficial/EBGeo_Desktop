@@ -16,5 +16,7 @@
     <file>icons/reload.png</file>
     <file>icons/criarCamada.png</file>
     <file>icons/visibilityAnalisis.png</file>
+    <file>icons/zoomtool.jpg</file>
+    <file>icons/copyicon.svg</file>
   </qresource>
 </RCC>
