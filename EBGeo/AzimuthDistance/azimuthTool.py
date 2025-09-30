@@ -153,6 +153,7 @@ class AzimuthTool(QObject):
         if button == QtCore.Qt.LeftButton:
             layerFeat = self.getLayerFeature(point)
             if not layerFeat:
+                QMessageBox.warning(None, "Aviso", "Clique em uma geometria de ponto existente.")
                 return
             else:
                 worklayer, workgeom = layerFeat
@@ -169,6 +170,7 @@ class AzimuthTool(QObject):
             
             layerFeat = self.getLayerFeature(point)
             if not layerFeat:
+                QMessageBox.warning(None, "Aviso", "Clique em uma geometria de ponto existente.")
                 return
             else:
                 self.worklayer, self.workgeom = layerFeat
