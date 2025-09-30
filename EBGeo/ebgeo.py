@@ -361,24 +361,26 @@ class EBGeo(QObject):
 		self.ebGeo.addAction(self.zoom_to_action)
 
 		self.simplifyInterface_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'qgis-green.svg'),
+			os.path.join(os.path.dirname(__file__), 'icons', 'hide.png'),
 			text=u'Simplificar Interface',
 			callback=self.loadSimplifyInterface,
 			parent=self.ebGeo,
 			add_to_menu=False,
-			add_to_toolbar=True
+			add_to_toolbar=False
 		)
+		self.simplifyInterface_action.setCheckable(True)
 		self.ebGeo.addAction(self.simplifyInterface_action)
 
-		self.hidde_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'hide.png'),
-			text=u'Ocultar Barra de Ferramentas',
-			callback=self.loadHideToolbar,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=True
-		)
-		self.ebGeo.addAction(self.hidde_action)
+		# self.hidde_action = self.add_action(
+		# 	os.path.join(os.path.dirname(__file__), 'icons', 'hide.png'),
+		# 	text=u'Ocultar Barra de Ferramentas',
+		# 	callback=self.loadHideToolbar,
+		# 	parent=self.ebGeo,
+		# 	add_to_menu=False,
+		# 	add_to_toolbar=False
+		# )
+		# self.hidde_action.setCheckable(True)
+		# self.ebGeo.addAction(self.hidde_action)
 
 		self.ms_action = self.add_action(
 		 	os.path.join(os.path.dirname(__file__), 'icons', 'help.png'),
@@ -558,7 +560,14 @@ class EBGeo(QObject):
 		from .SimplifyInterface.simplify_interface import SimplifyInterface
 		if not hasattr(self, "simplifyInterface"):	
 			self.simplifyInterface = SimplifyInterface(self.iface)
-		self.simplifyInterface.enable(store=True)
+		if getattr(self.simplifyInterface, "is_active", False):
+			self.simplifyInterface.disable()
+			self.simplifyInterface.is_active = False
+			self.simplifyInterface_action.setChecked(False)
+		else:
+			self.simplifyInterface.enable(store=True)
+			self.simplifyInterface.is_active = True
+			self.simplifyInterface_action.setChecked(True)
 
 	def loadHideToolbar(self):
 		from .HideToolbar.hideToolbar import HideToolbar
@@ -566,8 +575,10 @@ class EBGeo(QObject):
 			self.hide_toolbar = HideToolbar(self.iface)
 		if not self.hide_toolbar.active:
 			self.hide_toolbar.enable()
+			self.hidde_action.setChecked(True) 
 		else:
 			self.hide_toolbar.disable()
+			self.hidde_action.setChecked(False)
 
 	def loadHelp(self):
 		"""

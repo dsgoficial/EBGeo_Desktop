@@ -171,13 +171,13 @@ class AreaRange(QObject):
             d = 0.002 * self.canvas.scale()
         bufferRect = QgsRectangle(point.x() - d, point.y() - d, point.x() + d, point.y() + d)
         layerlist = self.iface.mapCanvas().layers()
+        same_crs = True
         for layer in layerlist:
             if layer.type() == QgsMapLayer.RasterLayer:
                 QMessageBox.information(None, u"Aviso", u"Selecione uma camada vetorial de pontos.")
                 continue
             if layer.geometryType() == 0:
                 for feature in layer.getFeatures():
-                    same_crs = True
                     transf = QgsCoordinateTransform(layer.crs(), self.canvas.mapSettings().destinationCrs(), QgsProject.instance())
                     if layer.crs().isGeographic() != self.canvas.mapSettings().destinationCrs().isGeographic():
                         same_crs = False
@@ -189,10 +189,7 @@ class AreaRange(QObject):
                     geom.transform(transf)
                     geom = QgsGeometry.fromPointXY(QgsPointXY(geom))
                     if geom.intersects(bufferRect):
-                        if not same_crs:
-                            QMessageBox.warning(None, "Aviso", 
-                        "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros)." )
-                        return layer, workgeom, feature
+                        return layer, workgeom, feature, same_crs
             else:
                 continue
 
@@ -257,10 +254,13 @@ class AreaRange(QObject):
         # Caso botão esquerdo clicado:
         if button == QtCore.Qt.LeftButton:
             layerFeat = self.getLayerFeature(point)
-            if not layerFeat:
+            if not layerFeat:                                         
                 return
             else:
-                worklayer, workgeom, workfeat = layerFeat
+                worklayer, workgeom, workfeat, same_crs = layerFeat
+            if not same_crs:
+                QMessageBox.warning(None, "Aviso", 
+                        "A camada selecionada tem sistema de coordenadas diferente do mapa (graus x metros)." )
 
             inputs = self.getInput()
             if not inputs:

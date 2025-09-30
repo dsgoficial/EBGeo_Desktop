@@ -36,8 +36,7 @@
         "separator",
         "algorithms:vector",
         "algorithms:raster",
-        "separator",
-        "mActionDisableQGISLight"
+        "separator"
       ]
     },
     "mEditingToolBar": {
