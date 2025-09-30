@@ -309,5 +309,5 @@ class VirtualFieldGenerator(QtWidgets.QDialog, FORM_CLASS):
 
     def pathGpkg(self):
         filePath = os.path.dirname(os.path.dirname(__file__))
-        filePathGpkg = os.path.join(filePath, "Auxiliar", "shp", "Brasil_Fusos.gpkg")
+        filePathGpkg = os.path.join(filePath, "auxiliar", "shp", "Brasil_Fusos.gpkg")
         return filePathGpkg
