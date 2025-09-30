@@ -1,10 +1,10 @@
 from qgis.PyQt import QtCore, QtWidgets
-from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker
+from qgis.gui import QgsMapTool, QgsVertexMarker
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY
 from . import mgrs
 from . import utmLatLon
 
-class CopyCoordTool(QgsMapToolEmitPoint):
+class CopyCoordTool(QgsMapTool):
     def __init__(self, iface, parent_widget, mgrs_precision=5, coord_format="MGRS"):
         super().__init__(iface.mapCanvas())
         self.iface = iface
