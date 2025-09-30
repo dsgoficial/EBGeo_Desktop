@@ -20,7 +20,7 @@ from qgis.core import (QgsProcessing,
                        QgsPointXY,
                        QgsWkbTypes,
                        QgsCategorizedSymbolRenderer,
-                       QgsProcessingMultiStepFeedback  
+                       Qgis  
                         )
 import math
 import processing
@@ -282,6 +282,16 @@ class LineOfSight(QgsProcessingAlgorithm):
     def check_inputs(self, dem_raster, lines_layer, feedback):
         messages = []
 
+        if dem_raster.bandCount() != 1:
+            messages.append("O raster de entrada não parece ser um MDE: possui mais de uma banda.")
+        else:
+            provider = dem_raster.dataProvider()
+            band_type = provider.dataType(1)
+            if band_type not in [Qgis.Float32, Qgis.Float64,
+                                 Qgis.Int16, Qgis.Int32,
+                                 Qgis.UInt16, Qgis.UInt32]:
+                messages.append("O raster não parece conter dados de elevação válidos (tipo incorreto).")
+
         if dem_raster.crs().isGeographic():
             messages.append("O CRS do raster é geográfico (lat/long). Reprojete para um CRS projetado.")
 
@@ -314,10 +324,10 @@ class LineOfSight(QgsProcessingAlgorithm):
         return self.tr("Linha de Visada")
 
     def group(self):
-        return self.tr(self.groupId())
+        return self.tr('Vetor e Raster')
 
     def groupId(self):
-        return 'MASACODE'
+        return 'vetoreraster'
 
     def shortHelpString(self):
         return self.tr(

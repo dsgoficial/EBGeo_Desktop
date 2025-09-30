@@ -229,8 +229,8 @@ class LaunchNOAA(QgsProcessingAlgorithm):
         
         pointTarget = QgsPointXY(longTarget, latTarget)
 
-        lineOpenParachute, pointDestOpenParachute = self.pointAndLineFromPointDistanceAndDirection(pointTarget, distanceOpenParachute, directionOpenParachuteMean)
-        lineFreeFall, pointDestFreeFall = self.pointAndLineFromPointDistanceAndDirection(pointTarget, distanceFreeFall, directionFreeFallMean)
+        lineOpenParachute, pointDestOpenParachute = self.pointAndLineFromPointDistanceAndDirection(pointTarget, distanceOpenParachute, directionOpenParachuteMean) #LIGAR PONTO ALVO COM ABERTURA DO PARAQUEDAS
+        lineFreeFall, pointDestFreeFall = self.pointAndLineFromPointDistanceAndDirection(pointDestOpenParachute, distanceFreeFall, directionFreeFallMean) #LIGAR ABERTURA DO PARAQUEDAS COM QUEDA LIVRE 
         
         lineDragNariz, pointInitNariz = self.pointAndLineFromPointDistanceAndDirection(pointDestFreeFall, drag, directionOpenParachuteMean + 180)
 
@@ -298,16 +298,19 @@ class LaunchNOAA(QgsProcessingAlgorithm):
         layerOut.addFeature(feat, QgsFeatureSink.FastInsert)
     
     def pointAndLineFromPointDistanceAndDirection(self, point, distance, direction):
+        '''
+        Build a line from the point with the distance and direction (inputs) and also returns the point where the line stops
+        '''
         transform = QgsProject.instance().transformContext()
         coordTransform = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), QgsCoordinateReferenceSystem("EPSG:3857"), transform)
-        pointTargetProject = coordTransform.transform(point)        
-        directionRad = math.radians(direction)
+        pointTargetProject = coordTransform.transform(point) #Tranforma lat long em XY       
+        directionRad = math.radians(direction) #direção do vetor
         dx = distance * math.sin(directionRad)
         dy = distance * math.cos(directionRad)
-        pointDestProj = QgsPointXY(pointTargetProject.x() + dx, pointTargetProject.y() + dy)
+        pointDestProj = QgsPointXY(pointTargetProject.x() + dx, pointTargetProject.y() + dy) #soma às coordenadas projetadas o dx e dy
         coordTransformReverse = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:3857"), QgsCoordinateReferenceSystem("EPSG:4326"), transform)
         pointDest = coordTransformReverse.transform(pointDestProj)
-        line = QgsGeometry.fromPolylineXY([point, pointDest])
+        line = QgsGeometry.fromPolylineXY([point, pointDest]) #faz a linha que liga o ponto de origem ao ponto destino
         return line, pointDest
     
     def latlongTarget(self, linesFileTxt):
@@ -330,7 +333,7 @@ class LaunchNOAA(QgsProcessingAlgorithm):
         for pressure in dictPressureDirectionAndIntensity:
             directionMean += dictPressureDirectionAndIntensity[pressure][0]
             intensityMean += dictPressureDirectionAndIntensity[pressure][1]
-        return directionMean / elements, intensityMean / elements
+        return round(directionMean / elements), round(intensityMean / elements)
     
     def dragAndSpeedAircraft(self, aircraft):
         if aircraft in ["C-130", "C-105", "KC-390"]:
@@ -357,14 +360,16 @@ class LaunchNOAA(QgsProcessingAlgorithm):
             if not '.mb' in line:
                 continue
             pressure = int(line.split(".mb")[0])
+            if pressure > 900:
+                return pressureDirectionIntensityWindFreeFallDict, pressureDirectionIntensityWindOpenParachuteDict 
             directionAndIntensity = line.split(".mb")[1].split(" ")[1]
             direction = int(directionAndIntensity.split("@")[0])
-            intensity = int(directionAndIntensity.split("@")[1])
+            intensity = int(directionAndIntensity.split("@")[1])            
             if pressure >= init_pressure_free_fall and pressure < init_pressure_open_parachute:
                 pressureDirectionIntensityWindFreeFallDict[pressure] = [direction, intensity]
             elif pressure >= init_pressure_open_parachute and pressure <= end_pressure_open_parachute:
                 pressureDirectionIntensityWindOpenParachuteDict[pressure] = [direction, intensity]
-        return pressureDirectionIntensityWindFreeFallDict, pressureDirectionIntensityWindOpenParachuteDict
+        return pressureDirectionIntensityWindFreeFallDict, pressureDirectionIntensityWindOpenParachuteDict 
 
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)
@@ -379,10 +384,10 @@ class LaunchNOAA(QgsProcessingAlgorithm):
         return self.tr("Lançamento Paraquedista NOAA")
 
     def group(self):
-        return self.tr(self.groupId())
+        return self.tr('Vetor e Raster')
 
     def groupId(self):
-        return 'MASACODE'
+        return 'vetoreraster'
 
     def shortHelpString(self):
         return self.tr('Converte em lote os zips contendo shapefiles no formato EDGV para o formato MASACODE')
