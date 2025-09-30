@@ -7,7 +7,7 @@ from qgis.PyQt.QtWidgets import QAction, QMessageBox, QMenu, QDockWidget, QShort
 
 from .zoomCoord_ui import Ui_ZoomDockWidgetBase  
 from . import mgrs  
-from .copyCoord import activate_copy_tool
+from .copyCoord import CopyCoordTool
 from ZoomCoordenadas import utmLatLon
 from .utmLatLon import dms_to_decimal
 import os
@@ -23,6 +23,7 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
         self.plugin = plugin
         self.canvas = iface.mapCanvas()
         self.setupUi(self)
+        self.tool = None
         
         shortcut = QShortcut(QKeySequence("Return"), self)
         shortcut.activated.connect(self.on_zoomToolButton_clicked)
@@ -200,5 +201,9 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
 
     @pyqtSlot(bool)
     def on_CopyButton_clicked(self):
+
         coord_format = self.SrcBox.currentData()
-        activate_copy_tool(self.iface, self, coord_format=coord_format)
+        self.tool = CopyCoordTool(self.iface, self, coord_format=coord_format)
+        self.canvas.setMapTool(self.tool)
+        self.CopyButton.setDown(True)
+
