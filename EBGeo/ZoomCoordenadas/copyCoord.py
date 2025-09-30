@@ -1,10 +1,10 @@
 from qgis.PyQt import QtCore, QtWidgets
-from qgis.gui import QgsMapTool, QgsVertexMarker
+from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY
 from . import mgrs
 from . import utmLatLon
 
-class CopyCoordTool(QgsMapTool):
+class CopyCoordTool(QgsMapToolEmitPoint):
     def __init__(self, iface, parent_widget, mgrs_precision=5, coord_format="MGRS"):
         super().__init__(iface.mapCanvas())
         self.iface = iface
@@ -108,12 +108,3 @@ class CopyCoordTool(QgsMapTool):
         if self.marker is not None:
             self.canvas.scene().removeItem(self.marker)
             self.marker = None
-
-
-# --- função que pode ser chamada como slot pelo DockWidget ---
-def activate_copy_tool(iface, parent_widget, mgrs_precision=5, coord_format="mgrs"):
-    """Ativa a ferramenta de copiar coordenadas."""
-    tool = CopyCoordTool(iface, parent_widget, mgrs_precision, coord_format)
-    parent_widget.canvas.setMapTool(tool)
-    if hasattr(parent_widget, 'CopyButton'):
-        parent_widget.CopyButton.setDown(True)
