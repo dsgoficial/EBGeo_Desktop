@@ -119,6 +119,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
                     "MASK": mask_file,
                     "CROP_TO_CUTLINE": True,
                     "KEEP_RESOLUTION": True,
+                    'NODATA' : -9999,
                     "OUTPUT": "TEMPORARY_OUTPUT"
                 },
                 context=context,
