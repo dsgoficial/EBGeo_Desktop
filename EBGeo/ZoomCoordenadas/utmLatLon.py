@@ -86,7 +86,7 @@ def dms_to_decimal(dms_str):
     Converte DMS para decimal.
     Aceita abreviações PT (N/S/L/O) e EN (N/S/E/W)
     """
-    pattern = r"(\d+)[°\s]+(\d+)[\'\s]+(\d+(?:\.\d+)?)[\"\s]*([NSEWLO])?"
+    pattern = r"(\d+)[°\s]+(\d+)[\'\s]+(\d+(?:\.\d+)?)[\"\'\s]*([NSEWLO])?"
     match = re.match(pattern, dms_str.strip(), re.IGNORECASE)
     if not match:
         raise ValueError(f"Formato DMS inválido: {dms_str}")
@@ -99,3 +99,14 @@ def dms_to_decimal(dms_str):
         if hemi in ['S', 'O', 'W']:  # Sul/Oeste em PT ou W em EN
             decimal *= -1
     return decimal
+
+def decimal_to_dms(lat, lon):
+    """Converte decimal para graus/min/seg"""
+    def dms(value, is_lat=True):
+        degrees = int(abs(value))
+        minutes = int((abs(value) - degrees) * 60)
+        seconds = (abs(value) - degrees - minutes/60) * 3600
+        hemi = 'N' if (value >= 0 and is_lat) else 'S' if is_lat else 'L' if value >= 0 else 'O'
+        str = f"{degrees}°{minutes}'{seconds:.2f}\"{hemi}"
+        return str
+    return f"{dms(lat, True)}  {dms(lon, False)}"
