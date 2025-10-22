@@ -2,6 +2,7 @@
 from qgis.core import *
 from qgis.gui import *
 from qgis.PyQt.QtCore import *
+from qgis.PyQt.QtWidgets import QMessageBox
 
 class VertexFinderTool(QgsMapToolIdentifyFeature):
     
@@ -14,6 +15,15 @@ class VertexFinderTool(QgsMapToolIdentifyFeature):
         
     def canvasReleaseEvent(self, event):
         found_features = self.identify(event.x(), event.y(), QgsMapToolIdentify.TopDownAll, self.VectorLayer)
+
+        if len(found_features) == 0:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "Aviso",                  
+                "Nenhum ponto selecionado!"  
+            )
+            return
+
         if len(found_features) > 0:
             for feat in found_features:
                 feature = feat.mFeature
