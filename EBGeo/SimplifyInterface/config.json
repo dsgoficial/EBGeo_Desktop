@@ -36,6 +36,24 @@
         "separator",
         "algorithms:vector",
         "algorithms:raster",
+        "algorithms:capacitacao",
+        "separator",
+        [
+        "LatLonToolsToolbar:Coordinate Conversion",
+        "LatLonToolsToolbar:Copy/Display Coordinate",
+        "LatLonToolsToolbar:Copy Canvas Extent",
+        "LatLonToolsToolbar:Lat Lon Digitize",
+        "LatLonToolsToolbar:Show in External Map",
+        "LatLonToolsToolbar:Multi-location Zoom",
+        "LatLonToolsToolbar:Settings",
+        "LatLonToolsToolbar:Zoom To Coordinate"
+        ],
+        "separator",
+        "mPluginToolBar:OpenTopography DEM Downloader",
+        "separator",
+        "mWebToolBar:Qgis2threejs Exporter",
+        "separator",
+        "mPluginMenu:Terrain profile",
         "separator"
       ]
     },
@@ -70,7 +88,23 @@
           "mAdvancedDigitizeToolBar:mActionMoveFeature",
           "mAdvancedDigitizeToolBar:mActionMoveFeatureCopy",
           "mAdvancedDigitizeToolBar:mActionRotateFeature",
-          "mAdvancedDigitizeToolBar:mActionScaleFeature"
+          "mAdvancedDigitizeToolBar:mActionScaleFeature",
+          "mAdvancedDigitizeToolBar:mActionOffsetPointSymbol",
+          "mAdvancedDigitizeToolBar:mActionRotatePointSymbols",
+          "mAdvancedDigitizeToolBar:mActionAddPart",
+          "mAdvancedDigitizeToolBar:mActionAddRing",
+          "mAdvancedDigitizeToolBar:mActionDeletePart",
+          "mAdvancedDigitizeToolBar:mActionDeleteRing",
+          "mAdvancedDigitizeToolBar:mActionFillRing",
+          "mAdvancedDigitizeToolBar:mActionMergeFeatureAttributes",
+          "mAdvancedDigitizeToolBar:mActionMergeFeatures",
+          "mAdvancedDigitizeToolBar:mActionOffsetCurve",
+          "mAdvancedDigitizeToolBar:mActionReshapeFeatures",
+          "mAdvancedDigitizeToolBar:mActionReverseLine",
+          "mAdvancedDigitizeToolBar:mActionSimplifyFeature",
+          "mAdvancedDigitizeToolBar:mActionSplitFeatures",
+          "mAdvancedDigitizeToolBar:mActionSplitParts",
+          "mAdvancedDigitizeToolBar:mActionTrimExtendFeature"
         ],
         [
           "mDigitizeToolBar:mActionVertexTool",
@@ -143,6 +177,15 @@
         "native:extendlines",
         "qgis:eliminateselectedpolygons",
         "native:fixgeometries"
+      ]
+    },
+    "capacitacao": {
+      "icon": ":/images/themes/default/mIconVector.svg",
+      "menu": [
+        "EBGeoProvider:mosaic",
+        "EBGeoProvider:frame",
+        "Geocodificacao:Geocoding"
+
       ]
     }
   },
