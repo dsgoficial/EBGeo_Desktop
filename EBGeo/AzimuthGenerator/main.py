@@ -174,12 +174,12 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
                 if self.virgulaButton.isChecked():
                     item = QTreeWidgetItem(['P' + str(i + 1), str(round(x, 3)).replace(".", ","), str(round(y, 3)).replace(".", ","), azimuth.replace(".", ","), str(dist).replace(".", ","), 'P' + str(i + 2)])
                 elif self.pontoButton.isChecked():
-                    item = QTreeWidgetItem(['P' + str(i + 1), str(round(x, 3)), str(round(y, 3)), azimuth, str(dist), 'P' + str(i + 2)])
+                    item = QTreeWidgetItem(['P' + str(i + 1), str(round(x, 3)), str(round(y, 3)), azimuth.replace(",", "."), str(dist), 'P' + str(i + 2)])
             else:
                 if self.virgulaButton.isChecked():
                     item = QTreeWidgetItem(['P' + str(i + 1), '', '', azimuth.replace(".", ","), str(dist).replace(".", ","), 'P' + str(i + 2)])
-                elif self.virgulaButton.isChecked():
-                    item = QTreeWidgetItem(['P' + str(i + 1), '', '', azimuth, str(dist), 'P' + str(i + 2)])
+                elif self.pontoButton.isChecked():
+                    item = QTreeWidgetItem(['P' + str(i + 1), '', '', azimuth.replace(",", "."), str(dist), 'P' + str(i + 2)])
             self.mapList.insertTopLevelItem(i, item)
 
     def getWorkGeom(self, geomandcrs):
