@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>440</width>
-    <height>109</height>
+    <height>331</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -17,10 +17,10 @@
    </sizepolicy>
   </property>
   <property name="toolTip">
-   <string>Toggle Coordinate Order</string>
+   <string/>
   </property>
   <property name="windowTitle">
-   <string>Zoom to Coordinate</string>
+   <string>Zoom para Coordenada</string>
   </property>
   <widget class="QWidget" name="dockWidgetContents">
    <property name="sizePolicy">
@@ -38,10 +38,14 @@
       <item>
        <widget class="QToolButton" name="zoomToolButton">
         <property name="toolTip">
-         <string>Zoom To Coordinate</string>
+         <string>Zoom para Coordenada</string>
         </property>
         <property name="text">
          <string>...</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../resources.qrc">
+          <normaloff>:/plugins/EBGeo/icons/zoomtool.jpg</normaloff>:/plugins/EBGeo/icons/zoomtool.jpg</iconset>
         </property>
        </widget>
       </item>
@@ -51,10 +55,28 @@
          <bool>true</bool>
         </property>
         <property name="toolTip">
-         <string>Paste Coordinate from Clipboard</string>
+         <string>Copiar Coordenada</string>
         </property>
         <property name="text">
          <string>...</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../resources.qrc">
+          <normaloff>:/plugins/EBGeo/icons/copyicon.svg</normaloff>:/plugins/EBGeo/icons/copyicon.svg</iconset>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="convertButton">
+        <property name="toolTip">
+         <string>Conversor de Coordenadas</string>
+        </property>
+        <property name="text">
+         <string>...</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../resources.qrc">
+          <normaloff>:/plugins/EBGeo/icons/converter.png</normaloff>:/plugins/EBGeo/icons/converter.png</iconset>
         </property>
        </widget>
       </item>
@@ -80,14 +102,93 @@
      </layout>
     </item>
     <item>
-     <widget class="QLabel" name="label">
-      <property name="text">
-       <string>Digite coordenadas MGRS</string>
-      </property>
-     </widget>
+     <widget class="QLabel" name="label"/>
     </item>
     <item>
      <widget class="QLineEdit" name="coordTxt"/>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="converterGroup">
+      <property name="title">
+       <string>Conversor de Coordenadas</string>
+      </property>
+      <layout class="QVBoxLayout" name="converterLayout">
+       <item>
+        <widget class="QLabel" name="labelSrc">
+         <property name="text">
+          <string>Coordenada Origem:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="origemCombo"/>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="inputCoord"/>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>10</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelDst">
+         <property name="text">
+          <string>Coordenada Destino:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="destinoCombo"/>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="outputCoord">
+         <property name="readOnly">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="buttonLayout">
+         <item>
+          <spacer name="horizontalSpacerButtons">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="transformButton">
+           <property name="text">
+            <string>Converter</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="cancelButton">
+           <property name="text">
+            <string>Cancelar</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
     </item>
    </layout>
   </widget>
@@ -99,6 +200,8 @@
    <header>qgsprojectionselectionwidget.h</header>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="../resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

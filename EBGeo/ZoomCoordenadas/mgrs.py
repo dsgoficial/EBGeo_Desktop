@@ -61,7 +61,7 @@ logging.basicConfig(level=LOG_LEVEL, format=FORMAT)
 log = logging.getLogger(__name__)
 
 BADLY_FORMED = \
-    'An MGRS string error: string too long, too short, or badly formed'
+    'Coordenada MGRS inválida.'
 
 # Whether to add the extra half-multiplier to UTM coords per precision,
 # added in geotrans3.8

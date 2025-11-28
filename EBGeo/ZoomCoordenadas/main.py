@@ -1,14 +1,14 @@
-from qgis.PyQt import QtWidgets, uic, QtGui
-from qgis.PyQt.QtGui import QIcon, QKeySequence
+from qgis.PyQt import QtWidgets, uic
+from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSlot
-from qgis.gui import QgsVertexMarker, QgsRubberBand, QgsProjectionSelectionDialog
-from qgis.core import QgsPointXY, QgsPoint, QgsRectangle, QgsCoordinateTransform, QgsProject, QgsWkbTypes, QgsCoordinateReferenceSystem
-from qgis.PyQt.QtWidgets import QAction, QMessageBox, QMenu, QDockWidget, QShortcut
+from qgis.gui import QgsVertexMarker
+from qgis.core import QgsCoordinateTransform, QgsProject, QgsCoordinateReferenceSystem
+from qgis.PyQt.QtWidgets import QShortcut
 
 from .zoomCoord_ui import Ui_ZoomDockWidgetBase  
 from . import mgrs  
 from .copyCoord import CopyCoordTool
-from ZoomCoordenadas import utmLatLon
+from . import utmLatLon, convertCoord
 from .utmLatLon import dms_to_decimal
 import os
 
@@ -24,10 +24,11 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
         self.canvas = iface.mapCanvas()
         self.setupUi(self)
         self.tool = None
+        self.converterGroup.setVisible(False)
         
         shortcut = QShortcut(QKeySequence("Return"), self)
         shortcut.activated.connect(self.on_zoomToolButton_clicked)
-
+       
         # Inicializa o marcador do ponto e o marcador da cruz como atributos
         self.point_marker = None
 
@@ -72,9 +73,6 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
     def zoom_to_mgrs(self):
         """Faz zoom para a coordenada MGRS digitada no widget, independente do CRS do canvas."""
         mgrs_text = self.coordTxt.text().strip()
-        if not mgrs_text:
-            QtWidgets.QMessageBox.warning(self, "Erro", "Digite uma coordenada MGRS!")
-            return
 
         try:
             lat, lon = mgrs.toWgs(mgrs_text)
@@ -85,7 +83,7 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
             self._zoom_to_point(pt_canvas)
 
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Não foi possível fazer o zoom:\n{e}")
+            QtWidgets.QMessageBox.warning(self, "Erro", f"{e}")
 
     def zoom_to_utm(self):
         text = self.coordTxt.text().strip()
@@ -201,9 +199,32 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
 
     @pyqtSlot(bool)
     def on_CopyButton_clicked(self):
-
         coord_format = self.SrcBox.currentData()
         self.tool = CopyCoordTool(self.iface, self, coord_format=coord_format)
         self.canvas.setMapTool(self.tool)
         self.CopyButton.setDown(True)
 
+    @pyqtSlot(bool)
+    def on_convertButton_clicked(self):
+        self.origemCombo.clear()
+        self.origemCombo.addItem("Lat/Lon Decimal", userData="Lat/Lon Decimal")
+        self.origemCombo.addItem("Lat/Lon GMS", userData="Lat/Lon GMS")
+        self.origemCombo.addItem("UTM", userData="UTM")
+        self.origemCombo.addItem("MGRS", userData="MGRS")
+        self.destinoCombo.clear()
+        self.destinoCombo.addItem("Lat/Lon Decimal", userData="Lat/Lon Decimal")
+        self.destinoCombo.addItem("Lat/Lon GMS", userData="Lat/Lon GMS")
+        self.destinoCombo.addItem("UTM", userData="UTM")
+        self.destinoCombo.addItem("MGRS", userData="MGRS")
+        self.destinoCombo.setCurrentIndex(1)
+        self.converterGroup.setVisible(True)
+
+    @pyqtSlot(bool)
+    def on_transformButton_clicked(self):
+        convertCoord.conversao(self)
+
+    @pyqtSlot(bool)
+    def on_cancelButton_clicked(self):
+        self.inputCoord.clear()
+        self.outputCoord.clear()
+        self.converterGroup.setVisible(False)

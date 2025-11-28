@@ -23,6 +23,41 @@ def utm2Point(utm_str, crs="EPSG:4326"):
     utmtrans = QgsCoordinateTransform(utmcrs, QgsCoordinateReferenceSystem(crs), QgsProject.instance())
     return utmtrans.transform(pt)
 
+def utm2LatLon(utm_str: str) -> tuple[float, float]:
+    """
+    Converte uma coordenada UTM (string) para Latitude e Longitude (WGS84).
+    
+    :param utm_str: String UTM. Ex: "53 N 486230 7845496"
+    :return: tuple[float, float]: (latitude, longitude) em graus decimais (WGS84).
+    """
+    zone, hemisphere, easting, northing = utmParse(utm_str)
+    
+    # 1. Definir o CRS de Origem (UTM)
+    utm_crs = QgsCoordinateReferenceSystem(utmGetEpsg(hemisphere, zone))
+    
+    # 2. Definir o Ponto de Origem
+    pt = QgsPointXY(easting, northing)
+    
+    # 3. Criar a Transformação
+    # O CRS de destino é fixado para WGS84 (EPSG:4326)
+    wgs84_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+    
+    utm_trans = QgsCoordinateTransform(
+        utm_crs, 
+        wgs84_crs, 
+        QgsProject.instance().transformContext()
+    )
+    
+    # 4. Transformar
+    ponto_latlon = utm_trans.transform(pt)
+    
+    # O QgsPointXY armazena (X, Y). Em Lat/Lon, X é Longitude e Y é Latitude.
+    latitude = ponto_latlon.y()
+    longitude = ponto_latlon.x()
+    
+    # 5. Retornar a tupla (latitude, longitude)
+    return latitude, longitude
+
 def isUtm(utm_str):
     try:
         utmParse(utm_str)
@@ -109,4 +144,4 @@ def decimal_to_dms(lat, lon):
         hemi = 'N' if (value >= 0 and is_lat) else 'S' if is_lat else 'L' if value >= 0 else 'O'
         str = f"{degrees}°{minutes}'{seconds:.2f}\"{hemi}"
         return str
-    return f"{dms(lat, True)}  {dms(lon, False)}"
+    return f"{dms(lat, True)}, {dms(lon, False)}"

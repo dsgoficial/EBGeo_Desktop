@@ -9,7 +9,6 @@ from qgis.PyQt.QtGui import QIcon
 from .BDGEx.bdgexGuiManager import BDGExGuiManager
 from .Processings.pluginProvider import pluginProvider
 from .VisibilityAnalysis.visibilityAnalysis import VisibilityAnalysis as Main_VisibilityAnalisys
-from .ZoomCoordenadas.zoomCoord_ui import Ui_ZoomDockWidgetBase
 from .ZoomCoordenadas.main import ZoomToDockWidget
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import pyqtSignal, QObject, Qt
@@ -597,7 +596,6 @@ class EBGeo(QObject):
 		dialogAbout.exec_()
 	
 	def loadZoomTool(self):
-		# cria a dock apenas se ainda não existir
 		if self.zoom_to:
 			self.iface.removeDockWidget(self.zoom_to)
 			self.zoom_to=None

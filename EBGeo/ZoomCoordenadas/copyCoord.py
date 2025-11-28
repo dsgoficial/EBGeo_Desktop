@@ -94,16 +94,6 @@ class CopyCoordTool(QgsMapToolEmitPoint):
         else:
             raise ValueError(f"Formato não suportado: {self.coord_format}")
 
-    def to_dms(self, lat, lon):
-        """Converte decimal para graus/min/seg"""
-        def dms(value, is_lat=True):
-            degrees = int(abs(value))
-            minutes = int((abs(value) - degrees) * 60)
-            seconds = (abs(value) - degrees - minutes/60) * 3600
-            hemi = 'N' if (value >= 0 and is_lat) else 'S' if is_lat else 'E' if value >= 0 else 'W'
-            return f"{degrees}°{minutes}'{seconds:.2f}\"{hemi}"
-        return f"{dms(lat, True)} {dms(lon, False)}"
-
     def removeMarker(self):
         if self.marker is not None:
             self.canvas.scene().removeItem(self.marker)
