@@ -27,7 +27,7 @@ class InterfaceDialog(QtWidgets.QDialog, GUI):
     
     def selectOutputFolder(self):
         fileDlg = QFileDialog()
-        self.outputFolder = fileDlg.getExistingDirectory(None, u"Selecionar pasta de saída das imagens", "", QFileDialog.ShowDirsOnly)
+        self.outputFolder = fileDlg.getExistingDirectory(None, u"Selecionar pasta de saída das imagens", "", QFileDialog.Option.ShowDirsOnly)
         self.sendData()
     
     def sendData(self):

@@ -4,8 +4,7 @@ from qgis.core import QgsCoordinateReferenceSystem, QgsVectorLayer, QgsProject, 
 from qgis.PyQt.QtWidgets import QMessageBox, QFileDialog, QDialogButtonBox
 from qgis.gui import QgsProjectionSelectionDialog
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, Qt, QObject
-from PyQt5.QtGui import QFont
-from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtGui import QFont, QColor
 import os
 import math
 from qgis import processing
@@ -169,9 +168,9 @@ class LineLabelsPerDistance(QtWidgets.QDialog, FORM_CLASS):
     
     def mudarCamada(self):
         if self.mapLayerSelection.currentLayer() is None:
-            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
         else:
-            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
 
     
            

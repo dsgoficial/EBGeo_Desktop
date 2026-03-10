@@ -8,7 +8,8 @@
 
 [general]
 name=EBGeo
-qgisMinimumVersion=3.34
+qgisMinimumVersion=4.0
+supportsQt6=True
 description=Ferramentas para planejamento militar do Exército Brasileiro
 version=2.3.0
 author=Exército Brasileiro - Diretoria de Serviço Geográfico

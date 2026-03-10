@@ -52,7 +52,7 @@ class Interface(QtWidgets.QDockWidget, GUI):
         params.append(point.y())
         params.append(self.canvas.mapSettings().destinationCrs())
         self.dialog.setCoords(params)
-        self.dialog.exec_()
+        self.dialog.exec()
 
     def setRasterStyle(self, raster_layer):
         shaderType = QgsColorRampShader()

@@ -32,7 +32,7 @@ class Main:
     
     def openWindow(self):
         if self.isOpen == False:
-            self.iface.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockWindow)
+            self.iface.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.dockWindow)
             self.isOpen = True
             
     def closeDock(self, e):

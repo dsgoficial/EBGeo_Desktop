@@ -7,7 +7,7 @@ Funciona com qualquer sistema de coordenadas (geográfico ou projetado)
 """
 import os
 
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QMetaType
 from qgis.core import (QgsProcessing,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
@@ -26,7 +26,6 @@ from qgis.core import (QgsProcessing,
                        QgsProject,
                        QgsCoordinateReferenceSystem,
                        QgsUnitTypes)
-from PyQt5.QtCore import QVariant
 import math
 
 
@@ -116,10 +115,10 @@ class GeradorPontosQuilometragem(QgsProcessingAlgorithm):
         
         # Criar campos de saída
         fields = QgsFields()
-        fields.append(QgsField('id', QVariant.Int))
-        fields.append(QgsField('nome_rodovia', QVariant.String))
-        fields.append(QgsField('km', QVariant.Double))
-        fields.append(QgsField('km_formatado', QVariant.String))
+        fields.append(QgsField('id', QMetaType.Type.Int))
+        fields.append(QgsField('nome_rodovia', QMetaType.Type.QString))
+        fields.append(QgsField('km', QMetaType.Type.Double))
+        fields.append(QgsField('km_formatado', QMetaType.Type.QString))
         
         # Criar sink de saída
         (sink, dest_id) = self.parameterAsSink(

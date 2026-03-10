@@ -1,4 +1,5 @@
 from qgis.PyQt.QtCore import *
+from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 from qgis.core import *
@@ -64,9 +65,9 @@ class AreaRange(QObject):
             new_fields = []
             #Garantir que sempre existam esses parâmetros
             fixed_fields = [
-                QgsField("Alcance", QVariant.Double),
-                QgsField("Azimute", QVariant.Double),
-                QgsField("Abertura", QVariant.Double)
+                QgsField("Alcance", QMetaType.Type.Double),
+                QgsField("Azimute", QMetaType.Type.Double),
+                QgsField("Abertura", QMetaType.Type.Double)
             ]
             for f in fixed_fields + [f for f in fields]:
                 if f.name() not in existing_field_names:
@@ -79,9 +80,9 @@ class AreaRange(QObject):
         self.firstAreaRangeLayerCrs = output_layer.crs()
         dtprovider = output_layer.dataProvider()
         QgsProject.instance().addMapLayer(output_layer)
-        dtprovider.addAttributes([QgsField("Alcance", QVariant.Double),
-        QgsField("Azimute", QVariant.Double),
-        QgsField("Abertura", QVariant.Double)] + [f for f in fields])
+        dtprovider.addAttributes([QgsField("Alcance", QMetaType.Type.Double),
+        QgsField("Azimute", QMetaType.Type.Double),
+        QgsField("Abertura", QMetaType.Type.Double)] + [f for f in fields])
         output_layer.updateFields()
         return output_layer, dtprovider
     
@@ -173,7 +174,7 @@ class AreaRange(QObject):
         layerlist = self.iface.mapCanvas().layers()
         same_crs = True
         for layer in layerlist:
-            if layer.type() == QgsMapLayer.RasterLayer:
+            if layer.type() == QgsMapLayer.LayerType.RasterLayer:
                 QMessageBox.information(None, u"Aviso", u"Selecione uma camada vetorial de pontos.")
                 continue
             if layer.geometryType() == 0:
@@ -220,7 +221,7 @@ class AreaRange(QObject):
     # Realiza ações de gerenciamento do clique do mouse.
     def doWork(self, point, button):
         # Caso botão direito clicado:
-        if button == QtCore.Qt.RightButton:
+        if button == QtCore.Qt.MouseButton.RightButton:
             resultInput = self.getInputRightButton()
             if not resultInput:
                 return
@@ -252,7 +253,7 @@ class AreaRange(QObject):
             return
 
         # Caso botão esquerdo clicado:
-        if button == QtCore.Qt.LeftButton:
+        if button == QtCore.Qt.MouseButton.LeftButton:
             layerFeat = self.getLayerFeature(point)
             if not layerFeat:                                         
                 return

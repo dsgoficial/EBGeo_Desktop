@@ -2,6 +2,7 @@
 import os, processing
 from qgis.PyQt import QtGui, uic, QtCore, QtWidgets
 from qgis.PyQt.QtCore import *
+from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox, QDialog, QFileDialog, QTableWidgetItem
 from qgis.core import QgsProject, QgsMapLayerProxyModel, QgsVectorLayer, QgsRasterLayer, QgsGeometry, QgsFeature, QgsField, QgsColorRampShader, QgsRasterShader, QgsSingleBandPseudoColorRenderer
@@ -18,7 +19,7 @@ class MobilityPath(QDialog, FORM_CLASS):
         self.populateLayers()
         QgsProject.instance().layersAdded.connect(self.populateLayers)
         QgsProject.instance().layersRemoved.connect(self.populateLayers)
-        self.layerCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        self.layerCombo.setFilters(QgsMapLayerProxyModel.Filter.RasterLayer)
         self.okButton.pressed.connect(self.resolveInputs)
         self.cancelButton.pressed.connect(self.cancel)
         self.tableWidget.cellChanged.connect(self.rowsCheck)
@@ -57,10 +58,10 @@ class MobilityPath(QDialog, FORM_CLASS):
 
         temp_layer = QgsVectorLayer("Point", "Dados de Classe", "memory")
         dtprovider = temp_layer.dataProvider()
-        dtprovider.addAttributes([QgsField("Deslocamento", QVariant.String),
-        QgsField("Minimo", QVariant.Double),
-        QgsField("Maximo", QVariant.Double),
-		QgsField("Valor", QVariant.Int)])
+        dtprovider.addAttributes([QgsField("Deslocamento", QMetaType.Type.QString),
+        QgsField("Minimo", QMetaType.Type.Double),
+        QgsField("Maximo", QMetaType.Type.Double),
+		QgsField("Valor", QMetaType.Type.Int)])
         temp_layer.updateFields()
         temp_list = []
         for i in range(self.tableWidget.rowCount()-1):

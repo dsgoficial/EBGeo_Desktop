@@ -9,10 +9,7 @@ from qgis.PyQt.QtWidgets import QMessageBox
 import qgis
 
 
-try:
-    from qgis.PyQt.QtWidgets import *
-except:
-    pass
+from qgis.PyQt.QtWidgets import *
 
 
 from . import resources

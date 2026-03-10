@@ -67,7 +67,7 @@ class Interface(QtWidgets.QDialog, GUI):
             self.longitudeEdit.setText(self.conv_gms_dec(self.longitudeEdit.text()))
             self.latitudeEdit.setText(self.conv_gms_dec(self.latitudeEdit.text()))
         if not self.longitudeEdit.text().replace('.','',1).replace('-','',1).isdigit() or not self.latitudeEdit.text().replace('-','',1).replace('.','',1).isdigit():
-                iface.messageBar().pushMessage("Error", "Confira se os valores inseridos nos campos de latitude e longitude são compatíveis com o sistema de coordenadas selecionado no campo SRC.", level=Qgis.Critical)
+                iface.messageBar().pushMessage("Error", "Confira se os valores inseridos nos campos de latitude e longitude são compatíveis com o sistema de coordenadas selecionado no campo SRC.", level=Qgis.MessageLevel.Critical)
                 return
         x = float(self.longitudeEdit.text())
         y = float(self.latitudeEdit.text())

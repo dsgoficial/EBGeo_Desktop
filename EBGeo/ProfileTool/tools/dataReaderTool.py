@@ -115,7 +115,7 @@ class DataReaderTool:
                 xC = x1C + dxC * n
                 yC = y1C + dyC * n
                 attr = 0
-                if layer.type() == layer.PluginLayer and isProfilable(layer):
+                if layer.type() == layer.LayerType.PluginLayer and isProfilable(layer):
                     ident = layer.identify(QgsPointXY(xC,yC))
                     try:
                         attr = float(ident[1].values()[choosenBand])
@@ -123,7 +123,7 @@ class DataReaderTool:
                         pass
                 else: #RASTER LAYERS
                     # this code adapted from valuetool plugin
-                    ident = layer.dataProvider().identify(QgsPointXY(xC,yC), QgsRaster.IdentifyFormatValue )
+                    ident = layer.dataProvider().identify(QgsPointXY(xC,yC), QgsRaster.IdentifyFormat.IdentifyFormatValue )
                     #if ident is not None and ident.has_key(choosenBand+1):
                     if ident is not None and (choosenBand in ident.results()):
                         attr = ident.results()[choosenBand]
@@ -187,10 +187,10 @@ class DataReaderTool:
 
         sourceCrs = QgsCoordinateReferenceSystem( qgis.utils.iface.mapCanvas().mapSettings().destinationCrs() )
         destCrs = QgsCoordinateReferenceSystem(profile1["layer"].crs())
-        xform = QgsCoordinateTransform(sourceCrs, destCrs)
-        xformrev = QgsCoordinateTransform(destCrs, sourceCrs)
+        xform = QgsCoordinateTransform(sourceCrs, destCrs, QgsProject.instance())
+        xformrev = QgsCoordinateTransform(destCrs, sourceCrs, QgsProject.instance())
         
-        geom =  qgis.core.QgsGeometry.fromPolyline([QgsPointXY(point[0], point[1]) for point in pointstoDraw1])
+        geom =  qgis.core.QgsGeometry.fromPolylineXY([QgsPointXY(point[0], point[1]) for point in pointstoDraw1])
         geominlayercrs = qgis.core.QgsGeometry(geom)
         tempresult = geominlayercrs.transform(xform)
         
@@ -242,8 +242,8 @@ class DataReaderTool:
         profile['x'] = [projectedpoint[1] for projectedpoint in projectedpoints]
         profile['y'] = [projectedpoint[2] for projectedpoint in projectedpoints]
         
-        multipoly = qgis.core.QgsGeometry.fromMultiPolyline([[xform.transform(QgsPointXY(projectedpoint[1], projectedpoint[2]), qgis.core.QgsCoordinateTransform.ReverseTransform) , 
-                                                              xform.transform(QgsPointXY(projectedpoint[6], projectedpoint[7]), qgis.core.QgsCoordinateTransform.ReverseTransform)  ] for projectedpoint in projectedpoints])
+        multipoly = qgis.core.QgsGeometry.fromMultiPolylineXY([[xform.transform(QgsPointXY(projectedpoint[1], projectedpoint[2]), qgis.core.QgsCoordinateTransform.TransformDirection.ReverseTransform) , 
+                                                              xform.transform(QgsPointXY(projectedpoint[6], projectedpoint[7]), qgis.core.QgsCoordinateTransform.TransformDirection.ReverseTransform)  ] for projectedpoint in projectedpoints])
         
         
         return profile, buffergeom, multipoly
@@ -318,7 +318,7 @@ class DataReaderTool:
                 break
             else:
                 vertexpoint = geom.vertexAt(i)
-                lenpoly = geom.lineLocatePoint(qgis.core.QgsGeometry.fromPoint(vertexpoint))
+                lenpoly = geom.lineLocatePoint(qgis.core.QgsGeometry.fromPointXY(vertexpoint))
                 
                 if min(abs(projectedpoints[:,0] - lenpoly)) < PRECISION :
                     continue
@@ -338,7 +338,7 @@ class DataReaderTool:
         
     def interpolatePoint(self,vertexpoint,geom,projectedpoints):
     
-        lenpoly = geom.lineLocatePoint(qgis.core.QgsGeometry.fromPoint(vertexpoint))
+        lenpoly = geom.lineLocatePoint(qgis.core.QgsGeometry.fromPointXY(vertexpoint))
         
         previouspointindex = np.max(np.where(projectedpoints[:,0]<=lenpoly)[0])
         nextpointindex = np.min(np.where(projectedpoints[:,0]>=lenpoly)[0])

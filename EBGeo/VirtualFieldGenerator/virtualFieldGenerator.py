@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from qgis.PyQt import QtCore
+from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtCore import pyqtSlot
 from qgis.core import QgsField, QgsMapLayerProxyModel, QgsVectorLayer, QgsGeometry, QgsCoordinateTransform, QgsCoordinateReferenceSystem, QgsProject, QgsRectangle, QgsPointXY, QgsWkbTypes
 from qgis.PyQt import uic, QtWidgets
@@ -221,16 +222,16 @@ class VirtualFieldGenerator(QtWidgets.QDialog, FORM_CLASS):
         self.close()
 
     def createArea(self, layer):
-        layer.addExpressionField('format_number($area,6)', QgsField(u'Área', QtCore.QVariant.Double))
+        layer.addExpressionField('format_number($area,6)', QgsField(u'Área', QMetaType.Type.Double))
         self.count += 1
 
     def createPerimeter(self, layer):
-        layer.addExpressionField('format_number($perimeter,3)', QgsField(u'Perímetro', QtCore.QVariant.Double))
+        layer.addExpressionField('format_number($perimeter,3)', QgsField(u'Perímetro', QMetaType.Type.Double))
         self.count += 1
 
     def createCentroidXY(self, layer):
-        layer.addExpressionField('format_number(x(centroid( $geometry)),10)', QgsField(u'Centroide_X_CAMADA', QtCore.QVariant.String))
-        layer.addExpressionField('format_number(y(centroid( $geometry)),10)', QgsField(u'Centroide_Y_CAMADA', QtCore.QVariant.String))
+        layer.addExpressionField('format_number(x(centroid( $geometry)),10)', QgsField(u'Centroide_X_CAMADA', QMetaType.Type.QString))
+        layer.addExpressionField('format_number(y(centroid( $geometry)),10)', QgsField(u'Centroide_Y_CAMADA', QMetaType.Type.QString))
         self.count += 2
 
     def createCentroidLatLong(self, layer):
@@ -247,13 +248,13 @@ class VirtualFieldGenerator(QtWidgets.QDialog, FORM_CLASS):
         exprX_ok = 'case when {} < 0 then {} else {} end'.format(geomX, expressionX_neg, expressionX_pos)
         exprY_ok = 'case when {} < 0 then {} else {} end'.format(geomY, expressionY_neg, expressionY_pos)
 
-        layer.addExpressionField(exprY_ok, QgsField(u'Centroide_Lat', QtCore.QVariant.String))
-        layer.addExpressionField(exprX_ok, QgsField(u'Centroide_Long', QtCore.QVariant.String))
+        layer.addExpressionField(exprY_ok, QgsField(u'Centroide_Lat', QMetaType.Type.QString))
+        layer.addExpressionField(exprX_ok, QgsField(u'Centroide_Long', QMetaType.Type.QString))
         self.count += 2
     
     def createXY(self, layer):
-        layer.addExpressionField('format_number($x,3)', QgsField(u'X_CAMADA', QtCore.QVariant.String))
-        layer.addExpressionField('format_number($y,3)', QgsField(u'Y_CAMADA', QtCore.QVariant.String))
+        layer.addExpressionField('format_number($x,3)', QgsField(u'X_CAMADA', QMetaType.Type.QString))
+        layer.addExpressionField('format_number($y,3)', QgsField(u'Y_CAMADA', QMetaType.Type.QString))
         self.count += 1
 
     def createLatLong(self, layer):
@@ -270,12 +271,12 @@ class VirtualFieldGenerator(QtWidgets.QDialog, FORM_CLASS):
         exprX_ok = 'case when {} < 0 then {} else {} end'.format(geomX, expressionX_neg, expressionX_pos)
         exprY_ok = 'case when {} < 0 then {} else {} end'.format(geomY, expressionY_neg, expressionY_pos)
 
-        layer.addExpressionField(exprY_ok, QgsField(u'Lat', QtCore.QVariant.String))
-        layer.addExpressionField(exprX_ok, QgsField(u'Long', QtCore.QVariant.String))
+        layer.addExpressionField(exprY_ok, QgsField(u'Lat', QMetaType.Type.QString))
+        layer.addExpressionField(exprX_ok, QgsField(u'Long', QMetaType.Type.QString))
         self.count += 2
         
     def createLength(self, layer):
-        layer.addExpressionField('format_number($length, 3)', QgsField(u'Comprimento', QtCore.QVariant.Double))
+        layer.addExpressionField('format_number($length, 3)', QgsField(u'Comprimento', QMetaType.Type.Double))
         self.count += 1
 
     def createUTM(self, layer):
@@ -300,11 +301,11 @@ class VirtualFieldGenerator(QtWidgets.QDialog, FORM_CLASS):
             xFieldName = u"X_{}".format(zone)
             yFieldName = u"Y_{}".format(zone)
             if self.workLayer.geometryType() == 0:
-                layer.addExpressionField(u"format_number(x(transform($geometry, layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(xFieldName, QtCore.QVariant.String))
-                layer.addExpressionField(u"format_number(y(transform($geometry, layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(yFieldName, QtCore.QVariant.String))
+                layer.addExpressionField(u"format_number(x(transform($geometry, layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(xFieldName, QMetaType.Type.QString))
+                layer.addExpressionField(u"format_number(y(transform($geometry, layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(yFieldName, QMetaType.Type.QString))
             else:
-                layer.addExpressionField(u"format_number(x(transform(centroid($geometry), layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(xFieldName, QtCore.QVariant.String))
-                layer.addExpressionField(u"format_number(y(transform(centroid($geometry), layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(yFieldName, QtCore.QVariant.String))
+                layer.addExpressionField(u"format_number(x(transform(centroid($geometry), layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(xFieldName, QMetaType.Type.QString))
+                layer.addExpressionField(u"format_number(y(transform(centroid($geometry), layer_property('{}', 'crs'), 'EPSG:{}')), 3)".format(layer.name(), zoneDict[zone]), QgsField(yFieldName, QMetaType.Type.QString))
             self.count += 2
 
     def pathGpkg(self):

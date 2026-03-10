@@ -15,7 +15,7 @@ class SelectLineTool:
     def getPointTableFromSelectedLine(self, iface, tool, newPoints, layerindex, previousLayer, pointstoDraw ):
         pointstoDraw = []
         layer = iface.activeLayer()
-        if layer == None or layer.type() != QgsMapLayer.VectorLayer:
+        if layer == None or layer.type() != QgsMapLayer.LayerType.VectorLayer:
             QMessageBox.warning( iface.mainWindow(), u"Buscador de Geometria Mais Próxima", u"Nenhuma camada vetorial selecionada." )
             return [pointstoDraw, layerindex, previousLayer]
         if not layer.isSpatial():
@@ -43,12 +43,12 @@ class SelectLineTool:
             closestFeature = None
             return [pointstoDraw, None, None]
         
-        if layer.geometryType() != qgis.core.QgsWkbTypes.LineGeometry  and closestFeature != None:
+        if layer.geometryType() != qgis.core.QgsWkbTypes.GeometryType.LineGeometry  and closestFeature != None:
             QMessageBox.warning( iface.mainWindow(), u"Buscador de Geometria Mais Próxima", u"Nenhuma camada vetorial linha selecionada." )
             return [pointstoDraw, None, None]
 
         booltemp = False
-        if layer.geometryType() != qgis.core.QgsWkbTypes.PointGeometry :
+        if layer.geometryType() != qgis.core.QgsWkbTypes.GeometryType.PointGeometry :
             booltemp = True
         
         if booltemp and closestFeature != None:

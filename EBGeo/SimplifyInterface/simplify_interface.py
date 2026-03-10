@@ -37,18 +37,18 @@ class SimplifyInterface:
 
     # Toolbar areas
     _toolbar_areas = {
-        "top": Qt.TopToolBarArea,
-        "bottom": Qt.BottomToolBarArea,
-        "left": Qt.LeftToolBarArea,
-        "right": Qt.RightToolBarArea,
+        "top": Qt.ToolBarArea.TopToolBarArea,
+        "bottom": Qt.ToolBarArea.BottomToolBarArea,
+        "left": Qt.ToolBarArea.LeftToolBarArea,
+        "right": Qt.ToolBarArea.RightToolBarArea,
     }
 
     # Panel areas
     _panel_areas = {
-        "top": Qt.TopDockWidgetArea,
-        "bottom": Qt.BottomDockWidgetArea,
-        "left": Qt.LeftDockWidgetArea,
-        "right": Qt.RightDockWidgetArea,
+        "top": Qt.DockWidgetArea.TopDockWidgetArea,
+        "bottom": Qt.DockWidgetArea.BottomDockWidgetArea,
+        "left": Qt.DockWidgetArea.LeftDockWidgetArea,
+        "right": Qt.DockWidgetArea.RightDockWidgetArea,
     }
 
 
@@ -216,7 +216,7 @@ class SimplifyInterface:
             toolbutton = QToolButton(self.mainwindow)
             toolbutton.setIcon(QIcon(algorithms["icon"]))
             toolbutton.setMenu(menu)
-            toolbutton.setPopupMode(QToolButton.MenuButtonPopup)
+            toolbutton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
 
             return [toolbutton]
 
@@ -285,7 +285,7 @@ class SimplifyInterface:
                 else:
                     toolbutton = QToolButton(self.mainwindow)
                     toolbutton.setMenu(item)
-                    toolbutton.setPopupMode(QToolButton.MenuButtonPopup)
+                    toolbutton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
                     toolbutton.setDefaultAction(item.actions()[0])
                     item.triggered.connect(toolbutton.setDefaultAction)
                     parent.addWidget(toolbutton)
@@ -354,7 +354,7 @@ class SimplifyInterface:
             self.settings.sync()
 
         # Enable contextual menu
-        self.mainwindow.setContextMenuPolicy(Qt.DefaultContextMenu)
+        self.mainwindow.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
 
         # Remove simplified toolbars
         for name in self.config["toolbars"]:
@@ -400,7 +400,7 @@ class SimplifyInterface:
         self.settings.sync()
 
         # Disable contextual menu
-        self.mainwindow.setContextMenuPolicy(Qt.NoContextMenu)
+        self.mainwindow.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
 
         # Set up toolbars
         items = []
@@ -426,7 +426,7 @@ class SimplifyInterface:
             toolbar.setMovable(False)
             toolbar.toggleViewAction().setDisabled(True)
             self.mainwindow.addToolBar(
-                self._toolbar_areas.get(item["area"], Qt.TopToolBarArea),
+                self._toolbar_areas.get(item["area"], Qt.ToolBarArea.TopToolBarArea),
                 toolbar
             )
             self.addItems(toolbar, item["items"])
@@ -455,11 +455,11 @@ class SimplifyInterface:
                 continue
             state, area = panels[name].split(":", 1)
             self.mainwindow.addDockWidget(
-                self._panel_areas.get(area, Qt.LeftDockWidgetArea),
+                self._panel_areas.get(area, Qt.DockWidgetArea.LeftDockWidgetArea),
                 panel
             )
             if state == "fixed":
-                panel.setFeatures(QDockWidget.NoDockWidgetFeatures)
+                panel.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
                 panel.show()
             elif state == "hidden":
                 panel.hide()

@@ -41,7 +41,7 @@ from qgis.core import (
     QgsDistanceArea,
     QgsCoordinateTransformContext,
 )
-from qgis.PyQt.Qt import QObject
+from qgis.PyQt.QtCore import QObject
 
 geometry_creation_dict = {
     QgsWkbTypes.Point: lambda x: QgsGeometry.fromPointXY(x),
@@ -175,7 +175,7 @@ class GeometryHandler(QObject):
                 # inverting the point list
                 nodes = geom.asPoint()
                 nodes = nodes[::-1]
-                flippedFeatureGeom = QgsGeometry.fromPoint(nodes)
+                flippedFeatureGeom = QgsGeometry.fromPointXY(nodes)
         elif geomType == 1:
             if isMulti:
                 nodes = geom.asMultiPolyline()
@@ -352,7 +352,7 @@ class GeometryHandler(QObject):
         outOfBoundsList = []
         geom = feat.geometry()
         for part in geom.asGeometryCollection():
-            if part.type() == QgsWkbTypes.PolygonGeometry:
+            if part.type() == QgsWkbTypes.GeometryType.PolygonGeometry:
                 self.getOutOfBoundsAngleInPolygon(
                     feat,
                     part,
@@ -362,7 +362,7 @@ class GeometryHandler(QObject):
                     angTol=angTol,
                     invalidRange=invalidRange,
                 )
-            if part.type() == QgsWkbTypes.LineGeometry:
+            if part.type() == QgsWkbTypes.GeometryType.LineGeometry:
                 self.getOutOfBoundsAngleInLine(
                     feat, part, angle, outOfBoundsList, invalidRange=invalidRange
                 )
@@ -398,7 +398,7 @@ class GeometryHandler(QObject):
             fromLineAlias = (
                 lambda x: QgsGeometry.fromMultiPolylineXY([x])
                 if next(lineLyr.getFeatures()).geometry().isMultipart()
-                else QgsGeometry.fromPolyline(x[0], x[1])
+                else QgsGeometry.fromPolylineXY(x)
             )
         for feat in lineLyr.getFeatures():
             geom = feat.geometry()

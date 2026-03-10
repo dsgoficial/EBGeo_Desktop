@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5 import QtWidgets
+from qgis.PyQt import QtWidgets
 from qgis import processing
 
 

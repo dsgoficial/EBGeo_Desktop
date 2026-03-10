@@ -4,7 +4,7 @@ import random
 from uuid import uuid4
 import processing
 from EBGeo.VisibilityAnalysis.viewshedTool import ViewshedTool
-from qgis.PyQt.QtCore import QObject, pyqtSlot, QVariant
+from qgis.PyQt.QtCore import QObject, pyqtSlot, QMetaType
 from qgis.PyQt.QtGui import *
 from qgis.core import *
 from qgis.gui import *
@@ -30,7 +30,6 @@ from qgis.core import (
     QgsFillSymbol,
     QgsSymbol
 )
-from PyQt5.QtGui import QColor
 from typing import Optional
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.PyQt.QtWidgets import (
@@ -532,7 +531,7 @@ class VisibilityAnalysis(
                 symbol.setColor(color)
 
                 # Para polígonos, definir borda preta
-                if layer.geometryType() == QgsWkbTypes.PolygonGeometry:
+                if layer.geometryType() == QgsWkbTypes.GeometryType.PolygonGeometry:
                     symbol = QgsFillSymbol.createSimple({
                         'color': color.name(),
                         'outline_color': '#000000',
@@ -698,7 +697,7 @@ class VisibilityAnalysis(
         output_layer = QgsVectorLayer(f"Polygon?crs={self.projeto.crs().authid()}", "Setor de Visada", "memory")
         QgsProject.instance().addMapLayer(output_layer)
         dtprovider = output_layer.dataProvider()
-        dtprovider.addAttributes([QgsField("altura_obs", QVariant.Double)])
+        dtprovider.addAttributes([QgsField("altura_obs", QMetaType.Type.Double)])
         output_layer.updateFields()
         return output_layer, dtprovider
     

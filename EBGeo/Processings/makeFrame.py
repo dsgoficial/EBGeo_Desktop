@@ -21,8 +21,7 @@
  ***************************************************************************/
 """
 from EBGeo.Utils.featureHandler import FeatureHandler
-from qgis.PyQt.Qt import QVariant
-from PyQt5.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QMetaType, QCoreApplication
 from qgis.core import (
     QgsProcessing,
     QgsFeatureSink,
@@ -125,7 +124,7 @@ class MakeFrame(QgsProcessingAlgorithm):
             )
 
         # Verificar se é uma camada raster
-        if inputLyr.type() == QgsMapLayer.RasterLayer:
+        if inputLyr.type() == QgsMapLayer.LayerType.RasterLayer:
             # Obter o extent do raster e convertê-lo em um polígono
             extent = inputLyr.extent()
             rasterGeom = QgsGeometry.fromRect(extent)
@@ -148,11 +147,11 @@ class MakeFrame(QgsProcessingAlgorithm):
         geomTypeLyr = (
             inputLyr.geometryType()
             if hasattr(inputLyr, "geometryType")
-            else QgsWkbTypes.PolygonGeometry
+            else QgsWkbTypes.GeometryType.PolygonGeometry
         )
         if (
-            geomTypeLyr == QgsWkbTypes.PointGeometry
-            or geomTypeLyr == QgsWkbTypes.LineGeometry
+            geomTypeLyr == QgsWkbTypes.GeometryType.PointGeometry
+            or geomTypeLyr == QgsWkbTypes.GeometryType.LineGeometry
         ):
             inputLyr = processing.run("native:buffer", 
                 {
@@ -173,8 +172,8 @@ class MakeFrame(QgsProcessingAlgorithm):
         stopScale = self.scales[stopScaleIdx]
         stopScale = int(stopScale.replace("k", ""))
         fields = QgsFields()
-        fields.append(QgsField("inom", QVariant.String))
-        fields.append(QgsField("mi", QVariant.String))
+        fields.append(QgsField("inom", QMetaType.Type.QString))
+        fields.append(QgsField("mi", QMetaType.Type.QString))
         crs = inputLyr.crs()
 
         xSubdivisions = self.parameterAsInt(parameters, self.XSUBDIVISIONS, context)
@@ -220,7 +219,7 @@ class MakeFrame(QgsProcessingAlgorithm):
 
         # Função de filtro para remover MI que não intersectam com a camada original
         def filterFunc(feat):
-            if hasattr(inputOld, "type") and inputOld.type() == QgsMapLayer.RasterLayer:
+            if hasattr(inputOld, "type") and inputOld.type() == QgsMapLayer.LayerType.RasterLayer:
                 geom = feat.geometry()
                 extent_geom = QgsGeometry.fromRect(inputOld.extent())
                 return geom.intersects(extent_geom)
@@ -235,8 +234,8 @@ class MakeFrame(QgsProcessingAlgorithm):
         needsFiltering = True
         if hasattr(inputOld, "type"):
             if (
-                inputOld.type() == QgsMapLayer.VectorLayer
-                and inputOld.geometryType() == QgsWkbTypes.PolygonGeometry
+                inputOld.type() == QgsMapLayer.LayerType.VectorLayer
+                and inputOld.geometryType() == QgsWkbTypes.GeometryType.PolygonGeometry
             ):
                 needsFiltering = False
 

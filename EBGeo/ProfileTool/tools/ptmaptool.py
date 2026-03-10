@@ -32,7 +32,7 @@ class ProfiletoolMapToolRenderer():
                 #Get mouse coords
                 mapPos = self.canvas.getCoordinateTransform().toMapCoordinates(position["x"],position["y"])
                 #Draw on temp layer
-                self.profiletool.rubberband.reset(qgis.core.QgsWkbTypes.LineGeometry)
+                self.profiletool.rubberband.reset(qgis.core.QgsWkbTypes.GeometryType.LineGeometry)
                 for i in range(0,len(self.pointstoDraw)):
                      self.profiletool.rubberband.addPoint(QgsPointXY(self.pointstoDraw[i][0],self.pointstoDraw[i][1]))
                 self.profiletool.rubberband.addPoint(QgsPointXY(mapPos.x(),mapPos.y()))
@@ -73,7 +73,7 @@ class ProfiletoolMapToolRenderer():
                     self.profiletool.rubberband.reset(self.profiletool.polygon)
                     self.profiletool.rubberbandbuf.reset()
                 self.pointstoDraw += newPoints
-            QgsMessageLog.logMessage(str(mapPos.x())+'***'+str(mapPos.y()), level=Qgis.Warning )
+            QgsMessageLog.logMessage(str(mapPos.x())+'***'+str(mapPos.y()), level=Qgis.MessageLevel.Warning )
 
         if self.profiletool.dockwidget.selectionmethod == 1:
             result = SelectLineTool().getPointTableFromSelectedLine(self.iface, self.tool, newPoints, self.layerindex, self.previousLayer , self.pointstoDraw)
@@ -147,13 +147,13 @@ class ProfiletoolMapTool(QgsMapTool):
     def __init__(self, canvas):
         QgsMapTool.__init__(self,canvas)
         self.canvas = canvas
-        self.cursor = QCursor(Qt.CrossCursor)
+        self.cursor = QCursor(Qt.CursorShape.CrossCursor)
 
     def canvasMoveEvent(self,event):
         self.moved.emit({'x': event.pos().x(), 'y': event.pos().y()})
 
     def canvasReleaseEvent(self,event):
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.MouseButton.RightButton:
             self.rightClicked.emit({'x': event.pos().x(), 'y': event.pos().y()})
         else:
             self.leftClicked.emit( {'x': event.pos().x(), 'y': event.pos().y()} )

@@ -25,18 +25,18 @@
 import os
 import math
 import processing
-from qgis.PyQt.QtCore import QVariant
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtCore import QMetaType
+from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtGui import QAction, QIcon
 from qgis.core import (Qgis,
-                       QgsProject, 
-                       QgsFeature, 
+                       QgsProject,
+                       QgsFeature,
                        QgsField,
                        QgsGeometry,
                        QgsVectorLayer,
                        QgsWkbTypes,
                        QgsPointXY
 )
-from qgis.PyQt.QtGui import QIcon
 from qgis.utils import iface
 
 class FrzPlugin:
@@ -74,7 +74,7 @@ class FrzPlugin:
     def gerar_zonas(self, layer):
 
         crs = layer.crs()
-        if layer.geometryType() != QgsWkbTypes.LineGeometry:
+        if layer.geometryType() != QgsWkbTypes.GeometryType.LineGeometry:
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 "Aviso de Tipo de Geometria",
@@ -94,7 +94,7 @@ class FrzPlugin:
             # Criação de camada de Zonas de Restrição de Voo de Drone
             frz = QgsVectorLayer("Polygon?crs=" + layer.crs().authid(), "Zonas de Restrição de Voo de Drones", "memory")
             pr = frz.dataProvider()
-            pr.addAttributes([QgsField("limite_voo_proibido", QVariant.String)])
+            pr.addAttributes([QgsField("limite_voo_proibido", QMetaType.Type.QString)])
             frz.updateFields()
 
             # Definição dos estilos
@@ -133,8 +133,8 @@ class FrzPlugin:
 
             restricao_vector = QgsVectorLayer(f"{QgsWkbTypes.displayString(runway.wkbType())}?crs={runway.sourceCrs().authid()}", "buffer", "memory")
             restricao_vector.dataProvider().addAttributes(runway.fields())
-            restricao_vector.dataProvider().addAttributes([QgsField("zona", QVariant.String)])
-            restricao_vector.dataProvider().addAttributes([QgsField("limite_voo_proibido", QVariant.String)])
+            restricao_vector.dataProvider().addAttributes([QgsField("zona", QMetaType.Type.QString)])
+            restricao_vector.dataProvider().addAttributes([QgsField("limite_voo_proibido", QMetaType.Type.QString)])
             restricao_vector.updateFields()
 
             for feat in runway.getFeatures():
@@ -270,7 +270,7 @@ class FrzPlugin:
 
                     if intersec.isEmpty():
                         continue
-                    if intersec.type() != QgsWkbTypes.PointGeometry:
+                    if intersec.type() != QgsWkbTypes.GeometryType.PointGeometry:
                         continue
                     
                     center = intersec.asPoint()
@@ -333,7 +333,7 @@ class FrzPlugin:
             frz.triggerRepaint()
             QgsProject.instance().addMapLayer(frz)
 
-            iface.messageBar().pushMessage('A camada de Zonas de Restrição de Voo para Drones foi criada com sucesso.', level=Qgis.Success, duration = 10)
+            iface.messageBar().pushMessage('A camada de Zonas de Restrição de Voo para Drones foi criada com sucesso.', level=Qgis.MessageLevel.Success, duration = 10)
 
     def angle_of_line(self, line_geom):
         # Calcula o ângulo (em radianos) da linha entre seus dois pontos extremos

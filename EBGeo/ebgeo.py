@@ -4,8 +4,8 @@ from qgis.utils import iface
 currentPath = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(currentPath))
 from qgis.core import QgsMapLayer, QgsProject, QgsApplication, QgsProject
-from qgis.PyQt.QtWidgets import QAction, QMessageBox, QMenu, QDockWidget
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QMessageBox, QMenu, QDockWidget
+from qgis.PyQt.QtGui import QIcon, QAction
 from .BDGEx.bdgexGuiManager import BDGExGuiManager
 from .Processings.pluginProvider import pluginProvider
 from .VisibilityAnalysis.visibilityAnalysis import VisibilityAnalysis as Main_VisibilityAnalisys
@@ -449,7 +449,7 @@ class EBGeo(QObject):
         """
 		from .AngleUnitConverter.main import Main
 		dialogBoxAng = Main(iface)
-		dialogBoxAng.exec_()
+		dialogBoxAng.exec()
 
 	def loadGeocoding(self):
 		"""
@@ -475,12 +475,12 @@ class EBGeo(QObject):
         """
 		hasRaster = False
 		for l in QgsProject.instance().mapLayers().values():
-			if l.type() == QgsMapLayer.RasterLayer:
+			if l.type() == QgsMapLayer.LayerType.RasterLayer:
 				hasRaster = True
 				break
 		if hasRaster == False:
-			msgBox = QMessageBox(QMessageBox.Information, u"Informação", u"Não há camadas raster para traçar o perfil.", QMessageBox.Ok)
-			msgBox.exec_()
+			msgBox = QMessageBox(QMessageBox.Icon.Information, u"Informação", u"Não há camadas raster para traçar o perfil.", QMessageBox.StandardButton.Ok)
+			msgBox.exec()
 			return
 		if self.mainProfileTool.dockOpened == False:
 			self.mainProfileTool.run()
@@ -491,7 +491,7 @@ class EBGeo(QObject):
         """
 		from .VirtualFieldGenerator.virtualFieldGenerator import VirtualFieldGenerator
 		dialogVFG = VirtualFieldGenerator(iface)
-		dialogVFG.exec_()
+		dialogVFG.exec()
 	
 	def loadMakeMosaic(self):
 		from qgis import processing
@@ -546,7 +546,7 @@ class EBGeo(QObject):
 		"""
 		from .MobilityPath.mobilityPath import MobilityPath
 		dialogMobPath = MobilityPath(iface)
-		dialogMobPath.exec_()
+		dialogMobPath.exec()
 		
 	def loadVisibility(self):
 		"""
@@ -585,7 +585,7 @@ class EBGeo(QObject):
         """
 		from .Help.help import Help
 		dialogHelp = Help()
-		dialogHelp.exec_()
+		dialogHelp.exec()
 
 	def loadAbout(self):
 		"""
@@ -593,7 +593,7 @@ class EBGeo(QObject):
         """
 		from .About.about import About
 		dialogAbout = About()
-		dialogAbout.exec_()
+		dialogAbout.exec()
 	
 	def loadZoomTool(self):
 		if self.zoom_to:
@@ -601,7 +601,7 @@ class EBGeo(QObject):
 			self.zoom_to=None
 		else:
 			self.zoom_to = ZoomToDockWidget(self.iface, plugin=self)
-			self.iface.addDockWidget(Qt.RightDockWidgetArea, self.zoom_to)
+			self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.zoom_to)
 
 	def initiateToolsSignals(self):
 		"""
@@ -643,5 +643,5 @@ class EBGeo(QObject):
 				self.iface
 			)
 		self.iface.addDockWidget(
-			Qt.RightDockWidgetArea, self.visibilityAnalysisToolBox
+			Qt.DockWidgetArea.RightDockWidgetArea, self.visibilityAnalysisToolBox
 		)

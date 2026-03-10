@@ -26,14 +26,14 @@ class NdAddFeatureGui(QDialog, GUI):
         
         self.twPoints.setColumnWidth(0,int(self.twPoints.width()/2))
         self.twPoints.setColumnWidth(1,int(self.twPoints.width()/2))
-        self.twPoints.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
-        self.twPoints.horizontalHeader().setSectionResizeMode(1,QHeaderView.Stretch)
+        self.twPoints.horizontalHeader().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch)
+        self.twPoints.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch)
         
         self.twPoints.cellChanged.connect( self.cellChanged )
         self.buttonBox.accepted.connect( self.onOK )
         self.addFromFileButton.clicked.connect( self.addFromFile )
         
-        self.buttonBox.button(QDialogButtonBox.Ok ).setEnabled(False)
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
         
         self.pb_ChooseCrs.setEnabled(False)
         self.l_OtherCrsName.setEnabled(False)
@@ -75,7 +75,7 @@ class NdAddFeatureGui(QDialog, GUI):
 
     def chooseOtherCrs(self):
         crsSelector = QgsProjectionSelectionDialog()
-        if crsSelector.exec_():
+        if crsSelector.exec():
             self.featureCrsId = crsSelector.crs().srsid()
             self.__displayAuthid()
     
@@ -107,13 +107,13 @@ class NdAddFeatureGui(QDialog, GUI):
             self.twPoints.insertRow(self.twPoints.rowCount())
             if(self.layertype == 0):
                if(self.twPoints.rowCount()-1)>=1:
-                 self.buttonBox.button(QDialogButtonBox.Ok ).setEnabled(True)
+                 self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
             elif(self.layertype == 1):
                if(self.twPoints.rowCount()-1)>=2:
-                 self.buttonBox.button(QDialogButtonBox.Ok ).setEnabled(True)
+                 self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
             elif(self.layertype == 2):
                if(self.twPoints.rowCount()-1)>=3:
-                 self.buttonBox.button(QDialogButtonBox.Ok ).setEnabled(True)
+                 self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
         
       
     def is_number(self, s):

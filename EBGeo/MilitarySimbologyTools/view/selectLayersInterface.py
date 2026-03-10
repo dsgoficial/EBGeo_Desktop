@@ -78,7 +78,7 @@ class SelectLayersInterface(QtWidgets.QDialog):
         main_layout.addLayout(buttons_layout)
         
         # Botões de OK/Cancelar
-        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.acceptSelection)
         button_box.rejected.connect(self.reject)
         main_layout.addWidget(button_box)

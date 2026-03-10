@@ -59,13 +59,13 @@ class PlottingTool:
                 #case line outside the raster
                 y = np.array(profiles[i]["z"], dtype=float)  #replace None value by np.nan
                 x = np.array(profiles[i]["l"])
-                wdg.plotWdg.plot(x, y, pen=pg.mkPen( model1.item(i,1).data(Qt.BackgroundRole),  width=2) , name = tmp_name)
+                wdg.plotWdg.plot(x, y, pen=pg.mkPen( model1.item(i,1).data(Qt.ItemDataRole.BackgroundRole),  width=2) , name = tmp_name)
             #set it visible or not
             for i in range(0 , model1.rowCount()):
                 tmp_name = ("%s#%d") % (profiles[i]["layer"].name(), profiles[i]["band"])
                 for item in wdg.plotWdg.getPlotItem().listDataItems():
                     if item.name() == tmp_name:
-                        item.setVisible(model1.item(i,0).data(Qt.CheckStateRole))
+                        item.setVisible(model1.item(i,0).data(Qt.ItemDataRole.CheckStateRole))
                         
         
 

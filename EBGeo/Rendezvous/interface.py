@@ -12,7 +12,7 @@ class Interface(QtWidgets.QDockWidget, GUI):
         super(Interface, self).__init__()
         self.setupUi(self)
         self.initSignals()
-        self.layerCombo.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.layerCombo.setFilters(QgsMapLayerProxyModel.Filter.PointLayer)
     
     def initSignals(self):
         self.ativarButton.clicked.connect(self.doWork)      

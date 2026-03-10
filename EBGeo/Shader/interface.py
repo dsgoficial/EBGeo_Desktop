@@ -19,7 +19,7 @@ class Interface(QtWidgets.QDockWidget, GUI):
         self.initVariables()
         self.initSignals()
         self.dateTimeEdit.setDateTime(QDateTime.currentDateTime())
-        self.layerCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        self.layerCombo.setFilters(QgsMapLayerProxyModel.Filter.RasterLayer)
         self.outputFile.setFilter(".tif")
     
     def initVariables(self):
@@ -50,7 +50,7 @@ class Interface(QtWidgets.QDockWidget, GUI):
             self.canvas.scene().removeItem(self.clickedPoint)
     
     def doWork(self, point, button):
-        if button == QtCore.Qt.LeftButton:
+        if button == QtCore.Qt.MouseButton.LeftButton:
             wgsPoint = self.getWGSPoint(point)
             now = self.dateTimeEdit.dateTime().toPyDateTime()
             az,zen = sunpos(now, wgsPoint.y(), wgsPoint.x(), 0)[:2]

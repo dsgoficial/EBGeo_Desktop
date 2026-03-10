@@ -163,7 +163,7 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
         # Cria e configura o marcador de ponto (a bolinha vermelha)
         self.point_marker = QgsVertexMarker(self.canvas)
         self.point_marker.setCenter(point)
-        self.point_marker.setColor(Qt.red)
+        self.point_marker.setColor(Qt.GlobalColor.red)
         self.point_marker.setPenWidth(2)
         self.point_marker.show()
         

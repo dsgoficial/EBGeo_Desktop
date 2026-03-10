@@ -7,8 +7,8 @@
 
 
 # -*- coding: utf-8 -*-
-from qgis.PyQt.QtWidgets import QAction, QToolButton, QMenu, QMessageBox
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QToolButton, QMenu, QMessageBox
+from qgis.PyQt.QtGui import QAction, QIcon
 from qgis.core import *
 from qgis.gui import *
 from .UI.interface import Interface
@@ -49,7 +49,7 @@ class Main:
     
     def openWindow(self):
         if self.isOpen == False:
-            self.iface.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockWindow)
+            self.iface.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.dockWindow)
             self.isOpen = True
             
     def closeDock(self, e):
@@ -79,11 +79,11 @@ class Main:
         pass
 
     def showMessage(self, text):
-        self.msgBox.setIcon(QMessageBox.Critical)
+        self.msgBox.setIcon(QMessageBox.Icon.Critical)
         self.msgBox.setWindowTitle("Erro")
-        self.msgBox.setStandardButtons(QMessageBox.Ok)
+        self.msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
         self.msgBox.setText(text)
-        self.msgBox.exec_()
+        self.msgBox.exec()
             
     def closeMsgBox(self, b):
         self.msgBox.close()

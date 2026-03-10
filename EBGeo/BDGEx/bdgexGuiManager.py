@@ -341,7 +341,7 @@ class BDGExGuiManager(QObject):
                     " your network settings (proxy and exceptions "
                     "too, if necessary)."
                 )
-                iface.messageBar().pushMessage(title, msg, level=Qgis.Warning, duration=5)
+                iface.messageBar().pushMessage(title, msg, level=Qgis.MessageLevel.Warning, duration=5)
             else:
                 QgsProject.instance().addMapLayer(vlayer)
 

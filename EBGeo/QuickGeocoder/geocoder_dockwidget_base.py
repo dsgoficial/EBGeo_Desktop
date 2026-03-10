@@ -6,7 +6,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from qgis.PyQt import QtCore, QtGui, QtWidgets
 
 class Ui_QuickGeocoderDockWidgetBase(object):
     def setupUi(self, QuickGeocoderDockWidgetBase):
@@ -54,7 +54,7 @@ class Ui_QuickGeocoderDockWidgetBase(object):
         self.newAttributeEdit.setObjectName("newAttributeEdit")
         self.horizontalLayout_2.addWidget(self.newAttributeEdit)
         self.verticalLayout.addLayout(self.horizontalLayout_2)
-        spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         self.verticalLayout.addItem(spacerItem)
         self.tabWidget.addTab(self.tabDirect, "")
         self.tabReverse = QtWidgets.QWidget()

@@ -10,7 +10,7 @@ class VertexFinderTool(QgsMapToolIdentifyFeature):
     
     def __init__(self, iface):
         super(VertexFinderTool, self).__init__(iface.mapCanvas())
-        self.setCursor(Qt.CrossCursor)
+        self.setCursor(Qt.CursorShape.CrossCursor)
         self.iface = iface
         
     def canvasReleaseEvent(self, event):
@@ -28,7 +28,7 @@ class VertexFinderTool(QgsMapToolIdentifyFeature):
             for feat in found_features:
                 feature = feat.mFeature
                 layer = feat.mLayer
-                if feature.geometry().type() == QgsWkbTypes.PointGeometry:
+                if feature.geometry().type() == QgsWkbTypes.GeometryType.PointGeometry:
                     self.iface.layerTreeView().setCurrentLayer(layer)
                     crs = layer.crs()
                     layer.selectByIds([feature.id()])

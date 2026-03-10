@@ -1,6 +1,6 @@
 from qgis.PyQt import QtGui, QtCore
 from qgis import core, gui
-from PyQt5.QtWidgets import QToolTip
+from qgis.PyQt.QtWidgets import QToolTip
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtCore import Qt, QPointF
 from qgis.core import (QgsPointXY, QgsGeometry, QgsFeature, 
@@ -24,16 +24,16 @@ class ViewshedTool(QgsMapTool):
         self.is_active = True
         
         # Configurando o RubberBand para visualização
-        self.rubber_band = QgsRubberBand(self.canvas, QgsWkbTypes.PolygonGeometry)
+        self.rubber_band = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
         self.rubber_band.setColor(QColor(255, 0, 0, 40))
         self.rubber_band.setWidth(2)
         
         # Linha temporária para mostrar a direção
-        self.temp_line = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.temp_line = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.temp_line.setColor(QColor(0, 0, 255, 200))
         self.temp_line.setWidth(2)
 
-        self.center_marker = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        self.center_marker = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         self.center_marker.setColor(QColor(144, 238, 144))  # Verde claro
         self.center_marker.setWidth(5)
 
@@ -77,10 +77,10 @@ class ViewshedTool(QgsMapTool):
             
             # Verificar se os objetos rubberbands ainda existem
             if hasattr(self, 'rubber_band') and self.rubber_band and not sip.isdeleted(self.rubber_band):
-                self.rubber_band.reset(QgsWkbTypes.PolygonGeometry)
+                self.rubber_band.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
             
             if hasattr(self, 'temp_line') and self.temp_line and not sip.isdeleted(self.temp_line):
-                self.temp_line.reset(QgsWkbTypes.LineGeometry)
+                self.temp_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
             
         except Exception as e:
             print(f"Erro ao resetar: {str(e)}")
@@ -104,7 +104,7 @@ class ViewshedTool(QgsMapTool):
                 self.center_point = point
                 
                 if hasattr(self, 'rubber_band') and self.rubber_band and not sip.isdeleted(self.rubber_band):
-                    self.rubber_band.reset(QgsWkbTypes.PolygonGeometry)
+                    self.rubber_band.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
                     self.rubber_band.addPoint(point)
                 
                 # Não adicionamos o marker para não destacar o primeiro vértice
@@ -115,7 +115,7 @@ class ViewshedTool(QgsMapTool):
                 self.direction_point = point
                 
                 if hasattr(self, 'temp_line') and self.temp_line and not sip.isdeleted(self.temp_line):
-                    self.temp_line.reset(QgsWkbTypes.LineGeometry)
+                    self.temp_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
                     self.temp_line.addPoint(self.center_point)
                     self.temp_line.addPoint(point)
                 
@@ -131,7 +131,7 @@ class ViewshedTool(QgsMapTool):
         
     
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self.reset()
             return
         
@@ -163,7 +163,7 @@ class ViewshedTool(QgsMapTool):
 
             if self.phase == 1 and self.center_point:  # Mostrando linha do centro até a posição atual do mouse
                 if hasattr(self, 'temp_line') and self.temp_line and not sip.isdeleted(self.temp_line):
-                    self.temp_line.reset(QgsWkbTypes.LineGeometry)
+                    self.temp_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
                     self.temp_line.addPoint(self.center_point)
                     self.temp_line.addPoint(current_point)
 
@@ -261,9 +261,9 @@ class ViewshedTool(QgsMapTool):
             # Método para adicionar a feição com formulário
             layer.beginEditCommand("new viewshed")
             attrDialog = gui.QgsAttributeDialog(layer, feature, False)
-            attrDialog.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+            attrDialog.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
             attrDialog.setMode(int(gui.QgsAttributeForm.AddFeatureMode))
-            res = attrDialog.exec_()
+            res = attrDialog.exec()
             if res == 0:
                 layer.destroyEditCommand()
             else:
@@ -296,7 +296,7 @@ class ViewshedTool(QgsMapTool):
                 return
                 
             # Atualizamos o rubber band
-            self.rubber_band.reset(QgsWkbTypes.PolygonGeometry)
+            self.rubber_band.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
             for point in sector_points:
                 self.rubber_band.addPoint(point)
         except Exception as e:
@@ -427,13 +427,13 @@ class ViewshedTool(QgsMapTool):
             
             # Verificar se os objetos ainda existem antes de usá-los
             if hasattr(self, 'rubber_band') and self.rubber_band and not sip.isdeleted(self.rubber_band):
-                self.rubber_band.reset(QgsWkbTypes.PolygonGeometry)
+                self.rubber_band.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
                 
             if hasattr(self, 'temp_line') and self.temp_line and not sip.isdeleted(self.temp_line):
-                self.temp_line.reset(QgsWkbTypes.LineGeometry)
+                self.temp_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
                 
             if hasattr(self, 'center_marker') and self.center_marker and not sip.isdeleted(self.center_marker):
-                self.center_marker.reset(QgsWkbTypes.PointGeometry)
+                self.center_marker.reset(QgsWkbTypes.GeometryType.PointGeometry)
         
             # Limpa todos os marcadores centrais permanentes
             if hasattr(self, 'permanent_center_markers'):

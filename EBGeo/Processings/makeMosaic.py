@@ -3,7 +3,7 @@
 import os
 import tempfile
 from typing import List
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.PyQt.QtCore import QCoreApplication, QMetaType
 from qgis.core import (QgsProcessing,
                        QgsProject,
                        QgsVectorLayer,
@@ -177,7 +177,7 @@ class MakeMosaic(QgsProcessingAlgorithm):
         raster_points = QgsVectorLayer(f"Point?crs={crs.authid()}", "raster_points", "memory")
         prov = raster_points.dataProvider()
         fields = QgsFields()
-        fields.append(QgsField("mi", QVariant.String))
+        fields.append(QgsField("mi", QMetaType.Type.QString))
         prov.addAttributes(fields)
         raster_points.updateFields()
 

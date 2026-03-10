@@ -6,8 +6,7 @@ from typing import List
 from dataclasses import MISSING, dataclass
 import os
 from qgis import processing
-from qgis.PyQt.Qt import QVariant
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QMetaType, QCoreApplication
 from qgis.core import (QgsProcessing, QgsVectorFileWriter,QgsProcessingAlgorithm,
                        QgsProcessingParameterMultipleLayers, QgsCoordinateTransformContext,
                        QgsProcessingFeatureSourceDefinition,
@@ -249,7 +248,7 @@ class AbstractEDGVClass(ABC):
 
     def get_output_fields(self, input_layer):
         fields = QgsFields()
-        fields.append(QgsField('MASACODE', QVariant.Int))
+        fields.append(QgsField('MASACODE', QMetaType.Type.Int))
         if not self.keep_input_attributes:
             return fields
         for field in input_layer.fields():

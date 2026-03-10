@@ -2,13 +2,11 @@
 
 #Qt import
 from qgis.PyQt import uic, QtCore, QtGui
-try:
-    from qgis.PyQt.QtGui import QDockWidget
-except:
-    from qgis.PyQt.QtWidgets import QDockWidget
+from qgis.PyQt.QtWidgets import QDockWidget
     
 #qgis import
 from qgis.core import *
+from qgis.PyQt.QtCore import QMetaType
 from qgis.gui import *
 #other
 import platform
@@ -16,6 +14,8 @@ import os
 #plugin import
 from ..tools.plottingtool import *
 from ..tools.tableviewtool import TableViewTool
+from ..pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as PgInfiniteLine
+from ..pyqtgraph.graphicsItems.TextItem import TextItem as PgTextItem
 #from .profiletool import Ui_ProfileTool
 
 uiFilePath = os.path.abspath(os.path.join(os.path.dirname(__file__), 'profiletool.ui'))
@@ -34,15 +34,15 @@ class PTDockWidget(QDockWidget, FormClass):
         self.setupUi(self)
         self.profiletoolcore = profiletoolcore
         self.iface = iface1
-        self.layerCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        self.layerCombo.setFilters(QgsMapLayerProxyModel.Filter.RasterLayer)
         
         #Apperance
-        self.location = QtCore.Qt.BottomDockWidgetArea
+        self.location = QtCore.Qt.DockWidgetArea.BottomDockWidgetArea
         minsize = self.minimumSize()
         maxsize = self.maximumSize()
         self.setMinimumSize(minsize)
         self.setMaximumSize(maxsize)
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
         
         #init scale widgets
         self.sbMaxVal.setValue(0)
@@ -87,10 +87,10 @@ class PTDockWidget(QDockWidget, FormClass):
     
         if item == 0:
             self.selectionmethod = 0
-            self.profiletoolcore.toolrenderer.tool.setCursor(QtCore.Qt.CrossCursor)
+            self.profiletoolcore.toolrenderer.tool.setCursor(QtCore.Qt.CursorShape.CrossCursor)
         elif item == 1:
             self.selectionmethod = 1
-            self.profiletoolcore.toolrenderer.tool.setCursor(QtCore.Qt.PointingHandCursor)
+            self.profiletoolcore.toolrenderer.tool.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             self.pointstoDraw = []
             self.pointstoCal = []
             
@@ -176,12 +176,12 @@ class PTDockWidget(QDockWidget, FormClass):
                 self.profiletoolcore.doTracking = bool(self.checkBox_mpl_tracking.checkState() )
                 self.checkBox_mpl_tracking.setEnabled(True)
                 for item in self.plotWdg.allChildItems():
-                    if str(type(item)) == "<class 'profiletool.pyqtgraph.graphicsItems.InfiniteLine.InfiniteLine'>":
+                    if isinstance(item, PgInfiniteLine):
                         if item.name() == 'cross_vertical':
                             item.show()
                         elif item.name() == 'cross_horizontal':
                             item.show()
-                    elif str(type(item)) == "<class 'profiletool.pyqtgraph.graphicsItems.TextItem.TextItem'>":
+                    elif isinstance(item, PgTextItem):
                         if item.textItem.toPlainText()[0] == 'X':
                             item.show()
                         elif item.textItem.toPlainText()[0] == 'Y':
@@ -193,12 +193,12 @@ class PTDockWidget(QDockWidget, FormClass):
                 self.profiletoolcore.rubberbandpoint.hide()
                 
                 for item in self.plotWdg.allChildItems():
-                    if str(type(item)) == "<class 'profiletool.pyqtgraph.graphicsItems.InfiniteLine.InfiniteLine'>":
+                    if isinstance(item, PgInfiniteLine):
                         if item.name() == 'cross_vertical':
                             item.hide()
                         elif item.name() == 'cross_horizontal':
                             item.hide()
-                    elif str(type(item)) == "<class 'profiletool.pyqtgraph.graphicsItems.TextItem.TextItem'>":
+                    elif isinstance(item, PgTextItem):
                         if item.textItem.toPlainText()[0] == 'X':
                             item.hide()
                         elif item.textItem.toPlainText()[0] == 'Y':
@@ -241,7 +241,7 @@ class PTDockWidget(QDockWidget, FormClass):
     def _onChange(self,item):
         if (not self.mdl.item(item.row(),5) is None 
                 and item.column() == 4 
-                and self.mdl.item(item.row(),5).data(QtCore.Qt.EditRole).type() == qgis.core.QgsMapLayer.VectorLayer
+                and self.mdl.item(item.row(),5).data(QtCore.Qt.ItemDataRole.EditRole).type() == qgis.core.QgsMapLayer.LayerType.VectorLayer
                 and len(self.profiletoolcore.toolrenderer.lastFreeHandPoints) > 1):
             
             self.profiletoolcore.calculateProfil(self.profiletoolcore.toolrenderer.lastFreeHandPoints)
@@ -265,17 +265,14 @@ class PTDockWidget(QDockWidget, FormClass):
         self.verticalLayout = []
         for i in range(0 , self.mdl.rowCount()):
             self.groupBox.append( QGroupBox(self.scrollAreaWidgetContents) )
-            sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             sizePolicy.setHorizontalStretch(0)
             sizePolicy.setVerticalStretch(0)
             sizePolicy.setHeightForWidth(self.groupBox[i].sizePolicy().hasHeightForWidth())
             self.groupBox[i].setSizePolicy(sizePolicy)
             self.groupBox[i].setMinimumSize(QSize(0, 150))
             self.groupBox[i].setMaximumSize(QSize(16777215, 150))
-            try:    #qgis2
-                self.groupBox[i].setTitle(QApplication.translate("GroupBox" + str(i), self.profiletoolcore.profiles[i]["layer"].name(), None, QApplication.UnicodeUTF8))
-            except: #qgis3
-                self.groupBox[i].setTitle(QApplication.translate("GroupBox" + str(i), self.profiletoolcore.profiles[i]["layer"].name(), None))
+            self.groupBox[i].setTitle(QApplication.translate("GroupBox" + str(i), self.profiletoolcore.profiles[i]["layer"].name()))
             self.groupBox[i].setObjectName("groupBox" + str(i))
 
             self.verticalLayout.append( QVBoxLayout(self.groupBox[i]) )
@@ -288,9 +285,9 @@ class PTDockWidget(QDockWidget, FormClass):
             self.mdl2 = QStandardItemModel(2, column)
             for j in range(len(self.profiletoolcore.profiles[i]["l"])):
                 self.mdl2.setData(self.mdl2.index(0, j, QModelIndex())  ,self.profiletoolcore.profiles[i]["l"][j])
-                self.mdl2.setData(self.mdl2.index(0, j, QModelIndex())  ,font ,QtCore.Qt.FontRole)
+                self.mdl2.setData(self.mdl2.index(0, j, QModelIndex())  ,font ,QtCore.Qt.ItemDataRole.FontRole)
                 self.mdl2.setData(self.mdl2.index(1, j, QModelIndex())  ,self.profiletoolcore.profiles[i]["z"][j])
-                self.mdl2.setData(self.mdl2.index(1, j, QModelIndex())  ,font ,QtCore.Qt.FontRole)
+                self.mdl2.setData(self.mdl2.index(1, j, QModelIndex())  ,font ,QtCore.Qt.ItemDataRole.FontRole)
             self.tableView[i].verticalHeader().setDefaultSectionSize(18)
             self.tableView[i].horizontalHeader().setDefaultSectionSize(60)
             self.tableView[i].setModel(self.mdl2)
@@ -299,39 +296,30 @@ class PTDockWidget(QDockWidget, FormClass):
             self.horizontalLayout = QHBoxLayout()
 
             self.profilePushButton.append( QPushButton(self.groupBox[i]) )
-            sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            sizePolicy = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             sizePolicy.setHorizontalStretch(0)
             sizePolicy.setVerticalStretch(0)
             sizePolicy.setHeightForWidth(self.profilePushButton[i].sizePolicy().hasHeightForWidth())
             self.profilePushButton[i].setSizePolicy(sizePolicy)
-            try:    #qgis2
-                self.profilePushButton[i].setText(QApplication.translate("GroupBox", "Copy to clipboard", None, QApplication.UnicodeUTF8))
-            except: #qgis3
-                self.profilePushButton[i].setText(QApplication.translate("GroupBox", "Copy to clipboard", None))
+            self.profilePushButton[i].setText(QApplication.translate("GroupBox", "Copy to clipboard"))
             self.profilePushButton[i].setObjectName(str(i))
             self.horizontalLayout.addWidget(self.profilePushButton[i])
 
             self.coordsPushButton.append(QPushButton(self.groupBox[i]))
-            sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            sizePolicy = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             sizePolicy.setHorizontalStretch(0)
             sizePolicy.setVerticalStretch(0)
             sizePolicy.setHeightForWidth(self.coordsPushButton[i].sizePolicy().hasHeightForWidth())
             self.coordsPushButton[i].setSizePolicy(sizePolicy)
-            try:    #qgis2
-                self.coordsPushButton[i].setText(QApplication.translate("GroupBox", "Copy to clipboard (with coordinates)", None, QApplication.UnicodeUTF8))
-            except: #qgis3
-                self.coordsPushButton[i].setText(QApplication.translate("GroupBox", "Copy to clipboard (with coordinates)", None))
+            self.coordsPushButton[i].setText(QApplication.translate("GroupBox", "Copy to clipboard (with coordinates)"))
                 
             self.tolayerPushButton.append(QPushButton(self.groupBox[i]))
-            sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            sizePolicy = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             sizePolicy.setHorizontalStretch(0)
             sizePolicy.setVerticalStretch(0)
             sizePolicy.setHeightForWidth(self.tolayerPushButton[i].sizePolicy().hasHeightForWidth())
             self.tolayerPushButton[i].setSizePolicy(sizePolicy)
-            try:    #qgis2
-                self.tolayerPushButton[i].setText(QApplication.translate("GroupBox", "Create Temporary layer", None, QApplication.UnicodeUTF8))
-            except: #qgis3
-                self.tolayerPushButton[i].setText(QApplication.translate("GroupBox", "Create Temporary layer", None))
+            self.tolayerPushButton[i].setText(QApplication.translate("GroupBox", "Create Temporary layer"))
                 
             self.coordsPushButton[i].setObjectName(str(i))
             self.horizontalLayout.addWidget(self.coordsPushButton[i])
@@ -373,14 +361,14 @@ class PTDockWidget(QDockWidget, FormClass):
         pr = vl.dataProvider()
         vl.startEditing()
         # add fields
-        pr.addAttributes([QgsField("Value", QVariant.Double) ])
+        pr.addAttributes([QgsField("Value", QMetaType.Type.Double) ])
         vl.updateFields()
         #Add features to layer
         for i in range( len(self.profiletoolcore.profiles[nr]["l"]) ):
         
             fet = QgsFeature(vl.fields())
             #set geometry
-            fet.setGeometry(QgsGeometry.fromPoint(QgsPoint(self.profiletoolcore.profiles[nr]['x'][i],self.profiletoolcore.profiles[nr]['y'][i])))
+            fet.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(self.profiletoolcore.profiles[nr]['x'][i],self.profiletoolcore.profiles[nr]['y'][i])))
             #set attributes
             fet.setAttributes( [self.profiletoolcore.profiles[nr]["z"][i]] )
             pr.addFeatures([fet])
@@ -390,10 +378,7 @@ class PTDockWidget(QDockWidget, FormClass):
             labelsettings = vl.labeling().settings()
             labelsettings.enabled = True
         
-        try:    #qgis2
-            qgis.core.QgsMapLayerRegistry.instance().addMapLayer(vl)
-        except:     #qgis3
-            qgis.core.QgsProject().instance().addMapLayer(vl)
+        qgis.core.QgsProject().instance().addMapLayer(vl)
         
     def closeEvent(self, event):
         self.closed.emit()

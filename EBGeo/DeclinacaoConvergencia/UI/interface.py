@@ -51,7 +51,7 @@ class Interface(QtWidgets.QDockWidget, GUI):
             self.canvas.scene().removeItem(self.clickedPoint)
     
     def doWork(self, point, button):
-        if button == QtCore.Qt.LeftButton:
+        if button == QtCore.Qt.MouseButton.LeftButton:
             wgsPoint = self.getWGSPoint(point)
             
             conv = self.auxiliar.calculateConvergence(wgsPoint)
@@ -100,11 +100,11 @@ class Interface(QtWidgets.QDockWidget, GUI):
         return gms.decode('utf8')
     
     def showMessage(self,text):
-        self.msgBox.setIcon(QMessageBox.Information)
+        self.msgBox.setIcon(QMessageBox.Icon.Information)
         self.msgBox.setWindowTitle(u"Aviso")
-        self.msgBox.setStandardButtons(QMessageBox.Ok)
+        self.msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
         self.msgBox.setText(text)
-        self.msgBox.exec_()
+        self.msgBox.exec()
     
     def closeMsgBox(self):
         self.msgBox.close()

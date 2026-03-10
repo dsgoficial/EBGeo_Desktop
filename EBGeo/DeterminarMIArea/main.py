@@ -42,13 +42,13 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.isOpen = True
 
     def openWindow(self):
-        self.iface.addDockWidget(QtCore.Qt.RightDockWidgetArea, self)
+        self.iface.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self)
         self.isOpen = True
 
     def closeDock(self, event):
         layers = self.iface.mapCanvas().layers()
         for l in layers:
-            if l.type() == QgsMapLayer.VectorLayer:
+            if l.type() == QgsMapLayer.LayerType.VectorLayer:
                 l.removeSelection()
         self.closingDock.emit()
         event.accept()
@@ -113,12 +113,12 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
     def clearLayersSelections(self):
         layers = self.iface.mapCanvas().layers()
         for l in layers:
-            if l.type() == QgsMapLayer.VectorLayer:
+            if l.type() == QgsMapLayer.LayerType.VectorLayer:
                 l.removeSelection()
 
     def findDialog(self, geom):
         self.workgeom = geom
-        self.dialogFind.exec_()
+        self.dialogFind.exec()
 
     def doWorkBox(self, choice):
         self.choice = choice
@@ -195,11 +195,11 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
             if self.item[listNum].childCount() == 0:
                 self.mapList.invisibleRootItem().removeChild(self.item[listNum])
         
-        self.mapList.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.mapList.header().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
 
     def selectScale(self):
         if self.choice == 'small':
-            self.dialog.exec_()
+            self.dialog.exec()
         else:
             QMessageBox.warning(self, u"Aviso:", u"Opção apenas disponível para pequenas escalas (até 25.000)")
 
@@ -562,7 +562,7 @@ class GeometryMapTool(QgsMapToolIdentifyFeature):
     
         layers = self.iface.mapCanvas().layers()
         for l in layers:
-            if l.type() == QgsMapLayer.VectorLayer:
+            if l.type() == QgsMapLayer.LayerType.VectorLayer:
                 l.selectByIds([])
 
         if len(found_features) > 0:
@@ -587,8 +587,8 @@ class RectangleMapTool(QgsMapToolEmitPoint):
         self.canvas = canvas
         QgsMapToolEmitPoint.__init__(self, self.canvas)
         self.rubberBand = QgsRubberBand(self.canvas, QgsWkbTypes().GeometryType(2))
-        self.rubberBand.setColor(Qt.red)
-        self.rubberBand.setBrushStyle(Qt.Dense6Pattern)
+        self.rubberBand.setColor(Qt.GlobalColor.red)
+        self.rubberBand.setBrushStyle(Qt.BrushStyle.Dense6Pattern)
         self.rubberBand.setWidth(1)
         self.reset()
 

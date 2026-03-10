@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from qgis.PyQt import QtCore
+from qgis.PyQt.QtCore import QMetaType
 from qgis.core import QgsField, QgsExpression, QgsMapLayerProxyModel, QgsVectorLayer, QgsMapLayer
 from qgis.PyQt import uic, QtWidgets
 from qgis.PyQt.QtWidgets import QMessageBox
@@ -16,7 +17,7 @@ class Main(QtWidgets.QDialog, FORM_CLASS):
         '''Construtor'''
         self.setupUi(self)
         self.mapLayerSelection.layerChanged.connect(self.attributeSelection.setLayer)
-        self.mapLayerSelection.setFilters(QgsMapLayerProxyModel.VectorLayer)
+        self.mapLayerSelection.setFilters(QgsMapLayerProxyModel.Filter.VectorLayer)
         self.okButton.pressed.connect(self.doWork)
         self.cancelButton.pressed.connect(self.cancel)
         self.iface = iface
@@ -52,7 +53,7 @@ class Main(QtWidgets.QDialog, FORM_CLASS):
                 return
         
         workingLayer.startEditing()
-        newField = QgsField(newFieldName, QtCore.QVariant.Double)
+        newField = QgsField(newFieldName, QMetaType.Type.Double)
         workingLayer.dataProvider().addAttributes([newField])
         workingLayer.updateFields()
 		

@@ -21,9 +21,9 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
-from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QProgressBar, QPushButton, QProgressDialog
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QMetaType
+from qgis.PyQt.QtGui import QIcon, QAction
+from qgis.PyQt.QtWidgets import QProgressBar, QPushButton, QProgressDialog
 # Initialize Qt resources from file resources.py
 from .resources import *
 
@@ -175,11 +175,11 @@ class QuickGeocoder:
 
             # show the dockwidget
             # TODO: fix to allow choice of dock location
-            self.iface.addDockWidget(Qt.BottomDockWidgetArea, self.dockwidget)
+            self.iface.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.dockwidget)
             self.dockwidget.show()
 
             # load layers to layers combo box
-            self.dockwidget.layersCombo.setFilters(QgsMapLayerProxyModel.PointLayer)
+            self.dockwidget.layersCombo.setFilters(QgsMapLayerProxyModel.Filter.PointLayer)
 
             # make signal/slot connections
             self.dockwidget.geocodeButton.clicked.connect(self.checkOperation)
@@ -369,13 +369,13 @@ class QuickGeocoder:
         apiKey = self.dockwidget.apiKeyEdit.text()
 
         if apiKey is None or apiKey == '':
-            self.iface.messageBar().pushMessage(u"Erro", u"API key não definida!", level=Qgis.Critical, duration=5)
+            self.iface.messageBar().pushMessage(u"Erro", u"API key não definida!", level=Qgis.MessageLevel.Critical, duration=5)
             return
 
         progressDialog = QProgressDialog()
         progressDialog.setMinimum(0)
         progressDialog.setCancelButtonText('Cancelar')
-        progressDialog.setWindowModality(Qt.WindowModal)
+        progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         progressDialog.setMinimumWidth(300)
         progressDialog.show()
 
@@ -390,7 +390,7 @@ class QuickGeocoder:
         progressDialog.setWindowTitle(u'Geocodificando ' + str(totalFeatures) + u' feições...')
 
         layer.startEditing()
-        novoAttr = QgsField(self.dockwidget.newAttributeEdit.text(), QVariant.String)
+        novoAttr = QgsField(self.dockwidget.newAttributeEdit.text(), QMetaType.Type.QString)
         layer.dataProvider().addAttributes([novoAttr])
         layer.updateFields()
         addrIdx = len(layer.fields()) - 1
@@ -401,7 +401,7 @@ class QuickGeocoder:
         for f in layer.getFeatures():
             if progressDialog.wasCanceled():
                 self.iface.messageBar().clearWidgets()
-                self.iface.messageBar().pushMessage(u"Geocodificação cancelada", u'Salvos ' + str(counter-2) + u' endereços.', level=Qgis.Info, duration=5)
+                self.iface.messageBar().pushMessage(u"Geocodificação cancelada", u'Salvos ' + str(counter-2) + u' endereços.', level=Qgis.MessageLevel.Info, duration=5)
                 break
             
             oldPoint = f.geometry().asPoint()
@@ -415,18 +415,18 @@ class QuickGeocoder:
 
         layer.commitChanges()
         
-        self.iface.messageBar().pushMessage(u"Successo", u"Endereços recuperados para {} pontos!".format(counter), level=Qgis.Success, duration=5)
+        self.iface.messageBar().pushMessage(u"Successo", u"Endereços recuperados para {} pontos!".format(counter), level=Qgis.MessageLevel.Success, duration=5)
 
     def doGeocode(self):
 
         if self.dockwidget.apiKeyEdit.text() == '':
-            self.iface.messageBar().pushMessage("Erro", u"API key não definida!", level=Qgis.Critical, duration=5)
+            self.iface.messageBar().pushMessage("Erro", u"API key não definida!", level=Qgis.MessageLevel.Critical, duration=5)
             return
         
         progressDialog = QProgressDialog()
         progressDialog.setMinimum(0)
         progressDialog.setCancelButtonText('Cancelar')
-        progressDialog.setWindowModality(Qt.WindowModal)
+        progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         progressDialog.setMinimumWidth(300)
         progressDialog.show()
         
@@ -475,8 +475,8 @@ class QuickGeocoder:
         header = fl.readline()
         header = header.replace('\n','')
         header = header.split(';')
-        temp_data.addAttributes([QgsField(header[i],QVariant.String) for i in range(len(header))])
-        temp_data.addAttributes([QgsField('addr_geocoded', QVariant.String)])
+        temp_data.addAttributes([QgsField(header[i],QMetaType.Type.QString) for i in range(len(header))])
+        temp_data.addAttributes([QgsField('addr_geocoded', QMetaType.Type.QString)])
         temp.updateFields()
 
         fo.writelines(';'.join(header))
@@ -489,7 +489,7 @@ class QuickGeocoder:
         for a in inputAddrList:
             if progressDialog.wasCanceled():
                 self.iface.messageBar().clearWidgets()
-                self.iface.messageBar().pushMessage(u"Geocodificação cancelada", u'Salvos ' + str(counter-2) + u' endereços.', level=Qgis.Info, duration=5)
+                self.iface.messageBar().pushMessage(u"Geocodificação cancelada", u'Salvos ' + str(counter-2) + u' endereços.', level=Qgis.MessageLevel.Info, duration=5)
                 break
             address, (latitude, longitude) = geolocator.reverse(a)
             print(counter, address, latitude, longitude)
@@ -512,4 +512,4 @@ class QuickGeocoder:
         QgsProject.instance().addMapLayer(temp)
         
         self.iface.messageBar().clearWidgets()
-        self.iface.messageBar().pushMessage(u"Successo", u'Geocodificados ' + str(totalAddresses) + u' endereços!', level=Qgis.Success, duration=5)
+        self.iface.messageBar().pushMessage(u"Successo", u'Geocodificados ' + str(totalAddresses) + u' endereços!', level=Qgis.MessageLevel.Success, duration=5)

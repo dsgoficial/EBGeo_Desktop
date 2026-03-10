@@ -15,14 +15,14 @@ class CopyCoordTool(QgsMapToolEmitPoint):
         self.coord_format = coord_format
 
     def activate(self):
-        self.canvas.setCursor(QtCore.Qt.CrossCursor)
+        self.canvas.setCursor(QtCore.Qt.CursorShape.CrossCursor)
 
     def deactivate(self):
         self.removeMarker()
         self.canvas.unsetMapTool(self)
         if hasattr(self.parent_widget, 'CopyButton'):
             self.parent_widget.CopyButton.setDown(False)
-        self.canvas.setCursor(QtCore.Qt.ArrowCursor)
+        self.canvas.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
 
     def canvasReleaseEvent(self, event):
         pt = self.toMapCoordinates(event.pos())
@@ -60,7 +60,7 @@ class CopyCoordTool(QgsMapToolEmitPoint):
         self.removeMarker()
         self.marker = QgsVertexMarker(self.canvas)
         self.marker.setCenter(pt)
-        self.marker.setColor(QtCore.Qt.red)
+        self.marker.setColor(QtCore.Qt.GlobalColor.red)
         self.marker.setIconType(QgsVertexMarker.ICON_CROSS)
         self.marker.setIconSize(12)
         self.marker.setPenWidth(2)

@@ -61,7 +61,7 @@ class CreateDataBaseInterface(QtWidgets.QDialog, FORM_CLASS):
         select_dialog.setEditMode(True)
     
         # Se o usuário cancelar a seleção
-        if not select_dialog.exec_():
+        if not select_dialog.exec():
             return 0
     
         selected_layers = select_dialog.selectedLayers

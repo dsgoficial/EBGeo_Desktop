@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 import os
 from MilitarySimbologyTools.view.selectLayersInterface import SelectLayersInterface
-from PyQt5 import uic, QtCore, QtWidgets
+from qgis.PyQt import uic, QtCore, QtWidgets
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QFileDialog
 from .createDataBaseInterface import CreateDataBaseInterface
@@ -31,7 +31,7 @@ class MilitarySimbologyInterface(QtWidgets.QFrame, GUI):
         return self.createDataBaseInterface
 
     def msg(self, msg):
-        QMessageBox.warning(self, u"Aviso:", msg, QMessageBox.Close)
+        QMessageBox.warning(self, u"Aviso:", msg, QMessageBox.StandardButton.Close)
 
     def setDataBase(self):
         dataBasePath = QFileDialog.getOpenFileName(self, 'Selecionar Geopackage', '', "Selecione banco de dados (*.gpkg)")[0]
@@ -65,7 +65,7 @@ class MilitarySimbologyInterface(QtWidgets.QFrame, GUI):
                 select_dialog.setWindowTitle("Selecionar Camadas para Carregamento")
                 select_dialog.setEditMode(False)
 
-                if select_dialog.exec_():
+                if select_dialog.exec():
                     # Se o usuário confirmar a seleção
                     selected_layers = select_dialog.selectedLayers
                     duplicate_info = select_dialog.get_duplicate_info()
@@ -103,7 +103,7 @@ class MilitarySimbologyInterface(QtWidgets.QFrame, GUI):
         select_dialog.setEditMode(True)
 
         # Se o usuário cancelar a seleção
-        if not select_dialog.exec_():
+        if not select_dialog.exec():
             return 0
 
         selected_layers = select_dialog.selectedLayers
@@ -171,7 +171,7 @@ class MilitarySimbologyInterface(QtWidgets.QFrame, GUI):
             select_dialog.setWindowTitle("Selecionar Camadas para Adicionar")
             select_dialog.setEditMode(True)
     
-            if not select_dialog.exec_():
+            if not select_dialog.exec():
                 return
     
             selected_layers = select_dialog.selectedLayers

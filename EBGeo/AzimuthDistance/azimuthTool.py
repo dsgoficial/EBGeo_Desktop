@@ -150,7 +150,7 @@ class AzimuthTool(QObject):
         return workgeom
 
     def doWork(self, point, button):
-        if button == QtCore.Qt.LeftButton:
+        if button == QtCore.Qt.MouseButton.LeftButton:
             layerFeat = self.getLayerFeature(point)
             if not layerFeat:
                 QMessageBox.warning(None, "Aviso", "Clique em uma geometria de ponto existente.")
@@ -166,7 +166,7 @@ class AzimuthTool(QObject):
             worklayer.triggerRepaint()
             QMessageBox.information(None , u"Aviso", u"Ponto criado com\n\nAzimute: {} º\n\nDistância: {}".format(ang, d))
             return
-        elif button == QtCore.Qt.RightButton:
+        elif button == QtCore.Qt.MouseButton.RightButton:
             
             layerFeat = self.getLayerFeature(point)
             if not layerFeat:

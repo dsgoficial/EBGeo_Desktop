@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.PyQt.QtCore import QCoreApplication, QMetaType
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.core import (QgsProcessing,
@@ -85,9 +85,9 @@ class LineOfSight(QgsProcessingAlgorithm):
             return {}
 
         fields = QgsFields()
-        fields.append(QgsField("obs_idx", QVariant.Int))
-        fields.append(QgsField("tgt_idx", QVariant.Int))
-        fields.append(QgsField("visible", QVariant.Int)) 
+        fields.append(QgsField("obs_idx", QMetaType.Type.Int))
+        fields.append(QgsField("tgt_idx", QMetaType.Type.Int))
+        fields.append(QgsField("visible", QMetaType.Type.Int)) 
 
         sink, dest_id = self.parameterAsSink(
             parameters,

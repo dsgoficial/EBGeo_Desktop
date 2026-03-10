@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 #Qt import
 from qgis.PyQt import uic, QtCore, QtGui
-try:
-    from qgis.PyQt.QtGui import QInputDialog, QMessageBox
-except:
-    from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox
 #qgis import
 from qgis.core import *
 from qgis.gui import *
@@ -27,7 +24,7 @@ class TableViewTool(QtCore.QObject):
                 layer = iface.mapCanvas().layer(i)
                 if isProfilable(layer):
                     for j in range(0, mdl.rowCount()):
-                        if str(mdl.item(j,2).data(QtCore.Qt.EditRole)) == str(layer.name()):
+                        if str(mdl.item(j,2).data(QtCore.Qt.ItemDataRole.EditRole)) == str(layer.name()):
                             donothing = True
                 else:
                     donothing = True
@@ -55,17 +52,17 @@ class TableViewTool(QtCore.QObject):
 
         # Ask the Band by a input dialog
         #First, if isProfilable, considerate the real band number (instead of band + 1 for raster)
-        if layer2.type() == layer2.PluginLayer and  isProfilable(layer2):
+        if layer2.type() == layer2.LayerType.PluginLayer and  isProfilable(layer2):
             self.bandoffset = 0
             typename = u'parâmetro'
-        elif layer2.type() == layer2.RasterLayer:
+        elif layer2.type() == layer2.LayerType.RasterLayer:
             self.bandoffset = 1
             typename = u'banda'
-        elif layer2.type() == layer2.VectorLayer:
+        elif layer2.type() == layer2.LayerType.VectorLayer:
             self.bandoffset = 0
             typename = u'campo'
 
-        if layer2.type() == layer2.RasterLayer and layer2.bandCount() != 1:
+        if layer2.type() == layer2.LayerType.RasterLayer and layer2.bandCount() != 1:
             listband = []
             for i in range(0,layer2.bandCount()):
                 listband.append(str(i+self.bandoffset))
@@ -74,13 +71,9 @@ class TableViewTool(QtCore.QObject):
                 choosenBand = int(testqt) - self.bandoffset
             else:
                 return 2
-        elif layer2.type() == layer2.VectorLayer :
+        elif layer2.type() == layer2.LayerType.VectorLayer :
             fieldstemp = [field.name() for field in layer2.fields() ]
-            if int(QtCore.QT_VERSION_STR[0]) == 4 :    #qgis2
-                fields = [field.name() for field in layer2.fields() if field.type() in [2,3,4,5,6]]
-            
-            elif int(QtCore.QT_VERSION_STR[0]) == 5 :    #qgis3
-                fields = [field.name() for field in layer2.fields() if field.isNumeric()]
+            fields = [field.name() for field in layer2.fields() if field.isNumeric()]
             if len(fields)==0:
                 QMessageBox.warning(iface.mainWindow(), u"Análise do Perfil do Terreno", u"Camada ativa não pode ser usada para gerar perfis.")
                 return
@@ -100,26 +93,26 @@ class TableViewTool(QtCore.QObject):
         #Complete the tableview
         row = mdl.rowCount()
         mdl.insertRow(row)
-        mdl.setData( mdl.index(row, 0, QModelIndex()) ,QtCore.Qt.Checked, QtCore.Qt.CheckStateRole)
-        mdl.item(row,0).setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsUserCheckable)
-        lineColour = QtCore.Qt.red
-        if layer2.type() == layer2.PluginLayer and layer2.LAYER_TYPE == 'crayfish_viewer':
-            lineColour = QtCore.Qt.blue
-        mdl.setData( mdl.index(row, 1, QModelIndex())  ,QColor(lineColour) , QtCore.Qt.BackgroundRole)
-        mdl.item(row,1).setFlags(QtCore.Qt.ItemIsEnabled) 
+        mdl.setData( mdl.index(row, 0, QModelIndex()) ,QtCore.Qt.CheckState.Checked, QtCore.Qt.ItemDataRole.CheckStateRole)
+        mdl.item(row,0).setFlags(QtCore.Qt.ItemFlag.ItemIsSelectable | QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+        lineColour = QtCore.Qt.GlobalColor.red
+        if layer2.type() == layer2.LayerType.PluginLayer and layer2.LAYER_TYPE == 'crayfish_viewer':
+            lineColour = QtCore.Qt.GlobalColor.blue
+        mdl.setData( mdl.index(row, 1, QModelIndex())  ,QColor(lineColour) , QtCore.Qt.ItemDataRole.BackgroundRole)
+        mdl.item(row,1).setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
         mdl.setData( mdl.index(row, 2, QModelIndex())  ,layer2.name())
-        mdl.item(row,2).setFlags(QtCore.Qt.ItemIsEnabled) 
+        mdl.item(row,2).setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
         mdl.setData( mdl.index(row, 3, QModelIndex())  ,choosenBand + self.bandoffset)
-        mdl.item(row,3).setFlags(QtCore.Qt.ItemIsEnabled) 
+        mdl.item(row,3).setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled) 
 
-        if layer2.type() == layer2.VectorLayer :
+        if layer2.type() == layer2.LayerType.VectorLayer :
             mdl.setData( mdl.index(row, 4, QModelIndex())  ,100.0)
         else:
             mdl.setData( mdl.index(row, 4, QModelIndex())  ,'')
-            mdl.item(row,4).setFlags(QtCore.Qt.NoItemFlags) 
-            
+            mdl.item(row,4).setFlags(QtCore.Qt.ItemFlag(0))
+
         mdl.setData( mdl.index(row, 5, QModelIndex())  ,layer2)
-        mdl.item(row,5).setFlags(QtCore.Qt.NoItemFlags)
+        mdl.item(row,5).setFlags(QtCore.Qt.ItemFlag(0))
         self.layerAddedOrRemoved.emit()
         
     def removeLayer(self, mdl, index):
@@ -138,28 +131,28 @@ class TableViewTool(QtCore.QObject):
 
         list1 = []
         for i in range(0,mdl.rowCount()):
-            list1.append(str(i +1) + " : " + mdl.item(i,2).data(QtCore.Qt.EditRole))
+            list1.append(str(i +1) + " : " + mdl.item(i,2).data(QtCore.Qt.ItemDataRole.EditRole))
         testqt, ok = QInputDialog.getItem(iface.mainWindow(), u"Seletor de camadas", u"Selecione uma camada", list1, False)
         if ok:
             for i in range(0,mdl.rowCount()):
-                if testqt == (str(i+1) + " : " + mdl.item(i,2).data(QtCore.Qt.EditRole)):
+                if testqt == (str(i+1) + " : " + mdl.item(i,2).data(QtCore.Qt.ItemDataRole.EditRole)):
                     return i
         return None
         
     def onClick(self, iface, wdg, mdl, plotlibrary, index1):
         temp = mdl.itemFromIndex(index1)
         if index1.column() == 1:                #modifying color
-            name = ("%s#%d") % (mdl.item(index1.row(),2).data(QtCore.Qt.EditRole), mdl.item(index1.row(),3).data(QtCore.Qt.EditRole))
-            color = QColorDialog().getColor(temp.data(QtCore.Qt.BackgroundRole))
-            mdl.setData( mdl.index(temp.row(), 1, QModelIndex())  ,color , QtCore.Qt.BackgroundRole)
+            name = ("%s#%d") % (mdl.item(index1.row(),2).data(QtCore.Qt.ItemDataRole.EditRole), mdl.item(index1.row(),3).data(QtCore.Qt.ItemDataRole.EditRole))
+            color = QColorDialog().getColor(temp.data(QtCore.Qt.ItemDataRole.BackgroundRole))
+            mdl.setData( mdl.index(temp.row(), 1, QModelIndex())  ,color , QtCore.Qt.ItemDataRole.BackgroundRole)
             PlottingTool().changeColor(wdg, plotlibrary, color, name)
         elif index1.column() == 0:                #modifying checkbox
-            name = ("%s#%d") % (mdl.item(index1.row(),2).data(QtCore.Qt.EditRole), mdl.item(index1.row(),3).data(QtCore.Qt.EditRole))
-            booltemp = temp.data(QtCore.Qt.CheckStateRole)
-            mdl.setData( mdl.index(temp.row(), 0, QModelIndex())  ,booltemp, QtCore.Qt.CheckStateRole)
+            name = ("%s#%d") % (mdl.item(index1.row(),2).data(QtCore.Qt.ItemDataRole.EditRole), mdl.item(index1.row(),3).data(QtCore.Qt.ItemDataRole.EditRole))
+            booltemp = temp.data(QtCore.Qt.ItemDataRole.CheckStateRole)
+            mdl.setData( mdl.index(temp.row(), 0, QModelIndex())  ,booltemp, QtCore.Qt.ItemDataRole.CheckStateRole)
             PlottingTool().changeAttachCurve(wdg, plotlibrary, booltemp, name)
         elif False and index1.column() == 4:               
-            name = mdl.item(index1.row(),4).data(QtCore.Qt.EditRole)
+            name = mdl.item(index1.row(),4).data(QtCore.Qt.ItemDataRole.EditRole)
             print(name)
         else:
             return

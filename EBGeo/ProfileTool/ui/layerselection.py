@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5 import uic, QtWidgets
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
+from qgis.PyQt import uic, QtWidgets
+from qgis.PyQt.QtCore import *
+from qgis.PyQt.QtGui import *
 from qgis.core import QgsMapLayer, QgsMapLayerProxyModel
 import platform
 import os
@@ -19,10 +19,10 @@ class LayerSelection(QtWidgets.QDialog, GUI):
 		super(LayerSelection, self).__init__()
 		self.setupUi(self)
 		self.buttonBox.clicked.connect(self.getSelectedLayer)
-		self.layerCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
+		self.layerCombo.setFilters(QgsMapLayerProxyModel.Filter.RasterLayer)
 		
 	def getSelectedLayer(self, b):
-		if b == QDialogButtonBox.Ok:
+		if b == QDialogButtonBox.StandardButton.Ok:
 			return self.layerCombo.currentLayer()
 		else:
 			return None

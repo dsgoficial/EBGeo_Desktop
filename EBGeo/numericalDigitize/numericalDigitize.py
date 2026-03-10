@@ -172,8 +172,8 @@ class NumericalDigitize:
     else:
       reply = QMessageBox.question(self.iface.mainWindow(), u'Feição inválida',
      u"A geometria da feição que você acabou de adicionar não é válida. Quer usá-la mesmo assim?",
-     QMessageBox.Yes, QMessageBox.No)
-      if reply == QMessageBox.Yes:
+     QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+      if reply == QMessageBox.StandardButton.Yes:
         f.setGeometry(geom)
       else:
         return False
@@ -194,7 +194,7 @@ class NumericalDigitize:
     
     attrDialog = QgsAttributeDialog(layer, f, False)
     attrDialog.setMode(QgsAttributeEditorContext.AddFeatureMode)
-    result = attrDialog.exec_()
+    result = attrDialog.exec()
         
     layer.endEditCommand()
     

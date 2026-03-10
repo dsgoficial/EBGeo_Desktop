@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.PyQt.QtCore import QCoreApplication, QMetaType
 from qgis.core import (QgsProcessing,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterMultipleLayers,
@@ -98,8 +98,8 @@ class MatchLayerAndFrame(QgsProcessingAlgorithm):
     
     def outLayer(self, parameters, context, frame_layer_pairs, setCRS):
         newField = QgsFields()
-        newField.append(QgsField('id', QVariant.Int))
-        newField.append(QgsField('nome', QVariant.String))
+        newField.append(QgsField('id', QMetaType.Type.Int))
+        newField.append(QgsField('nome', QMetaType.Type.QString))
         
 
         (sink, newLayer) = self.parameterAsSink(

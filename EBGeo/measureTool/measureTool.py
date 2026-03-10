@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from qgis.PyQt.QtCore import QEvent, QObject, QRect, Qt
-from PyQt5.QtWidgets import QToolTip
+from qgis.PyQt.QtWidgets import QToolTip, QPushButton
 from qgis.PyQt.QtGui import *
-from qgis.PyQt.QtWidgets import QPushButton
 from qgis.core import *
 from qgis.gui import *
 from qgis.core import (
@@ -51,7 +50,7 @@ class MeasureTool(QObject):
         layer = self.iface.activeLayer()
         if (
             not isinstance(layer, QgsVectorLayer)
-            or layer.geometryType() == QgsWkbTypes.PointGeometry
+            or layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry
             or not layer.isEditable()
         ):
             enabled = False
@@ -156,13 +155,13 @@ class EventFilter(QObject):
         if (
             (
                 event.type() == QEvent.MouseButtonPress
-                and event.button() == Qt.LeftButton
+                and event.button() == Qt.MouseButton.LeftButton
             )
             or (
                 event.type() == QEvent.MouseButtonRelease
-                and event.button() == Qt.LeftButton
+                and event.button() == Qt.MouseButton.LeftButton
             )
-            or (event.type() == QEvent.MouseMove and event.button() != Qt.MidButton)
+            or (event.type() == QEvent.MouseMove and event.button() != Qt.MouseButton.MidButton)
         ):
             curPoint = (
                 self.iface.mapCanvas()
@@ -173,17 +172,17 @@ class EventFilter(QObject):
             self.pointList.updateCurrentPoint(curPoint)
         if (
             event.type() == QEvent.MouseButtonRelease
-            and event.button() == Qt.LeftButton
+            and event.button() == Qt.MouseButton.LeftButton
         ):
             self.pointList.newPoint()
         elif event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Backspace or event.key() == Qt.Key_Delete:
+            if event.key() == Qt.Key.Key_Backspace or event.key() == Qt.Key.Key_Delete:
                 self.pointList.removeLastPoint()
-            elif event.key() == Qt.Key_Escape:
+            elif event.key() == Qt.Key.Key_Escape:
                 self.pointList.empty()
         elif (
             event.type() == QEvent.MouseButtonRelease
-            and event.button() == Qt.RightButton
+            and event.button() == Qt.MouseButton.RightButton
         ):
             self.pointList.empty()
         return QObject.eventFilter(self, obj, event)
@@ -193,7 +192,7 @@ class EventFilter(QObject):
         area = None
         if (
             self.iface.mapCanvas().currentLayer().geometryType()
-            == QgsWkbTypes.LineGeometry
+            == QgsWkbTypes.GeometryType.LineGeometry
         ):
             if len(self.pointList) > 1:
                 line_dist = QgsGeometry.fromPolylineXY(self.pointList[:2])
@@ -221,7 +220,7 @@ class EventFilter(QObject):
                 tooltip.hideText()
         elif (
             self.iface.mapCanvas().currentLayer().geometryType()
-            == QgsWkbTypes.PolygonGeometry
+            == QgsWkbTypes.GeometryType.PolygonGeometry
         ):
             tempPointList = []
             if len(self.pointList) > 2:

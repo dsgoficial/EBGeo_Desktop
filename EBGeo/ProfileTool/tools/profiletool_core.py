@@ -2,10 +2,7 @@
 
 #Qt import
 from qgis.PyQt import uic, QtCore, QtGui
-try:
-    from qgis.PyQt.QtGui import QWidget
-except:
-    from qgis.PyQt.QtWidgets import QWidget
+from qgis.PyQt.QtWidgets import QWidget
 from qgis.PyQt.QtSvg import * # required in some distros
 #qgis import
 import qgis
@@ -21,6 +18,8 @@ from .dataReaderTool import DataReaderTool
 from .plottingtool import PlottingTool
 from .ptmaptool import ProfiletoolMapTool, ProfiletoolMapToolRenderer
 from ..ui.ptdockwidget import PTDockWidget
+from ..pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as PgInfiniteLine
+from ..pyqtgraph.graphicsItems.TextItem import TextItem as PgTextItem
 
 class ProfileToolCore(QWidget):
 
@@ -29,19 +28,19 @@ class ProfileToolCore(QWidget):
         self.iface = iface
         self.plugincore = plugincore
         #the rubberband
-        self.polygon = QgsWkbTypes.LineGeometry
+        self.polygon = QgsWkbTypes.GeometryType.LineGeometry
         self.rubberband = QgsRubberBand(self.iface.mapCanvas(), self.polygon)
         self.rubberband.setWidth(2)
-        self.rubberband.setColor(QtGui.QColor(QtCore.Qt.red))
+        self.rubberband.setColor(QtGui.QColor(QtCore.Qt.GlobalColor.red))
         self.rubberbandpoint = QgsVertexMarker(self.iface.mapCanvas())
-        self.rubberbandpoint.setColor(QtGui.QColor(QtCore.Qt.red))
+        self.rubberbandpoint.setColor(QtGui.QColor(QtCore.Qt.GlobalColor.red))
         self.rubberbandpoint.setIconSize(5)
         self.rubberbandpoint.setIconType(QgsVertexMarker.ICON_BOX) # or ICON_CROSS, ICON_X
         self.rubberbandpoint.setPenWidth(3)
         
         self.rubberbandbuf = QgsRubberBand(self.iface.mapCanvas())
         self.rubberbandbuf.setWidth(1)
-        self.rubberbandbuf.setColor(QtGui.QColor(QtCore.Qt.blue))
+        self.rubberbandbuf.setColor(QtGui.QColor(QtCore.Qt.GlobalColor.blue))
 
         if QtCore.QSettings().value("profiletool/lastdirectory") != '':
             self.loaddirectory = QtCore.QSettings().value("profiletool/lastdirectory")       
@@ -90,10 +89,10 @@ class ProfileToolCore(QWidget):
 
         #calculate profiles
         for i in range(0 , self.dockwidget.mdl.rowCount()):
-            self.profiles.append( {"layer": self.dockwidget.mdl.item(i,5).data(QtCore.Qt.EditRole) } )
-            self.profiles[i]["band"] = self.dockwidget.mdl.item(i,3).data(QtCore.Qt.EditRole)
-            if self.dockwidget.mdl.item(i,5).data(QtCore.Qt.EditRole).type() == qgis.core.QgsMapLayer.VectorLayer :
-                self.profiles[i], buffer, multipoly = DataReaderTool().dataVectorReaderTool(self.iface, self.toolrenderer.tool, self.profiles[i], self.pointstoDraw, float(self.dockwidget.mdl.item(i,4).data(QtCore.Qt.EditRole)) )
+            self.profiles.append( {"layer": self.dockwidget.mdl.item(i,5).data(QtCore.Qt.ItemDataRole.EditRole) } )
+            self.profiles[i]["band"] = self.dockwidget.mdl.item(i,3).data(QtCore.Qt.ItemDataRole.EditRole)
+            if self.dockwidget.mdl.item(i,5).data(QtCore.Qt.ItemDataRole.EditRole).type() == qgis.core.QgsMapLayer.LayerType.VectorLayer :
+                self.profiles[i], buffer, multipoly = DataReaderTool().dataVectorReaderTool(self.iface, self.toolrenderer.tool, self.profiles[i], self.pointstoDraw, float(self.dockwidget.mdl.item(i,4).data(QtCore.Qt.ItemDataRole.EditRole)) )
                 self.rubberbandbuf.addGeometry(buffer,None)
                 self.rubberbandbuf.addGeometry(multipoly,None)
                 
@@ -110,14 +109,10 @@ class ProfileToolCore(QWidget):
         self.enableMouseCoordonates(self.dockwidget.plotlibrary)
         
     def removeClosedLayers(self, model1):
-        qgisLayerNames = []
-        if int(QtCore.QT_VERSION_STR[0]) == 4 :    #qgis2
-            qgisLayerNames = [  layer.name()    for layer in self.iface.legendInterface().layers()]
-        elif int(QtCore.QT_VERSION_STR[0]) == 5 :    #qgis3
-            qgisLayerNames = [  layer.name()    for layer in qgis.core.QgsProject().instance().mapLayers().values()]
+        qgisLayerNames = [layer.name() for layer in qgis.core.QgsProject().instance().mapLayers().values()]
             
         for i in range(0 , model1.rowCount()):
-            layerName = model1.item(i,2).data(QtCore.Qt.EditRole)
+            layerName = model1.item(i,2).data(QtCore.Qt.ItemDataRole.EditRole)
             if not layerName in qgisLayerNames:
                 self.dockwidget.removeLayer(i)
                 self.removeClosedLayers(model1)
@@ -152,7 +147,7 @@ class ProfileToolCore(QWidget):
             self.vline = self.dockwidget.plotWdg.figure.get_axes()[0].axvline(xdata,linewidth=2, color = 'k')
             self.dockwidget.plotWdg.draw()
             if not self.pointstoDraw is None:
-                geom =  qgis.core.QgsGeometry.fromPolyline([QgsPoint(point[0], point[1]) for point in self.pointstoDraw])
+                geom =  qgis.core.QgsGeometry.fromPolylineXY([QgsPointXY(point[0], point[1]) for point in self.pointstoDraw])
                 pointprojected = geom.interpolate(xdata)
                 self.rubberbandpoint.show() 
                 self.rubberbandpoint.setCenter(pointprojected.asPoint())
@@ -204,14 +199,14 @@ class ProfileToolCore(QWidget):
                         #plot xy label and cursor
                         if not xtoplot is None and not ytoplot is None:
                             for item in self.dockwidget.plotWdg.allChildItems():
-                                if str(type(item)) == "<class 'profiletool.pyqtgraph.graphicsItems.InfiniteLine.InfiniteLine'>":
+                                if isinstance(item, PgInfiniteLine):
                                     if item.name() == 'cross_vertical':
                                         item.show()
                                         item.setPos(xtoplot)
                                     elif item.name() == 'cross_horizontal':
                                         item.show()
                                         item.setPos(ytoplot)
-                                elif str(type(item)) == "<class 'profiletool.pyqtgraph.graphicsItems.TextItem.TextItem'>":
+                                elif isinstance(item, PgTextItem):
                                     if item.textItem.toPlainText()[0] == 'X':
                                         item.show()
                                         item.setText('X : '+str(round(xtoplot,roundvalue)))
@@ -223,7 +218,7 @@ class ProfileToolCore(QWidget):
                                     
                     #tracking part
                     if self.doTracking and not xtoplot is None and not ytoplot is None:
-                        geom =  qgis.core.QgsGeometry.fromPolyline([QgsPoint(point[0], point[1]) for point in self.pointstoDraw])
+                        geom =  qgis.core.QgsGeometry.fromPolylineXY([QgsPointXY(point[0], point[1]) for point in self.pointstoDraw])
                         pointprojected = geom.interpolate(xtoplot)
                         self.rubberbandpoint.show() 
                         #self.rubberbandpoint.setCenter(pointprojected.asPoint())

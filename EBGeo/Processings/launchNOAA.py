@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from qgis import processing
-from qgis.PyQt.Qt import QVariant
+from qgis.PyQt.QtCore import QMetaType, QCoreApplication
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis.core import (QgsProcessingAlgorithm, QgsProcessingMultiStepFeedback,
                        QgsProcessingParameterEnum,
@@ -27,7 +27,6 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingMultiStepFeedback,
                        QgsPalLayerSettings,
                        QgsVectorLayerSimpleLabeling
                         )
-from qgis.PyQt.QtCore import QCoreApplication
 import math
 import os
 
@@ -182,7 +181,7 @@ class LaunchNOAA(QgsProcessingAlgorithm):
         height_open_parachute = self.parameterAsInt(parameters, self.HEIGHT_OPEN_PACHUTE, context)
 
         fields = QgsFields()
-        fields.append(QgsField("Tipo", QVariant.String))
+        fields.append(QgsField("Tipo", QMetaType.Type.QString))
 
         crs = QgsCoordinateReferenceSystem("EPSG:4674")
 
@@ -415,9 +414,9 @@ class LaunchNOAA(QgsProcessingAlgorithm):
 
         provider = layer_entradas.dataProvider()
         provider.addAttributes([
-            QgsField("TIPO", QVariant.String),
-            QgsField("ENTRADA_ANV", QVariant.Double),
-            QgsField("DISTANCIA_HORIZONTAL", QVariant.Double)
+            QgsField("TIPO", QMetaType.Type.QString),
+            QgsField("ENTRADA_ANV", QMetaType.Type.Double),
+            QgsField("DISTANCIA_HORIZONTAL", QMetaType.Type.Double)
         ])
         layer_entradas.updateFields()
 

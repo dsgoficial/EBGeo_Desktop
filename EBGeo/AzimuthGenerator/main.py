@@ -40,10 +40,10 @@ class FontSizeDialog(QDialog, BOX_CLASS):
         current_value = int(self.spinBox.value())
         if 6 <= current_value <= 96:
             self.error.setVisible(False)
-            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
         else:
             self.error.setVisible(True)
-            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
     
     def getFontSize(self):
         return self.spinBox.value()
@@ -68,13 +68,13 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
         self.displayXYCheckBox = self.findChild(QtWidgets.QCheckBox, "displayXYCheckBox")
 
     def openWindow(self):
-        self.iface.addDockWidget(QtCore.Qt.RightDockWidgetArea, self)
+        self.iface.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self)
         self.isOpen = True
 
     def closeDock(self, event):
         layers = self.iface.mapCanvas().layers()
         for l in layers:
-            if l.type() == QgsMapLayer.VectorLayer:
+            if l.type() == QgsMapLayer.LayerType.VectorLayer:
                 l.removeSelection()
         self.closingDock.emit()
         event.accept()
@@ -113,7 +113,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
     def clearLayersSelections(self):
         layers = self.iface.mapCanvas().layers()
         for l in layers:
-            if l.type() == QgsMapLayer.VectorLayer:
+            if l.type() == QgsMapLayer.LayerType.VectorLayer:
                 l.removeSelection()
 
     def generateDMS(self, ang):
@@ -280,7 +280,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
 
     def exportHtml(self):
         fontSizeDlg = FontSizeDialog(self)
-        if fontSizeDlg.exec_() == QDialog.Accepted:
+        if fontSizeDlg.exec() == QDialog.Accepted:
             fontSize = fontSizeDlg.getFontSize()
         else:
             return

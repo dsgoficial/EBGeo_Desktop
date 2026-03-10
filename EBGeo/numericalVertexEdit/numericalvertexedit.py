@@ -42,7 +42,7 @@ class NumericalVertexEdit:
     self.layerCrs = layerCrs
     
     self.dialog.setCoords(params)
-    self.dialog.exec_()
+    self.dialog.exec()
     
   def moveVertex2(self, newpoint, newcrs):
     transformer = QgsCoordinateTransform(newcrs, self.layerCrs, QgsProject.instance())
