@@ -7,6 +7,7 @@ from .makeMosaic import MakeMosaic
 from .makeFrame import MakeFrame
 from .matchLayerAndFrame import MatchLayerAndFrame
 from .insertMASACODE import ConvertEDGVtoMASACODE
+from .convertEDGV3Topo14ToMASACODE import ConvertEDGV3Topo14ToMASACODE
 from .simbmilLoader import SimbMilAlgorithm
 from .pointsWithKmAndName import GeradorPontosQuilometragem
 from .launchNOAA import LaunchNOAA
@@ -22,6 +23,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(MatchLayerAndFrame())
         self.addAlgorithm(ConvertEDGVtoMASACODE())
         self.addAlgorithm(ConvertBDGExZIPtoMASACODE())
+        self.addAlgorithm(ConvertEDGV3Topo14ToMASACODE())
         self.addAlgorithm(SimbMilAlgorithm())
         self.addAlgorithm(GeradorPontosQuilometragem())
         self.addAlgorithm(LaunchNOAA())
