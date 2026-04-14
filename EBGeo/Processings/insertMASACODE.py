@@ -397,13 +397,11 @@ class ElementoFisiograficoNatural(AbstractEDGVClass):
                                 for field in output_fields]
         outputFileWriterDict = {
             10007: self.create_output_file_writer(
-                input_layer,
                 output_fields,
                 output_file=os.path.join(self.output_file_path, 'Mountain.shp'),
                 srs=input_layer.crs(),
             ),
             21000: self.create_output_file_writer(
-                input_layer,
                 output_fields,
                 output_file=os.path.join(self.output_file_path, 'Cliff.shp'),
                 srs=input_layer.crs(),
@@ -415,6 +413,6 @@ class ElementoFisiograficoNatural(AbstractEDGVClass):
             if feat is None:
                 continue
             outputFileWriterDict[feat['MASACODE']].addFeature(feat)
-        for code, writer in outputFileWriterDict.items():
+        for _, writer in outputFileWriterDict.items():
             del writer
         return True

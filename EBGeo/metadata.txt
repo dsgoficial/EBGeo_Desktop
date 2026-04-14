@@ -10,7 +10,7 @@
 name=EBGeo
 qgisMinimumVersion=3.34
 description=Ferramentas para planejamento militar do Exército Brasileiro
-version=2.3.0
+version=2.3.1
 author=Exército Brasileiro - Diretoria de Serviço Geográfico
 email=suporte.dsgtools@dsg.eb.mil.br
 about=
@@ -84,6 +84,7 @@ about=
 # Uncomment the following line and add your changelog:
 changelog=
 	PORTUGUÊS
+	2.3.1 - Corrigido bug no conversor de MASACODE (caso de cliff e mountain)
 	2.2.1 - Adicionado funcionalidade para inserir MASACODE
 	2.2.0 - Adicionado Mosaicar
 	2.1.0 - Adicionadas novas funcionalidades pendentes, correção de bugs
