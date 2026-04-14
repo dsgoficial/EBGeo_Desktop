@@ -10,6 +10,7 @@ import zipfile
 from qgis import processing
 from qgis.core import (QgsProcessingAlgorithm, QgsProcessingMultiStepFeedback,
                        QgsProcessingParameterBoolean,
+                       QgsProcessingParameterEnum,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFolderDestination,
                        QgsProcessingUtils)
@@ -20,6 +21,11 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
     INPUT_FOLDER = 'INPUT_FOLDER'
     KEEP_ATTRIBUTES = 'KEEP_ATTRIBUTES'
     OUTPUT_FOLDER = 'OUTPUT_FOLDER'
+    OUTPUT_MODE = 'OUTPUT_MODE'
+    OUTPUT_MODE_OPTIONS = [
+        'Criar uma pasta no destino para cada zip',
+        'Consolidar todos os zips em uma única pasta de saída',
+    ]
 
     def initAlgorithm(self, config = None):
         self.addParameter(
@@ -42,10 +48,19 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
                 self.tr('Pasta para salvar os arquivos exportados')
             )
         )
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.OUTPUT_MODE,
+                self.tr('Modo de saída'),
+                options=self.OUTPUT_MODE_OPTIONS,
+                defaultValue=0,
+            )
+        )
 
     def processAlgorithm(self, parameters, context, feedback):         
         self.outputFolderPath = self.parameterAsString(parameters, self.OUTPUT_FOLDER, context)
         keepAttributes = self.parameterAsBool(parameters, self.KEEP_ATTRIBUTES, context)
+        consolidateOutput = self.parameterAsEnum(parameters, self.OUTPUT_MODE, context) == 1
         inputFolder = self.parameterAsFile(
             parameters, self.INPUT_FOLDER, context)
         inputFiles = list(
@@ -71,17 +86,25 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
                 zip_ref.extractall(self.tempFolder)
             zip_ref.close()
             fileList = [i for i in glob.glob(f'{self.tempFolder}/**/*.shp')]
+            if consolidateOutput:
+                outputFolder = self.outputFolderPath
+                appendToExisting = current > 0
+            else:
+                zipName = os.path.splitext(os.path.basename(file))[0]
+                outputFolder = os.path.join(self.outputFolderPath, zipName)
+                appendToExisting = False
             processing.run(
                 "EBGeoProvider:convertedgvtomasacode",
                 {
                     "INPUT": fileList,
                     "KEEP_ATTRIBUTES": keepAttributes,
-                    "OUTPUT_FOLDER": self.outputFolderPath,
+                    "OUTPUT_FOLDER": outputFolder,
+                    "APPEND_TO_EXISTING": appendToExisting,
                 },
                 context=context,
                 feedback=multiStepFeedback
             )
-        
+
         return {self.OUTPUT_FOLDER: 'Conversão concluída'}
 
 
