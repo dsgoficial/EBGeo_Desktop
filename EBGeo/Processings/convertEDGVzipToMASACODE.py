@@ -81,16 +81,16 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
                 break
             multiStepFeedback.setProgressText(f"Convertendo arquivo {current+1}/{nInputs}")
             multiStepFeedback.setCurrentStep(current)
-            self.tempFolder = QgsProcessingUtils.tempFolder()
+            zipName = os.path.splitext(os.path.basename(file))[0]
+            extractFolder = os.path.join(QgsProcessingUtils.tempFolder(), zipName)
+            os.makedirs(extractFolder, exist_ok=True)
             with zipfile.ZipFile(file, 'r') as zip_ref:
-                zip_ref.extractall(self.tempFolder)
-            zip_ref.close()
-            fileList = [i for i in glob.glob(f'{self.tempFolder}/**/*.shp')]
+                zip_ref.extractall(extractFolder)
+            fileList = glob.glob(f'{extractFolder}/**/*.shp')
             if consolidateOutput:
                 outputFolder = self.outputFolderPath
                 appendToExisting = current > 0
             else:
-                zipName = os.path.splitext(os.path.basename(file))[0]
                 outputFolder = os.path.join(self.outputFolderPath, zipName)
                 appendToExisting = False
             os.makedirs(outputFolder, exist_ok=True)
