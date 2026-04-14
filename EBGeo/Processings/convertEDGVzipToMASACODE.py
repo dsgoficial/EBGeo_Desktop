@@ -93,6 +93,7 @@ class ConvertBDGExZIPtoMASACODE(QgsProcessingAlgorithm):
                 zipName = os.path.splitext(os.path.basename(file))[0]
                 outputFolder = os.path.join(self.outputFolderPath, zipName)
                 appendToExisting = False
+            os.makedirs(outputFolder, exist_ok=True)
             processing.run(
                 "EBGeoProvider:convertedgvtomasacode",
                 {
