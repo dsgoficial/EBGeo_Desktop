@@ -3,7 +3,7 @@
 # Importar as bibliotecas necessárias:
 from abc import ABC, abstractmethod
 from typing import List
-from dataclasses import MISSING, dataclass
+from dataclasses import MISSING, dataclass, field
 import os
 from qgis import processing
 from qgis.PyQt.QtCore import QMetaType, QCoreApplication
@@ -16,10 +16,25 @@ from qgis.core import (QgsProcessing, QgsVectorFileWriter,QgsProcessingAlgorithm
                        QgsVectorLayer, QgsFeature, QgsWkbTypes
                        )
 
+class MASACODEContext:
+    def __init__(self, append_to_existing: bool):
+        self.append_to_existing = append_to_existing
+        self._files_created_this_run = set()
+
+    def get_write_mode(self, output_file: str):
+        file_exists = os.path.exists(output_file)
+        if self.append_to_existing or output_file in self._files_created_this_run:
+            self._files_created_this_run.add(output_file)
+            return QgsVectorFileWriter.AppendToLayerAddFields if file_exists else QgsVectorFileWriter.CreateOrOverwriteFile
+        self._files_created_this_run.add(output_file)
+        return QgsVectorFileWriter.CreateOrOverwriteFile
+
+
 class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
     KEEP_ATTRIBUTES = 'KEEP_ATTRIBUTES'
     OUTPUT_FOLDER = 'OUTPUT_FOLDER'
+    APPEND_TO_EXISTING = 'APPEND_TO_EXISTING'
 
     def initAlgorithm(self, config = None):
         self.addParameter(
@@ -42,15 +57,26 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 self.tr('Pasta para salvar os arquivos exportados')
             )
         )
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.APPEND_TO_EXISTING,
+                self.tr('Adicionar feições a arquivos existentes (criação incremental)'),
+                defaultValue=False,
+            )
+        )
 
     def processAlgorithm(self, parameters, context, feedback):         
         outputFolderPath = self.parameterAsString(parameters, self.OUTPUT_FOLDER, context)
         keepAttributes = self.parameterAsBool(parameters, self.KEEP_ATTRIBUTES, context)
+        appendToExisting = self.parameterAsBool(parameters, self.APPEND_TO_EXISTING, context)
         inputLayers = self.parameterAsLayerList(
             parameters, self.INPUT, context)
         nInputs = len(inputLayers)
         if nInputs == 0:
             return {self.OUTPUT_FOLDER: 'Camadas vazias. Não foi possível converter os dados.'}
+
+        masacode_context = MASACODEContext(appendToExisting)
+
         conversion_factory = {
             'VEG_Floresta_A': EDGVClass(
                 masacode=10000,
@@ -58,6 +84,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'VEG_Veg_Cultivada_A': EDGVClass(
                 masacode=10001,
@@ -65,6 +92,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'VEG_Brejo_Pantano_A': EDGVClass(
                 masacode=10002,
@@ -72,6 +100,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'LOC_Area_Edificada_A': EDGVClass(
                 masacode=10003,
@@ -79,6 +108,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'LOC_Aglomerado_Rural_De_Extensao_Urbana_P': EDGVClass(
                 masacode=10003,
@@ -86,6 +116,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Point,
+                context=masacode_context,
             ),
             'LOC_Aglomerado_Rural_Isolado_P': EDGVClass(
                 masacode=10003,
@@ -93,6 +124,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Point,
+                context=masacode_context,
             ),
             'LOC_Cidade_P': EDGVClass(
                 masacode=10003,
@@ -100,6 +132,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Point,
+                context=masacode_context,
             ),
             'LOC_Vila_P': EDGVClass(
                 masacode=10003,
@@ -107,6 +140,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Point,
+                context=masacode_context,
             ),
             'HID_Massa_Dagua_A': EDGVClass(
                 masacode=10004,
@@ -114,6 +148,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'HID_Trecho_Massa_Dagua_A': EDGVClass(
                 masacode=10004,
@@ -121,29 +156,34 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'HID_Trecho_Drenagem_L': TrechoDrenagem(
                 output_file_name='River',
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.LineString,
+                context=masacode_context,
             ),
             'REL_Terreno_Exposto_A': TerrenoExposto(
                 output_file_name='Sand',
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'REL_Elemento_Fisiografico_Natural_A': ElementoFisiograficoNatural(
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.Polygon,
+                context=masacode_context,
             ),
             'TRA_Trecho_Rodoviario_L': TrechoRodoviario(
                 output_file_name='Road',
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.LineString,
+                context=masacode_context,
             ),
             'TRA_Arruamento_L': EDGVClass(
                 masacode=20004,
@@ -151,6 +191,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.LineString,
+                context=masacode_context,
             ),
             'TRA_Ponte_L': EDGVClass(
                 masacode=20005,
@@ -158,6 +199,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.LineString,
+                context=masacode_context,
             ),
             'TRA_TUNEL_L': EDGVClass(
                 masacode=20007,
@@ -165,6 +207,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.LineString,
+                context=masacode_context,
             ),
             'TRA_Trecho_Ferroviario_L': EDGVClass(
                 masacode=20006,
@@ -172,6 +215,7 @@ class ConvertEDGVtoMASACODE(QgsProcessingAlgorithm):
                 output_file_path=outputFolderPath,
                 keep_input_attributes=keepAttributes,
                 output_geom_type=QgsWkbTypes.LineString,
+                context=masacode_context,
             ),
         }
         stepSize = 100/nInputs
@@ -234,17 +278,15 @@ class AbstractEDGVClass(ABC):
     output_geom_type: int
     output_file_name: str = MISSING
     masacode: int = MISSING
+    context: MASACODEContext = None
 
     
     @abstractmethod
     def get_masacode(self, feature):
         pass
-    
+
     def __post_init__(self):
-        self.output_file = self.get_output_file()
-    
-    def get_output_file(self):
-        return os.path.join(self.output_file_path, self.output_file_name+'.shp')
+        pass
 
     def get_output_fields(self, input_layer):
         fields = QgsFields()
@@ -258,8 +300,7 @@ class AbstractEDGVClass(ABC):
     def create_output_file_writer(self, output_fields, output_file, srs):
         options = QgsVectorFileWriter.SaveVectorOptions()
         options.driverName = "ESRI Shapefile"
-        options.actionOnExistingFile = QgsVectorFileWriter.AppendToLayerAddFields if os.path.exists(
-            output_file) else QgsVectorFileWriter.CreateOrOverwriteFile
+        options.actionOnExistingFile = self.context.get_write_mode(output_file)
         vectorFileWriter = QgsVectorFileWriter.create(
             output_file,
             output_fields,
@@ -292,7 +333,7 @@ class AbstractEDGVClass(ABC):
                                    for field in output_fields]
         output_file_writer = self.create_output_file_writer(
             output_fields=output_fields,
-            output_file=self.output_file,
+            output_file=os.path.join(self.output_file_path, f'{self.output_file_name}.shp'),
             srs=input_layer.crs(),
         )
         convertLambda = lambda x: self.convertFeature(x, output_fields)
@@ -396,13 +437,11 @@ class ElementoFisiograficoNatural(AbstractEDGVClass):
                                 for field in output_fields]
         outputFileWriterDict = {
             10007: self.create_output_file_writer(
-                input_layer,
                 output_fields,
                 output_file=os.path.join(self.output_file_path, 'Mountain.shp'),
                 srs=input_layer.crs(),
             ),
             21000: self.create_output_file_writer(
-                input_layer,
                 output_fields,
                 output_file=os.path.join(self.output_file_path, 'Cliff.shp'),
                 srs=input_layer.crs(),
@@ -414,6 +453,6 @@ class ElementoFisiograficoNatural(AbstractEDGVClass):
             if feat is None:
                 continue
             outputFileWriterDict[feat['MASACODE']].addFeature(feat)
-        for code, writer in outputFileWriterDict.items():
-            del writer
+        for key in list(outputFileWriterDict.keys()):
+            outputFileWriterDict[key] = None
         return True
