@@ -8,7 +8,7 @@ from qgis.core import (QgsPointXY, QgsGeometry, QgsFeature,
                       QgsPolygon, QgsPoint)
 from qgis.gui import QgsMapTool, QgsRubberBand
 import math
-import sip
+from PyQt6 import sip
 
 class ViewshedTool(QgsMapTool):
     def __init__(self, canvas, layer, observer_height_field_name):
