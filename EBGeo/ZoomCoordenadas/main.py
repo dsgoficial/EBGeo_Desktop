@@ -2,8 +2,10 @@ from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSlot
 from qgis.gui import QgsVertexMarker
-from qgis.core import QgsCoordinateTransform, QgsProject, QgsCoordinateReferenceSystem
-from qgis.PyQt.QtWidgets import QShortcut
+from qgis.core import (QgsCoordinateTransform, QgsProject, QgsCoordinateReferenceSystem,
+                       QgsVectorLayer, QgsFeature, QgsGeometry, QgsPointXY,
+                       QgsRectangle, Qgis)
+from qgis.PyQt.QtGui import QShortcut
 
 from .zoomCoord_ui import Ui_ZoomDockWidgetBase  
 from . import mgrs  
@@ -37,6 +39,16 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
         self.SrcBox.addItem("UTM", userData="UTM")
         self.SrcBox.addItem("MGRS", userData="MGRS")
         self.SrcBox.addItem("Outros...", userData="CUSTOM")
+
+        # Botão para criar ponto(s) a partir de coordenada(s) MGRS
+        self.createPointButton = QtWidgets.QToolButton(self.dockWidgetContents)
+        self.createPointButton.setText("+P")
+        self.createPointButton.setToolTip(
+            "Criar ponto(s) a partir de MGRS (múltiplos separados por vírgula)"
+        )
+        self.horizontalLayout.insertWidget(3, self.createPointButton)
+        self.createPointButton.clicked.connect(self.create_points_from_mgrs)
+        self.mgrs_point_layer = None
 
     def closeEvent(self, event):
         # Quando o usuário fecha o dock, zera a referência no plugin
@@ -182,7 +194,86 @@ class ZoomToDockWidget(QtWidgets.QDockWidget, Ui_ZoomDockWidgetBase, FORM_CLASS)
         if self.point_marker:
             self.canvas.scene().removeItem(self.point_marker)
             self.point_marker = None
-        
+
+    def create_points_from_mgrs(self):
+        """Cria ponto(s) a partir de uma ou mais coordenadas MGRS digitadas em
+        coordTxt (múltiplas separadas por vírgula), numa camada de memória."""
+        text = self.coordTxt.text().strip()
+        if not text:
+            QtWidgets.QMessageBox.warning(
+                self, "MGRS",
+                "Digite uma ou mais coordenadas MGRS separadas por vírgula."
+            )
+            return
+
+        tokens = [t.strip() for t in text.split(',') if t.strip()]
+        created = []   # (mgrs_str, lon, lat)
+        errors = []
+        for tok in tokens:
+            try:
+                lat, lon = mgrs.toWgs(tok)
+                created.append((tok, float(lon), float(lat)))
+            except Exception as e:
+                errors.append(f"{tok}: {e}")
+
+        if not created:
+            QtWidgets.QMessageBox.warning(
+                self, "MGRS",
+                "Nenhuma coordenada MGRS válida.\n" + "\n".join(errors)
+            )
+            return
+
+        layer = self._get_or_create_mgrs_layer()
+        prov = layer.dataProvider()
+        feats = []
+        for mgrs_str, lon, lat in created:
+            f = QgsFeature(layer.fields())
+            f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(lon, lat)))
+            f.setAttribute('mgrs', mgrs_str)
+            feats.append(f)
+        prov.addFeatures(feats)
+        layer.updateExtents()
+        layer.triggerRepaint()
+
+        # Centraliza/zoom no(s) ponto(s) criado(s), convertendo para o CRS do canvas
+        srcCrs = QgsCoordinateReferenceSystem.fromEpsgId(4326)
+        destCrs = self.canvas.mapSettings().destinationCrs()
+        transform = QgsCoordinateTransform(srcCrs, destCrs, QgsProject.instance())
+        canvas_pts = [transform.transform(lon, lat) for _, lon, lat in created]
+        if len(canvas_pts) == 1:
+            self._zoom_to_point(canvas_pts[0])
+        else:
+            rect = QgsRectangle()
+            rect.setMinimal()
+            for p in canvas_pts:
+                rect.combineExtentWith(p.x(), p.y())
+            rect.scale(1.2)
+            self.canvas.setExtent(rect)
+            self.canvas.refresh()
+
+        msg = f"{len(created)} ponto(s) MGRS criado(s)."
+        if errors:
+            msg += f" {len(errors)} inválido(s): " + " | ".join(errors)
+        self.iface.messageBar().pushMessage(
+            "MGRS", msg,
+            level=Qgis.MessageLevel.Warning if errors else Qgis.MessageLevel.Success,
+            duration=5
+        )
+
+    def _get_or_create_mgrs_layer(self):
+        """Reusa a camada 'Pontos MGRS' se ainda existir no projeto; senão cria."""
+        lyr = getattr(self, 'mgrs_point_layer', None)
+        if lyr is not None and QgsProject.instance().mapLayer(lyr.id()) is not None:
+            return lyr
+        lyr = QgsVectorLayer(
+            "Point?crs=EPSG:4326&field=mgrs:string(50)",
+            "Pontos MGRS",
+            "memory"
+        )
+        QgsProject.instance().addMapLayer(lyr)
+        self.mgrs_point_layer = lyr
+        return lyr
+
 
     @pyqtSlot()
     def on_zoomToolButton_clicked(self) -> None:

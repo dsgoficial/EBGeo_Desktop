@@ -161,7 +161,7 @@ class EventFilter(QObject):
                 event.type() == QEvent.MouseButtonRelease
                 and event.button() == Qt.MouseButton.LeftButton
             )
-            or (event.type() == QEvent.MouseMove and event.button() != Qt.MouseButton.MidButton)
+            or (event.type() == QEvent.MouseMove and event.button() != Qt.MouseButton.MiddleButton)
         ):
             curPoint = (
                 self.iface.mapCanvas()

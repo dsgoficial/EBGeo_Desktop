@@ -216,6 +216,15 @@ class EBGeo(QObject):
 		from .Visibility.main import Main as Main_Visib
 		self.mainVisib = Main_Visib(iface)
 
+		self.los_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'visib.png'),
+			text=u'Linha de Visada',
+			callback=self.loadLineOfSight,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.los_action)
+
 		self.mosaic_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'mosaic.png'),
 			text=u'Gerador de Mosaicos',
@@ -500,6 +509,13 @@ class EBGeo(QObject):
 	def loadMakeFrame(self):
 		from qgis import processing
 		processing.execAlgorithmDialog('EBGeoProvider:frame')
+
+	def loadLineOfSight(self):
+		"""
+		Abre o algoritmo de Linha de Visada (perfil de visibilidade entre vértices de linhas sobre um MDE)
+		"""
+		from qgis import processing
+		processing.execAlgorithmDialog('EBGeoProvider:lineofsight')
 
 	def loadShaderTool(self):
 		"""

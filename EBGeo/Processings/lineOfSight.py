@@ -162,8 +162,17 @@ class LineOfSight(QgsProcessingAlgorithm):
             obs_pt = p_obs.geometry().asPoint()
             tgt_pt = p_tgt.geometry().asPoint()
 
-            obs_xyz = (obs_pt.x(), obs_pt.y(), p_obs["z_1"] + observer_height)
-            tgt_xyz = (tgt_pt.x(), tgt_pt.y(), p_tgt["z_1"] + target_height)
+            z_obs = self._as_float(p_obs["z_1"])
+            z_tgt = self._as_float(p_tgt["z_1"])
+            if z_obs is None or z_tgt is None:
+                if feedback:
+                    feedback.pushWarning(
+                        "Vértice sem valor de elevação (NoData) — segmento ignorado."
+                    )
+                continue
+
+            obs_xyz = (obs_pt.x(), obs_pt.y(), z_obs + observer_height)
+            tgt_xyz = (tgt_pt.x(), tgt_pt.y(), z_tgt + target_height)
 
             visible, block_xy = self.calculate_visibility(
                 obs_xyz, tgt_xyz, dem_raster, context=context, feedback=feedback
@@ -222,6 +231,16 @@ class LineOfSight(QgsProcessingAlgorithm):
         heights = [f["z_1"] for f in sampled.getFeatures()]
         return heights
 
+    def _as_float(self, value):
+        """Converte um valor de atributo (possivelmente NULL/NoData) para float,
+        ou retorna None se não for um número válido."""
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
     def curvature_refraction_correction(self, distance):
         refraction_coeff = 0.13
         earth_radius = 6371000
@@ -252,7 +271,10 @@ class LineOfSight(QgsProcessingAlgorithm):
 
         z_vals = self.sample_dem_height_processing(dem_raster, points, context, feedback)
 
-        for i, z_dem in enumerate(z_vals):
+        for i, z_dem_raw in enumerate(z_vals):
+            z_dem = self._as_float(z_dem_raw)
+            if z_dem is None:
+                continue
             t = (i + 1) / n_samples
             z_expected = z0 + t * (z1 - z0)
             distance = math.sqrt((points[i].x() - x0)**2 + (points[i].y() - y0)**2)

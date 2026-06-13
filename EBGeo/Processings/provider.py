@@ -12,6 +12,7 @@ from .simbmilLoader import SimbMilAlgorithm
 from .pointsWithKmAndName import GeradorPontosQuilometragem
 from .launchNOAA import LaunchNOAA
 from .lineOfSight import LineOfSight
+from .generateMgrsAttribute import GenerateMgrsAttribute
 class Provider(QgsProcessingProvider):
 
     def __init__(self):
@@ -28,6 +29,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(GeradorPontosQuilometragem())
         self.addAlgorithm(LaunchNOAA())
         self.addAlgorithm(LineOfSight())
+        self.addAlgorithm(GenerateMgrsAttribute())
 
     def load(self):
         ProcessingConfig.settingIcons[self.name()] = self.icon()
