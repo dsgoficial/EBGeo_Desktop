@@ -291,6 +291,7 @@ class AbstractEDGVClass(ABC):
     def get_output_fields(self, input_layer):
         fields = QgsFields()
         fields.append(QgsField('MASACODE', QMetaType.Type.Int))
+        fields.append(QgsField('name', QMetaType.Type.QString))
         if not self.keep_input_attributes:
             return fields
         for field in input_layer.fields():
@@ -318,6 +319,12 @@ class AbstractEDGVClass(ABC):
         newFeat = QgsFeature(output_fields)
         newFeat.setGeometry(feature.geometry())
         newFeat['MASACODE'] = masacode
+        nomeField = [
+            field.name() for field in feature.fields()
+            if field.name().lower() == 'nome'
+        ]
+        if nomeField:
+            newFeat['name'] = feature[nomeField[0]]
         if not self.keep_input_attributes:
             return newFeat
         for field in feature.fields():
