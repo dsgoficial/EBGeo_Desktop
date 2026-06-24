@@ -316,7 +316,11 @@ class CobterVegetacao(AbstractEDGVClass):
             197: (10001, 'Plantation'),
             1296: (10001, 'Plantation'),
             301: (10002, 'Swamp'),
-            1002: (10005, 'Sand'),
+            1000: (10005, 'Sand'),  # Terreno exposto - desconhecido
+            1001: (10005, 'Sand'),  # Terreno exposto - cascalho
+            1002: (10005, 'Sand'),  # Terreno exposto - areia
+            1003: (10005, 'Sand'),  # Terreno exposto - pedregoso
+            1004: (10005, 'Sand'),  # Terreno exposto - pavimentado
         }
 
     def get_masacode(self, feature):
@@ -365,6 +369,7 @@ class TrechoDrenagem(AbstractEDGVClass):
     def __post_init__(self):
         super().__post_init__()
         self.conversion_map = {
+            0: 21002,   # Desconhecido -> tratado como permanente
             1: 21002,   # Permanente
             3: 21003,   # Temporário
         }
