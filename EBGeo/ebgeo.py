@@ -146,14 +146,6 @@ class EBGeo(QObject):
 		self.bdgexGuiManager = BDGExGuiManager(self, self.iface, self.ebGeo, toolbar = None)
 		self.bdgexGuiManager.initGui()
 
-		self.ms_action = self.add_action(
-		 	os.path.join(os.path.dirname(__file__), 'icons', 'militarySimbology.png'),
-		 	text=u'Simbologia Militar: camadas MD33 antigas',
-		 	callback=self.loadMilitarySimbology,
-		 	parent=self.ebGeo,
-		 	add_to_menu=False,
-		 	add_to_toolbar=False)
-		self.ebGeo.addAction(self.ms_action)
 
 		self.nd_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'numericaldigitize.png'),
@@ -481,17 +473,6 @@ class EBGeo(QObject):
 		if self.mainGeocoding.pluginIsActive == False:
 			self.mainGeocoding.run()
 
-	def loadMilitarySimbology(self):
-		"""
-        Shows the Military Simbology Dock
-        """
-		from .MilitarySimbologyTools.main import Main
-		main = Main()
-		dlg = main.getFrame()
-		dlg.setGeometry(700, 500, 100, 50)
-		if dlg:
-			dlg.show()
-        
 	def loadProfileTool(self):
 		"""
         Generates terrain profile
@@ -590,13 +571,25 @@ class EBGeo(QObject):
 		if not hasattr(self, "simplifyInterface"):	
 			self.simplifyInterface = SimplifyInterface(self.iface)
 		if getattr(self.simplifyInterface, "is_active", False):
-			self.simplifyInterface.disable()
+			# segundo acionamento: volta a interface ao jeito de antes
+			self.simplifyInterface.disable(store=True)
 			self.simplifyInterface.is_active = False
 			self.simplifyInterface_action.setChecked(False)
-		else:
+			return
+		try:
 			self.simplifyInterface.enable(store=True)
-			self.simplifyInterface.is_active = True
-			self.simplifyInterface_action.setChecked(True)
+		except Exception as e:
+			# falhou no meio: desfaz o que já tinha mudado, para a interface não ficar pela metade
+			try:
+				self.simplifyInterface.disable(store=True)
+			except Exception:
+				pass
+			self.simplifyInterface.is_active = False
+			self.simplifyInterface_action.setChecked(False)
+			self.iface.messageBar().pushCritical('EBGeo', 'Simplificar Interface falhou e a interface foi restaurada: {}'.format(e))
+			return
+		self.simplifyInterface.is_active = True
+		self.simplifyInterface_action.setChecked(True)
 
 	def loadHideToolbar(self):
 		from .HideToolbar.hideToolbar import HideToolbar

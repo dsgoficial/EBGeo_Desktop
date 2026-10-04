@@ -26,6 +26,13 @@ from qgis.PyQt.QtWidgets import (
 from processing import execAlgorithmDialog
 from Protector.protector import _CloseGuard
 
+def _widgets_da_acao(action):
+    """Widgets ligados à ação: associatedWidgets() no Qt5, associatedObjects() no Qt6."""
+    if hasattr(action, 'associatedWidgets'):
+        return action.associatedWidgets()
+    return [o for o in action.associatedObjects() if isinstance(o, QWidget)]
+
+
 class SimplifyInterface:
 
     # Message levels
@@ -237,11 +244,11 @@ class SimplifyInterface:
             if not wildcard:
                 return [action]
 
-            for widget in action.associatedWidgets():
+            for widget in _widgets_da_acao(action):
                 if isinstance(widget, QToolButton):
                     return [widget.menu()] if widget.menu() else widget.actions()
 
-            for widget in action.associatedWidgets():
+            for widget in _widgets_da_acao(action):
                 if isinstance(widget, QMenu):
                     return [widget]
 
@@ -314,8 +321,9 @@ class SimplifyInterface:
                 self.log(f"Toolbar {item['name']} not found.", "warning")
                 continue
 
-            if self.mainwindow.toolBarArea(toolbar) != item["area"]:
-                self.mainwindow.addToolBar(item["area"], toolbar)
+            area = Qt.ToolBarArea(int(getattr(item["area"], "value", item["area"])))
+            if self.mainwindow.toolBarArea(toolbar) != area:
+                self.mainwindow.addToolBar(area, toolbar)
 
             toolbar.show()
             self.log(f"Toolbar {item['name']} is visible.")
@@ -329,10 +337,11 @@ class SimplifyInterface:
                 self.log(f"Panel {item['name']} not found.", "warning")
                 continue
 
-            if self.mainwindow.dockWidgetArea(panel) != item["area"]:
-                self.mainwindow.addDockWidget(item["area"], panel)
+            area = Qt.DockWidgetArea(int(getattr(item["area"], "value", item["area"])))
+            if self.mainwindow.dockWidgetArea(panel) != area:
+                self.mainwindow.addDockWidget(area, panel)
 
-            panel.setFeatures(QDockWidget.DockWidgetFeatures(item["features"]))
+            panel.setFeatures(QDockWidget.DockWidgetFeature(int(getattr(item["features"], "value", item["features"]))))
 
             if item["hidden"]:
                 panel.hide()
@@ -358,12 +367,16 @@ class SimplifyInterface:
 
         # Remove simplified toolbars
         for name in self.config["toolbars"]:
-            toolbar = self.mainwindow.findChild(QToolBar, name)
-            if not toolbar:
+            # todas as cópias: a do ciclo anterior pode ainda esperar o deleteLater
+            toolbars = self.mainwindow.findChildren(QToolBar, name)
+            if not toolbars:
                 self.log(f"Toolbar {name} not found.", "warning")
                 continue
-            self.mainwindow.removeToolBar(toolbar)
-            toolbar.deleteLater()
+            for toolbar in toolbars:
+                self.mainwindow.removeToolBar(toolbar)
+                toolbar.hide()
+                toolbar.setParent(None)
+                toolbar.deleteLater()
             self.log(f"Toolbar {name} removed.")
 
         # Restore layout
