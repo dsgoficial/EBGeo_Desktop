@@ -175,6 +175,8 @@ class FerramentaLinha(_Base):
         for p in pts:
             self._banda().addPoint(QgsPointXY(p), False)
         self._banda().updatePosition()
+        # o reset() esconde a banda e o addPoint não a mostra de volta (medido no QGIS 4.0.0)
+        self._banda().setVisible(len(pts) >= 2)
         self._banda().update()
 
     def _aceita(self, p):

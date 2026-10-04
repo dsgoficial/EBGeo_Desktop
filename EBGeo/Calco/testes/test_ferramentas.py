@@ -73,6 +73,24 @@ class TesteFerramentas(unittest.TestCase):
         self.assertAlmostEqual(f['symbol_spacing_km'], 3 * f['symbol_size_km'], places=3)
         self.assertEqual(f['symbol_code'], '290199')
 
+    def test_preview_aparece_ao_mover(self):
+        """Pior caso medido: sem o setVisible a banda tinha 2 pontos e 0 pixel na tela."""
+        ft = FerramentaLinha(self.canvas, 'boundary')
+        self.canvas.setMapTool(ft)
+        self.canvas.show()
+        _clique(self.canvas, ft, 100, 300)
+        ev = QgsMapMouseEvent(self.canvas, QEvent.Type.MouseMove, QPoint(400, 200), Qt.MouseButton.NoButton,
+                              Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+        ft.canvasMoveEvent(ev)
+        self.assertTrue(ft.banda.isVisible())
+        self.assertEqual(ft.banda.numberOfVertices(), 2)
+        img = self.canvas.grab().toImage()
+        vermelho = sum(1 for x in range(0, img.width(), 2) for y in range(0, img.height(), 2)
+                       if img.pixelColor(x, y).red() > 200 and img.pixelColor(x, y).green() < 80)
+        self.assertGreater(vermelho, 10)
+        ft.cancelar()
+        self.assertFalse(ft.banda.isVisible())
+
     def test_linha_com_um_ponto_nao_grava(self):
         ft = FerramentaLinha(self.canvas, 'boundary')
         antes = self._contar('boundary')
