@@ -241,7 +241,7 @@ def colunas_do_bitmap_web(tipo, props, png_b64, png_largura=None, png_altura=Non
     TAMBÉM o svg (renderizar): o Web redesenha ao abrir todo bitmap com bitmapVersion menor
     que 4, e um PNG de gerador antigo pode ser outro desenho (medido na fixture 03: um símbolo
     com amplificadores de texto tem 475 px lógicos no PNG e 443 no gerador atual). O raster
-    fica como reserva, e é o único caminho do símbolo de engenharia enquanto o motor não o tiver.
+    fica como reserva.
     """
     razao = float(props.get('pixelRatio') or 1)
     largura = props.get('width') or (png_largura / razao if png_largura else None)

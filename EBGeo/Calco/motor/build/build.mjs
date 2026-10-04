@@ -84,6 +84,14 @@ const entradaComum = {
     // O QJSEngine do Qt 6.8 não entende espalhamento de objeto nem campos de classe: ES2016.
     transform: { target: 'es2016' },
     logLevel: 'warn',
+    // O gerador de engenharia importa engineering.css (estilo do painel): fora do navegador o
+    // CSS não serve, e o módulo vira vazio.
+    plugins: [{
+        name: 'css-vazio',
+        load(id) {
+            return id.endsWith('.css') ? { code: 'export {};', moduleType: 'js' } : null;
+        },
+    }],
 };
 
 // O milsymbol é MIT: o aviso de licença acompanha o código. Os comentários do fonte do Web

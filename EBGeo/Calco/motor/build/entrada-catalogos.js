@@ -11,6 +11,48 @@ import { getExtensionNumbers, hasExtensions } from '@js/military_tools/military_
 import { COORDINATION_POINTS_CATALOG, getAvailableTextFields } from '@js/military_tools/coordination_measure_tool/coordination_points_catalog.js';
 import { ECHELON_CODES, SUPPLY_CLASSES, UI_DATA } from '@js/military_tools/coordination_measure_tool/coordination_measure_constants.js';
 import { FAMILIAS_DE_ESCALAO, ESCALAO_PADRAO } from '@js/military_tools/coordination_measure_tool/familias-de-escalao.js';
+import { ENGINEERING_CATALOG } from '@js/military_tools/engineering_symbol_tool/engineering_catalog.js';
+import { engineeringFields } from '@js/military_tools/engineering_symbol_tool/engineering_fields.js';
+import { engineeringDraft } from '@js/military_tools/engineering_symbol_tool/engineering_generator.js';
+
+// Formulário de cada item de engenharia (engineering_fields.js), com o rascunho padrão de
+// engineeringDraft. A validação de verdade é a função errorsFor, exposta no bundle
+// (Motor.engenharia_erros); aqui vão as regras como dado, para a interface marcar o campo.
+function engenharia() {
+    const itens = ENGINEERING_CATALOG.map((item) => {
+        const f = engineeringFields[item.number] || { fields: [] };
+        return {
+            numero: item.number,
+            codigo: String(item.number),
+            titulo: item.title,
+            variantes: item.variants.map((v, i) => ({ indice: i, rotulo: v.label, ancora: v.anchor })),
+            rotuloVariante: f.variant || null,
+            fixo: f.fixed || '',
+            extra: f.extra || '',
+            campos: f.fields.map((c) => ({
+                chave: c.key, rotulo: c.label, tipo: c.kind, padrao: c.value, ajuda: c.help || '',
+                opcoes: c.options ? c.options.map(([valor, rotulo]) => ({ valor, rotulo })) : undefined,
+                quando: c.when ? { campo: c.when[0], valor: c.when[1] } : undefined,
+            })),
+            rascunhoPadrao: engineeringDraft(item.number),
+        };
+    });
+    return {
+        itens,
+        totalVariantes: itens.reduce((n, i) => n + i.variantes.length, 0),
+        validacao: {
+            inteiro: '^(?:\d+|\?)?$',
+            decimal: '^(?:\d+(?:[.,]\d+)?|\?)?$',
+            textoMaximo: 40,
+            regras: [
+                { item: 16, campo: 'maximum', regra: 'minimum <= maximum', mensagem: 'O gabarito máximo deve ser igual ou maior que o mínimo.' },
+                { item: 17, campo: 'totalWidth', regra: 'roadWidth <= totalWidth', mensagem: 'A largura total não pode ser menor que a largura da pista.' },
+                { item: 18, campo: 'totalWidth', regra: 'roadWidth <= totalWidth', mensagem: 'A largura total não pode ser menor que a largura da pista.' },
+            ],
+            rampa: 'marcas: 0 abaixo de 5% ou sem valor; 1 até 7%; 2 até 10%; 3 até 14%; 4 acima de 14%',
+        },
+    };
+}
 
 function entradaDeTabela(e) {
     const saida = {
@@ -102,6 +144,7 @@ export function montarCatalogos() {
             barraEngajamento: ENGAGEMENT_BAR_DATA,
             porConjunto,
         },
+        engenharia: engenharia(),
         medida: {
             lista: UI_DATA.pointsList,
             subtiposNucleo: UI_DATA.echelonSubtypes,

@@ -10,6 +10,25 @@ import { generateDeclinationSvg } from '@js/military_tools/declination_tool/decl
 import { calculateMagneticDeclination } from '@utils/geomagnetic/wmm_calculator.js';
 import { calculateMeridianConvergence } from '@utils/geomagnetic/meridian_convergence.js';
 
+import { engineeringSvg, EngineeringSymbolGenerator } from '@js/military_tools/engineering_symbol_tool/engineering_generator.js';
+
+async function engenharia(p) {
+    try {
+        const d = engineeringSvg(p.pointCode, p);
+        const r = await new EngineeringSymbolGenerator().generate(p.pointCode, p);
+        // O PNG que o Web registra no mapa (nitidez 2), em base64, para a comparação de pixels.
+        const png = await new Promise((ok) => {
+            const leitor = new FileReader();
+            leitor.onload = () => ok(String(leitor.result).split(',')[1]);
+            leitor.readAsDataURL(r.blob);
+        });
+        return { svg: d.svg, larguraDesenho: d.width, alturaDesenho: d.height, largura: r.width, altura: r.height,
+            iconOffset: r.iconOffset, png, pixelRatio: r.pixelRatio };
+    } catch (erro) {
+        return { erro: String(erro && erro.message || erro) };
+    }
+}
+
 async function declinacao(p) {
     return { svg: generateDeclinationSvg(p.declination, p.convergence, p.fillColor) };
 }
@@ -83,4 +102,4 @@ function baseline() {
     return saida;
 }
 
-window.paridadeWeb = { simbolo, medida, declinacao, wmm, baseline };
+window.paridadeWeb = { simbolo, medida, engenharia, declinacao, wmm, baseline };

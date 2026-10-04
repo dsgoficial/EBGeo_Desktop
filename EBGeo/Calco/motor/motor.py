@@ -5,7 +5,7 @@ EBGeo Web empacotados por build/build.mjs) num QJSEngine, uma vez por sessão, e
 
     Motor.instancia().simbolo_militar(props)  -> dict
     Motor.instancia().medida(props)           -> dict
-    Motor.instancia().engenharia(props)       -> NotImplementedError (pendência, ver README)
+    Motor.instancia().engenharia(props)       -> dict (símbolo de engenharia, C 5-36)
     Motor.instancia().catalogos()             -> dict (catalogos.json)
 
 `props` usa os NOMES DE PROPRIEDADE do EBGeo Web (sidc, fillColor, uniqueDesignation,
@@ -20,8 +20,12 @@ import os
 import threading
 
 try:  # QGIS 4 (Qt 6); o shim qgis.PyQt não traz QtQml.
+    from PyQt6.QtCore import QObject, pyqtSlot
+    from PyQt6.QtGui import QFont, QFontMetricsF
     from PyQt6.QtQml import QJSEngine, QJSValue
 except ImportError:  # pragma: no cover - QGIS 3 (Qt 5)
+    from PyQt5.QtCore import QObject, pyqtSlot
+    from PyQt5.QtGui import QFont, QFontMetricsF
     from PyQt5.QtQml import QJSEngine, QJSValue
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
@@ -40,6 +44,41 @@ def _mensagem_de_erro(valor):
         if not p.isUndefined() and p.toString():
             partes.append('{}: {}'.format(prop, p.toString()[:500]))
     return ' | '.join(partes)
+
+
+class MedidorTexto(QObject):
+    """
+    Medição de texto que o gerador de engenharia pede ao navegador (getComputedTextLength e
+    getBBox), injetada no QJSEngine como globalThis.__ebgeoMedidor. Mede com a fonte em 2048 px
+    (uma unidade por unidade de desenho da Arial) e sem hinting, e escala para o tamanho pedido:
+    é o advance linear que o Chromium usa no SVG. Devolve [advance, tinta à esquerda, tinta à
+    direita, ascent, descent]; o DOM mínimo arredonda ascent e descent como o Chromium.
+    """
+
+    REFERENCIA = 2048
+
+    def __init__(self):
+        super().__init__()
+        self._metricas = {}
+
+    def _de(self, familia):
+        m = self._metricas.get(familia)
+        if m is None:
+            fonte = QFont(familia or 'Arial')
+            fonte.setPixelSize(self.REFERENCIA)
+            fonte.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+            fonte.setKerning(True)
+            m = self._metricas[familia] = QFontMetricsF(fonte)
+        return m
+
+    @pyqtSlot(str, str, float, result='QVariantList')
+    def medir(self, texto, familia, tamanho):
+        m = self._de(familia)
+        k = float(tamanho) / self.REFERENCIA
+        if not texto:
+            return [0.0, 0.0, 0.0, m.ascent() * k, m.descent() * k]
+        tinta = m.tightBoundingRect(texto)
+        return [m.horizontalAdvance(texto) * k, tinta.left() * k, tinta.right() * k, m.ascent() * k, m.descent() * k]
 
 
 class Motor:
@@ -66,6 +105,9 @@ class Motor:
             raise ErroMotor('Bundle do motor não encontrado: {}. Gere-o com motor/build/build.mjs.'.format(
                 os.path.basename(caminho_bundle)))
         self._engine = QJSEngine()
+        self._medidor = MedidorTexto()
+        QJSEngine.setObjectOwnership(self._medidor, QJSEngine.ObjectOwnership.CppOwnership)
+        self._engine.globalObject().setProperty('__ebgeoMedidor', self._engine.newQObject(self._medidor))
         with open(caminho_bundle, encoding='utf-8') as f:
             codigo = f.read()
         r = self._engine.evaluate(codigo, os.path.basename(caminho_bundle))
@@ -115,9 +157,22 @@ class Motor:
         return self._chamar('gerarMedida', props)
 
     def engenharia(self, props):
-        raise NotImplementedError(
-            'Símbolos de engenharia ainda não estão no motor: o gerador do Web monta o desenho com '
-            'DOMParser e mede texto e caixas com getComputedTextLength/getBBox (ver motor/build/README.md).')
+        """Símbolo de engenharia por pointCode (número do item) e engineering {variant, values}."""
+        return self._chamar('gerarEngenharia', props)
+
+    def engenharia_rascunho(self, codigo, dados=None):
+        """engineeringDraft do Web: padrões do item, campos permitidos, texto cortado em 40."""
+        r = self._api.property('rascunhoEngenharia').call([str(codigo), self._para_js(dados or {})])
+        if r.isError():
+            raise ErroMotor(_mensagem_de_erro(r))
+        return self._converter(r)
+
+    def engenharia_erros(self, codigo, valores):
+        """errorsFor do Web: [{key, message}] dos campos inválidos do formulário."""
+        r = self._api.property('errosEngenharia').call([str(codigo), self._para_js(valores or {})])
+        if r.isError():
+            raise ErroMotor(_mensagem_de_erro(r))
+        return self._converter(r)
 
     def svg_milsymbol_bruto(self, sidc, opcoes=None):
         """milsymbol sem o pós-processamento brasileiro (pior caso dos testes, depuração)."""

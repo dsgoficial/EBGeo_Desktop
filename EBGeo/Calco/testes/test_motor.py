@@ -157,6 +157,44 @@ def casos_medida():
     return casos
 
 
+def casos_engenharia():
+    """As 34 variantes com os valores padrão, mais valores que exercitam texto, fundo e acesso."""
+    itens = Motor.instancia().catalogos()['engenharia']['itens']
+    casos = [('{} v{} {}'.format(it['codigo'], v['indice'], v['rotulo']),
+              {'pointCode': it['codigo'], 'engineering': {'variant': v['indice'], 'values': {}}})
+             for it in itens for v in it['variantes']]
+
+    def add(nome, codigo, valores, variante=0, **extra):
+        casos.append((nome, dict({'pointCode': codigo, 'engineering': {'variant': variante, 'values': valores}}, **extra)))
+
+    for inc in ('3', '9', '12', '20', '?'):
+        add('5 rampa ' + inc, '5', {'inclination': inc})
+    add('2 fundo', '2', {'order': '15', 'fillBackground': True})
+    add('7 curvas', '7', {'count': '3', 'radius': '12,5'})
+    add('8 completo', '8', {'order': '12', 'wheelsTwo': '150', 'wheelsOne': '1000', 'clearance': '4,5',
+                            'length': '1250', 'width': '12,5', 'railway': True, 'underClearance': True,
+                            'underLength': True, 'underWidth': True, 'fillBackground': True})
+    add('8 textos longos', '8', {'order': '123456789', 'length': '123456789012', 'width': '99,99'})
+    add('9 fundo', '9', {'class': '100', 'order': '7', 'fillBackground': True})
+    add('9 texto vazio', '9', {'class': ''})
+    add('13 acesso nos dois', '13', {'access': 'both', 'speed': '1,5', 'material': 'R'})
+    add('13 acesso à direita', '13', {'access': 'right', 'type': 'P'}, variante=1)
+    add('14 acesso nos dois', '14', {'access': 'both', 'weight': '12,5', 'class': '100', 'order': '123'})
+    add('14 sem acesso', '14', {'access': 'none'})
+    add('15 larguras', '15', {'width': '3,5', 'length': '1200'})
+    add('16 gabaritos iguais', '16', {'minimum': '3,5', 'maximum': '3,5'})
+    add('16 gabaritos diferentes', '16', {'minimum': '3', 'maximum': '5,25'})
+    add('17 portal', '17', {'roadWidth': '4,5', 'totalWidth': '7', 'clearance': '5'})
+    add('18 túnel', '18', {'order': '2', 'length': '1500', 'roadWidth': '6', 'totalWidth': '8'})
+    add('19 altura ?', '19', {'height': '?'})
+    add('20 permanente', '20', {'foliage': 'permanent'}, variante=1)
+    add('21 permanente', '21', {'foliage': 'permanent'}, variante=1)
+    add('27 fundo', '27', {'fillBackground': True})
+    add('28 fundo e cor', '28', {'fillBackground': True}, fillColor='#AA0000')
+    add('9 cor', '9', {}, fillColor='#0055AA')
+    return casos
+
+
 def casos_declinacao():
     return [
         {'declination': -21.25, 'convergence': 0.62, 'fillColor': '#0077CC'},
@@ -213,6 +251,7 @@ def referencia_web():
                     '--apenas-paridade'], check=True, capture_output=True, text=True)
     lista = ([{'tipo': 'simbolo', 'props': p} for _n, p in casos_simbolo()]
              + [{'tipo': 'medida', 'props': p} for _n, p in casos_medida()]
+             + [{'tipo': 'engenharia', 'props': p} for _n, p in casos_engenharia()]
              + [{'tipo': 'declinacao', 'props': p} for p in casos_declinacao()]
              + [{'tipo': 'wmm', 'props': p} for p in casos_wmm()])
     entrada = os.path.join(pasta, 'casos.json')
@@ -232,6 +271,7 @@ def referencia_web():
     ref = {
         'simbolo': [next(res) for _ in casos_simbolo()],
         'medida': [next(res) for _ in casos_medida()],
+        'engenharia': [next(res) for _ in casos_engenharia()],
         'declinacao': [next(res) for _ in casos_declinacao()],
         'wmm': [next(res) for _ in casos_wmm()],
         'baseline': dados['baseline'],
@@ -526,6 +566,267 @@ class TestMedida(unittest.TestCase):
             itens.append((r['svg'], nome.replace('catálogo ', '')))
         arq = grade(itens, os.path.join(SAIDA, 'grade_medidas.png'), celula=130, colunas=12)
         print('\n[render] ' + arq)
+
+
+def view_box(svg):
+    import re
+    raiz = re.search(r'<svg\b[^>]*>', svg).group(0)
+    return [float(v) for v in re.search(r'viewBox="([^"]+)"', raiz).group(1).split()]
+
+
+def raster_no_espaco_do_usuario(svg, k=3, margem=30, largura=300, altura=260):
+    """Rasteriza o SVG com a unidade do desenho fixa (k px) e a origem fixa: dois SVGs do mesmo
+    desenho com viewBox um pouco diferentes caem pixel sobre pixel."""
+    x, y, w, h = view_box(svg)
+    img = QImage(QSize(largura * k, altura * k), QImage.Format.Format_ARGB32)
+    img.fill(0)
+    r = QSvgRenderer(QByteArray(svg.encode('utf-8')))
+    p = QPainter(img)
+    r.render(p, QRectF((x + margem) * k, (y + margem) * k, w * k, h * k))
+    p.end()
+    return r.isValid(), img
+
+
+def _alfa(img):
+    img = img.convertToFormat(QImage.Format.Format_ARGB32)
+    largura, altura = img.width(), img.height()
+    bits = img.constBits()
+    bits.setsize(img.sizeInBytes())
+    dados = bytes(bits)
+    passo = img.bytesPerLine()
+    return [dados[y * passo + 3:y * passo + 4 * largura:4] for y in range(altura)]
+
+
+def diferenca_de_tinta(a, b, limiar=96, folga=0):
+    """(pixels que diferem, pixels de tinta na união). Com folga=1, um pixel de um lado só conta
+    se o outro não tiver tinta em nenhum vizinho a 1 px (absorve o serrilhado entre renderizadores)."""
+    A, B = _alfa(a), _alfa(b)
+    h, w = min(len(A), len(B)), min(len(A[0]), len(B[0]))
+
+    def tem(M, x, y):
+        for yy in range(max(0, y - folga), min(h, y + folga + 1)):
+            linha = M[yy]
+            for xx in range(max(0, x - folga), min(w, x + folga + 1)):
+                if linha[xx] > limiar:
+                    return True
+        return False
+    dif = uniao = 0
+    for y in range(h):
+        la, lb = A[y], B[y]
+        for x in range(w):
+            ta, tb = la[x] > limiar, lb[x] > limiar
+            if ta or tb:
+                uniao += 1
+                if ta != tb and not (folga and ((ta and tem(B, x, y)) or (tb and tem(A, x, y)))):
+                    dif += 1
+    return dif, uniao
+
+
+class TestEngenharia(unittest.TestCase):
+    """Os 23 itens / 34 variantes do C 5-36 pelo gerador do Web sobre o DOM mínimo."""
+
+    # Limites. O texto é a única fonte de diferença entre o Chromium e o Qt: (a) a caixa do
+    # texto no Chromium soma ao advance a tinta do glifo HINTADO em tamanho pequeno (medido:
+    # '4 / V / ? / Y' a 21 px tem caixa de 104,50 e advance de 103,52), e o Qt mede sem hinting,
+    # então o viewBox pode diferir até cerca de 1 unidade; (b) largura e altura lógicas são esse
+    # viewBox × 0,7 mais o arredondamento do canvas do Web (até 0,5 px); (c) a tinta, rasterizada
+    # pelo MESMO renderizador no MESMO espaço do desenho, só muda onde o texto foi reduzido a
+    # data-max-width com advances que diferem em centésimos. Valores finais conferidos nas
+    # medidas impressas pelo teste.
+    LIMITE_CAIXA = 1.5
+    LIMITE_TAMANHO = 1.6
+    LIMITE_ANCORA = 1.1
+    LIMITE_TINTA = 0.01
+
+    @classmethod
+    def setUpClass(cls):
+        cls.motor = Motor.instancia()
+
+    def test_34_variantes_validas_no_qsvgrenderer(self):
+        cat = self.motor.catalogos()['engenharia']
+        self.assertEqual(len(cat['itens']), 23)
+        self.assertEqual(cat['totalVariantes'], 34)
+        validas, ruins, itens = 0, [], []
+        for nome, props in casos_engenharia()[:34]:
+            r = self.motor.engenharia(props)
+            ok, img = render_svg(r['svg'], 160, 160)
+            if ok and pixels_tinta(img, 2) > 0 and not r['avisos']:
+                validas += 1
+            else:
+                ruins.append((nome, r['avisos']))
+            itens.append((r['svg'], nome))
+        print('\n[engenharia] {} de 34 variantes com SVG válido e tinta no QSvgRenderer'.format(validas))
+        grade(itens, os.path.join(SAIDA, 'grade_engenharia.png'), celula=150, colunas=7)
+        self.assertEqual(ruins, [])
+
+    def _comparar(self, nosso, web):
+        vb_n, vb_w = view_box(nosso['svg']), view_box(web['svg'])
+        caixa = max(abs(a - b) for a, b in zip(vb_n, vb_w))
+        tam = max(abs(nosso['largura'] - web['largura']), abs(nosso['altura'] - web['altura']))
+        anc = max(abs(a - b) for a, b in zip(nosso['iconOffset'], web['iconOffset']))
+        _ok, a = raster_no_espaco_do_usuario(nosso['svg'])
+        _ok, b = raster_no_espaco_do_usuario(web['svg'])
+        dif, uniao = diferenca_de_tinta(a, b)
+        return caixa, tam, anc, dif / max(1, uniao)
+
+    def _chrome_contra_qt(self, nosso, web):
+        """Informativo: PNG do Chromium contra o nosso SVG rasterizado pelo Qt no MESMO tamanho."""
+        chrome = QImage.fromData(base64.b64decode(web['png']))
+        qt = QImage(chrome.size(), QImage.Format.Format_ARGB32)
+        qt.fill(0)
+        p = QPainter(qt)
+        QSvgRenderer(QByteArray(nosso['svg'].encode('utf-8'))).render(p, QRectF(0, 0, chrome.width(), chrome.height()))
+        p.end()
+        dif, uniao = diferenca_de_tinta(chrome, qt, folga=1)
+        return chrome, dif / max(1, uniao)
+
+    def test_paridade_com_o_web(self):
+        ref = referencia_web()
+        if ref is None:
+            self.skipTest('EBGEO_WEB ou node ausente')
+        casos = casos_engenharia()
+        linhas, falhas, iguais = [], [], 0
+        piores = [0, 0, 0, 0, 0]
+        mosaico = []
+        for (nome, props), web in zip(casos, ref['engenharia']):
+            self.assertNotIn('erro', web, nome)
+            nosso = self.motor.engenharia(props)
+            if nosso['svg'] == web['svg']:
+                iguais += 1
+            m = self._comparar(nosso, web)
+            chrome, dif_chrome = self._chrome_contra_qt(nosso, web)
+            m = m + (dif_chrome,)
+            piores = [max(a, b) for a, b in zip(piores, m)]
+            linha = '{:<34} caixa {:.3f} tamanho {:.2f} âncora {:.2f} tinta {:.4f} (Chromium x Qt {:.4f})'.format(nome, *m)
+            linhas.append(linha)
+            if (m[0] > self.LIMITE_CAIXA or m[1] > self.LIMITE_TAMANHO or m[2] > self.LIMITE_ANCORA
+                    or m[3] > self.LIMITE_TINTA):
+                falhas.append(linha)
+            mosaico.append((chrome, nosso['svg'], nome))
+        print('\n[engenharia] paridade com o Web em {} casos: SVG idêntico byte a byte {}; pior caixa {:.3f} un., '
+              'pior tamanho {:.2f} px, pior âncora {:.2f} px, pior tinta {:.4f}, pior Chromium x Qt {:.4f}'.format(
+                  len(casos), iguais, *piores))
+        for linha in linhas:
+            print('  ' + linha)
+        self._mosaico_chrome_qt(mosaico)
+        self.assertEqual(falhas, [])
+
+    def _mosaico_chrome_qt(self, itens, colunas=4):
+        """Chromium (PNG do Web) e Qt (nosso SVG) no mesmo tamanho, lado a lado."""
+        lado = 150
+        linhas = (len(itens) + colunas - 1) // colunas
+        img = QImage(QSize(colunas * 2 * lado, linhas * (lado + 14)), QImage.Format.Format_ARGB32)
+        img.fill(QColor(255, 255, 255))
+        p = QPainter(img)
+        p.setFont(QFont('Arial', 7))
+        for k, (chrome, svg, nome) in enumerate(itens):
+            x0, y0 = (k % colunas) * 2 * lado, (k // colunas) * (lado + 14)
+            esc = min((lado - 8) / max(1, chrome.width()), (lado - 8) / max(1, chrome.height()))
+            w, h = chrome.width() * esc, chrome.height() * esc
+            p.drawImage(QRectF(x0 + 4, y0 + 4, w, h), chrome)
+            QSvgRenderer(QByteArray(svg.encode('utf-8'))).render(p, QRectF(x0 + lado + 4, y0 + 4, w, h))
+            p.setPen(QColor(0, 0, 0))
+            p.drawText(QRectF(x0, y0 + lado - 2, 2 * lado, 14), Qt.AlignmentFlag.AlignHCenter,
+                       'Chromium | Qt: ' + nome[:30])
+            p.setPen(QColor(220, 220, 220))
+            p.drawRect(x0, y0, 2 * lado - 1, lado + 13)
+        p.end()
+        arq = os.path.join(SAIDA, 'engenharia_chromium_qt.png')
+        img.save(arq)
+        print('[render] ' + arq)
+
+    def test_pior_caso_reprova(self):
+        """A régua tem de reprovar: (1) sem o medidor de texto do Qt; (2) o desenho real sem uma parte."""
+        ref = referencia_web()
+        if ref is None:
+            self.skipTest('EBGEO_WEB ou node ausente')
+        casos = casos_engenharia()
+        indice = {n: i for i, (n, _p) in enumerate(casos)}
+        # Alvos onde o texto DECIDE o desenho: é o extremo da caixa (26, 15, 16, 18, 8 completo)
+        # ou é reduzido a data-max-width (8 textos longos, 14 acesso). Onde o texto fica no miolo
+        # do desenho, trocar a fonte muda menos que a tolerância e a régua, por construção, aceita.
+        alvos = ('26 v0 Exemplo', '15 larguras', '16 gabaritos diferentes', '18 túnel', '8 completo',
+                 '8 textos longos', '14 acesso nos dois')
+        # (1) Medidor na fonte errada (máquina sem Arial, caindo em serifada): a régua tem de
+        # reprovar os itens cujo texto define a caixa ou é reduzido a data-max-width.
+        from Calco.motor.motor import MedidorTexto, QJSValue
+
+        class MedidorErrado(MedidorTexto):
+            def _de(self, familia):
+                return super()._de('Times New Roman')
+
+        certos = [self.motor.engenharia(p) for _n, p in casos]
+        g = self.motor._engine.globalObject()
+        original = g.property('__ebgeoMedidor')
+        errado = MedidorErrado()
+        g.setProperty('__ebgeoMedidor', self.motor._engine.newQObject(errado))
+        try:
+            reprovados, mudaram, reprovados_todos = [], 0, 0
+            for (nome, props), web, certo in zip(casos, ref['engenharia'], certos):
+                errado_ = self.motor.engenharia(props)
+                if errado_['svg'] == certo['svg']:
+                    continue
+                mudaram += 1
+                m = self._comparar(errado_, web)
+                if m[0] > self.LIMITE_CAIXA or m[1] > self.LIMITE_TAMANHO or m[3] > self.LIMITE_TINTA:
+                    reprovados_todos += 1
+                    if nome in alvos:
+                        reprovados.append(nome)
+            # Informativo: sem medidor algum, a estimativa de 0,556 fs por caractere é a largura
+            # exata dos algarismos na Arial, e a régua só acusa os textos com letras.
+            g.setProperty('__ebgeoMedidor', QJSValue())
+            sem = [nome for nome in alvos
+                   if self._comparar(self.motor.engenharia(casos[indice[nome]][1]), ref['engenharia'][indice[nome]])[0]
+                   > self.LIMITE_CAIXA]
+        finally:
+            g.setProperty('__ebgeoMedidor', original)
+        print('\n[engenharia] pior caso medidor em Times: alvos reprovados {} de {}; no geral, {} de {} casos que '
+              'mudaram; sem medidor (informativo): {} de {} alvos'.format(
+                  len(reprovados), len(alvos), reprovados_todos, mudaram, len(sem), len(alvos)))
+        self.assertEqual(len(reprovados), len(alvos))
+        # (2) A saída real degradada: o zigue-zague direito do acesso difícil do vau some.
+        import re
+        nome = '13 acesso nos dois'
+        nosso = self.motor.engenharia(casos[indice[nome]][1])
+        degradado = dict(nosso, svg=re.sub(r'<path data-part="ford-access-right"[^>]*/>', '', nosso['svg'], count=1))
+        self.assertNotEqual(degradado['svg'], nosso['svg'])
+        m = self._comparar(degradado, ref['engenharia'][indice[nome]])
+        print('[engenharia] pior caso sem o zigue-zague direito: tinta {:.4f}'.format(m[3]))
+        self.assertGreater(m[3], self.LIMITE_TINTA)
+
+    def test_formulario(self):
+        cat = self.motor.catalogos()['engenharia']
+        item8 = next(i for i in cat['itens'] if i['codigo'] == '8')
+        self.assertEqual(item8['rascunhoPadrao']['values']['order'], '3')
+        self.assertTrue(any(c['tipo'] == 'checkbox' for c in item8['campos']))
+        r = self.motor.engenharia_rascunho('13', {'variant': 9, 'values': {'type': 'X', 'order': 'a' * 50}})
+        self.assertEqual(r['variant'], 0)            # variante inexistente volta a 0
+        self.assertEqual(r['values']['type'], 'V')  # opção fora da lista é ignorada
+        self.assertEqual(len(r['values']['order']), 40)
+        self.assertEqual(self.motor.engenharia_erros('16', {'width': '4', 'minimum': '5', 'maximum': '4'})[0]['key'],
+                         'maximum')
+        self.assertEqual(self.motor.engenharia_erros('6', {'radius': '-2'})[0]['key'], 'radius')
+        self.assertEqual(self.motor.engenharia_erros('6', {'radius': '2,5'}), [])
+
+    def test_ponte_para_colunas(self):
+        """simbolos.renderizar grava as colunas do calco a partir de point_code e engineering (JSON)."""
+        from Calco import simbolos
+        atributos = {'point_code': '9', 'engineering': json.dumps({'variant': 0, 'values': {'class': '60', 'order': '12'}}),
+                     'fill_color': '#AA0000'}
+        col, r = simbolos.renderizar('engineering_symbol', atributos, detalhes=True)
+        svg = simbolos.svg_de_coluna(col['svg'])
+        self.assertIn('>60</text>', svg)
+        self.assertIn('color="#AA0000"', svg)
+        self.assertEqual(col['largura_px'], r['largura'])
+        self.assertEqual(col['svg_assinatura'], simbolos.assinatura('engineering_symbol', atributos))
+
+    def test_desempenho(self):
+        casos = casos_engenharia()
+        t = time.perf_counter()
+        for k in range(200):
+            self.motor.engenharia(casos[k % len(casos)][1])
+        dt = time.perf_counter() - t
+        print('\n[desempenho] 200 símbolos de engenharia: {:.2f} s ({:.2f} ms cada)'.format(dt, dt * 5))
 
 
 class TestDeclinacao(unittest.TestCase):

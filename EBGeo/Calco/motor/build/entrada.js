@@ -15,6 +15,10 @@ import { fitDrawSize } from '@js/military_tools/svg-to-png.js';
 import { SYMBOL_BITMAP_PIXEL_RATIO } from '@js/layers/bitmap-version.js';
 import { CoordinationMeasureGenerator, iconOffsetFor } from '@js/military_tools/coordination_measure_tool/coordination_measure_generator.js';
 import { codigoDesenhavel } from '@js/military_tools/coordination_measure_tool/familias-de-escalao.js';
+import { engineeringSvg, engineeringDraft, engineeringItem } from '@js/military_tools/engineering_symbol_tool/engineering_generator.js';
+import { errorsFor } from '@js/military_tools/engineering_symbol_tool/engineering_drawing.js';
+import { rampChevronCount } from '@js/military_tools/engineering_symbol_tool/engineering_fields.js';
+import { instalarDomTemporario } from './dom-minimo.js';
 
 // ---------------------------------------------------------------------------------------------
 // Correção de texto para o QSvgRenderer
@@ -250,6 +254,60 @@ export function gerarMedida(props) {
         valido: true,
         avisos: colherAvisos(),
     };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Símbolo de engenharia: engineeringSvg do Web, INTACTO, sobre o DOM mínimo (dom-minimo.js),
+// e o tamanho do generate() sem o canvas
+// ---------------------------------------------------------------------------------------------
+
+export function gerarEngenharia(props) {
+    props = props || {};
+    colherAvisos();
+    const codigo = props.pointCode;
+    const desfazer = instalarDomTemporario();
+    let d;
+    try {
+        d = engineeringSvg(codigo, props);
+    } finally {
+        desfazer();
+    }
+    // EngineeringSymbolGenerator.generate: convertSvgToPngBlob(svg, round(w × nitidez), round(h × nitidez)).
+    const nitidez = SYMBOL_BITMAP_PIXEL_RATIO;
+    const natural = tamanhoNatural(d.svg);
+    const desenho = fitDrawSize(natural.width, natural.height,
+        Math.max(1, Math.round(d.width * nitidez)), Math.max(1, Math.round(d.height * nitidez)));
+    const iconOffset = d.iconOffset;
+    return {
+        svg: d.svg,
+        svgWeb: d.svg,
+        largura: desenho.width / nitidez,
+        altura: desenho.height / nitidez,
+        // anchor 'center': o deslocamento do centro é o próprio iconOffset.
+        ancoraX: Math.round(iconOffset[0] * 100) / 100 || 0,
+        ancoraY: Math.round(iconOffset[1] * 100) / 100 || 0,
+        anchor: 'center',
+        iconOffset,
+        larguraDesenho: d.width,
+        alturaDesenho: d.height,
+        rascunho: engineeringDraft(codigo, props.engineering),
+        valido: true,
+        avisos: colherAvisos(),
+    };
+}
+
+// Rascunho normalizado (padrões, campos permitidos, texto cortado em 40) e erros de validação
+// do formulário: as mesmas funções que o painel do Web usa.
+export function rascunhoEngenharia(codigo, dados) {
+    return engineeringDraft(codigo, dados);
+}
+
+export function errosEngenharia(codigo, valores) {
+    return errorsFor(engineeringItem(codigo), valores || {});
+}
+
+export function marcasDeRampa(inclinacao) {
+    return rampChevronCount(inclinacao);
 }
 
 // SVG do milsymbol SEM o pós-processamento brasileiro, com as opções do gerador. Serve ao
