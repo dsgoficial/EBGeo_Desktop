@@ -1,0 +1,10 @@
+/* ellipseRing do Web: 16 passos, semieixo @@RL@@ ao longo do rumo @az e @@RT@@ para a
+   esquerda, centrado em @@CENTRO@@. */
+@@SEJA@@
+lc := @@CENTRO@@
+rl ::= @@RL@@
+rt ::= @@RT@@
+@@EM@@
+make_line(array_foreach(generate_series(0, 16),
+  project(project(@lc, @rl * cos(2 * pi() * @element / 16), @az), @rt * sin(2 * pi() * @element / 16), @az - pi() / 2)))
+@@FIM@@

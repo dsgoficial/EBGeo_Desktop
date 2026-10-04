@@ -1,0 +1,23 @@
+/* Linha de Limite: eixo com um vão por instância (largura n x tamanho x 1,5 x 1,2,
+   vãos sobrepostos fundidos, createLineWithGaps) e os traços X e I do escalão. */
+@@SEJA@@
+@@LIMITE@@
+gw ::= @ne * @s * 1.5 * 1.2
+rso := array_sort(@rs)
+@@EM@@
+transform(
+  CASE WHEN @L < @t THEN @g ELSE
+    with_variable('seg',
+      array_filter(array_foreach(generate_series(0, @ni),
+        @@SEJA@@
+        u0 ::= CASE WHEN @element = 0 THEN 0 ELSE min(@L, @L * @rso[@element - 1] + @gw / 2) END
+        u1 ::= CASE WHEN @element = @ni THEN @L ELSE max(0, @L * @rso[@element] - @gw / 2) END
+        @@EM@@
+        CASE WHEN @u1 - @u0 > @t THEN line_substring(@g, @u0, @u1) END
+        @@FIM@@), @element IS NOT NULL),
+      collect_geometries(array_cat(
+        CASE WHEN array_length(@seg) > 0 THEN @seg ELSE array(@g) END,
+        @@ESCALAO_LINHAS@@)))
+  END,
+  @crs_loc, @layer_crs)
+@@FIM@@

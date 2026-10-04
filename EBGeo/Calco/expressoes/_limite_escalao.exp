@@ -1,0 +1,21 @@
+/* Os glifos do escalão de cada instância (createEchelonSymbol): glifos espaçados
+   1,5 x tamanho ao longo do rumo local, o conjunto centrado em L x ratio.
+   @@FORMA@@ dá a geometria do caractere @ch centrado em @ci. */
+array_filter(array_foreach(generate_series(0, @ni - 1),
+  @@SEJA@@
+  @@INSTANCIA:I=@element@@
+  ne2 ::= length(@ech)
+  esp ::= @s * 1.5
+  pi0 := project(@ce, -(@ne2 - 1) * @esp / 2, @az)
+  @@EM@@
+  CASE WHEN @ne2 > 0 THEN
+    collect_geometries(array_filter(array_foreach(generate_series(0, @ne2 - 1),
+      @@SEJA@@
+      ci := project(@pi0, @element * @esp, @az)
+      ch := substr(@ech, @element + 1, 1)
+      @@EM@@
+      @@FORMA@@
+      @@FIM@@), @element IS NOT NULL))
+  END
+  @@FIM@@),
+  @element IS NOT NULL)

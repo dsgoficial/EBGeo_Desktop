@@ -1,0 +1,2 @@
+/* Dente da sapa e da trincheira: patamar opcional, V aberto (sem corda). */
+make_line(array_cat(array(@pa), CASE WHEN @fl > 0 THEN array(@pc) ELSE array() END, array(@px, @pe)))

@@ -1,0 +1,25 @@
+/* Geometria dos rótulos de um lado (generateBoundaryTexts): para cada instância com
+   showLabels diferente de false, o ponto a tamanho x text_distance_ratio do centro, à
+   esquerda (@@LADO@@ = -90, text_top) ou à direita (90, text_bottom).
+   @@FORMA_ROTULO@@ devolve, a partir do ponto @pt e do rumo @az, um segmento paralelo ao
+   eixo (o rótulo corre sobre ele, de pé, e o QGIS gira e endireita sozinho) ou o
+   próprio ponto (rótulo voltado ao norte). */
+@@SEJA@@
+@@LIMITE@@
+sl := array_foreach(CASE WHEN coalesce(try(array_length(@ij), 0), 0) > 0 THEN @ij ELSE array(map('showLabels', true)) END,
+        coalesce(try(@element['showLabels'], true), true) <> false)
+@@EM@@
+CASE WHEN @L >= @t THEN
+  with_variable('partes',
+    array_filter(array_foreach(generate_series(0, @ni - 1),
+      CASE WHEN @sl[@element] THEN
+        @@SEJA@@
+        @@INSTANCIA:I=@element@@
+        pt := project(@ce, @s * coalesce("text_distance_ratio", 0.9), @az + (@@LADO@@) * pi() / 180)
+        @@EM@@
+        @@FORMA_ROTULO@@
+        @@FIM@@
+      END), @element IS NOT NULL),
+    CASE WHEN array_length(@partes) > 0 THEN transform(collect_geometries(@partes), @crs_loc, @layer_crs) END)
+END
+@@FIM@@

@@ -1,0 +1,4 @@
+/* Fator dos tamanhos em px (traço, texto) com a correção LIGADA e âncora válida: 2^(z - z0),
+   o que prende o traço ao terreno. Desligada, ou sem âncora, vale 1: fixo em mm. */
+CASE WHEN coalesce("zoom_corr", true) AND coalesce("created_zoom", 0) > 0 AND coalesce(@map_scale, 0) > 0
+  THEN (@@M_POR_PX_CRIACAO@@) / ((@@ESCALA_TERRENO@@) * 0.00026) ELSE 1 END

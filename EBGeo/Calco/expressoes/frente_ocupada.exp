@@ -1,0 +1,14 @@
+/* Frente Ocupada: eixo de 3 vértices [p1, p2, p3]; braço superior p1->p2 com gancho a
+   -225 graus e inferior p1->p3 a +225 graus (createRay de add_occupied_front_geometry.js).
+   Com menos de 3 vértices desenha o eixo cru (o Web não desenha nada). */
+@@SEJA@@
+@@PROJ@@
+@@EM@@
+transform(
+  CASE WHEN num_points(@g) < 3 THEN @g ELSE
+    collect_geometries(array_cat(
+      @@BRACO:PONTA=point_n(@g, 2);SENTIDO=-1@@,
+      @@BRACO:PONTA=point_n(@g, 3);SENTIDO=1@@))
+  END,
+  @crs_loc, @layer_crs)
+@@FIM@@

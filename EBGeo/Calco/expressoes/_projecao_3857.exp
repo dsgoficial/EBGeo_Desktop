@@ -1,0 +1,6 @@
+/* Variante em EPSG:3857: comprimento em Mercator vale metro / cos(lat); k corrige pelo
+   centroide (a expressão testada da 290199 da análise de 2026-10-04). */
+c4326 := centroid(transform($geometry, @layer_crs, 'EPSG:4326'))
+crs_loc ::= 'EPSG:3857'
+k := 1 / cos(y(@c4326) * pi() / 180)
+g := transform($geometry, @layer_crs, @crs_loc)

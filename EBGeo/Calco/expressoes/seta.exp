@@ -1,0 +1,24 @@
+/* Seta: um polígono por parte do MultiLineString (cada parte é um ramo), unidos quando
+   há mais de um (a seta combinada do Web é turf.union dos ramos). Porte de
+   add_arrow_geometry.js: largura em metros (|width| ou 1000), cabeça de base
+   2,5 x largura e comprimento base x head_length_ratio, ponta dupla limitada ao
+   comprimento do eixo, aeromóvel. */
+@@SEJA@@
+@@PROJ@@
+w ::= abs(CASE WHEN coalesce("width_m", 0) <> 0 THEN "width_m" ELSE 1000 END) * @k
+hr ::= CASE WHEN coalesce("head_length_ratio", 0) <> 0 THEN "head_length_ratio" ELSE 1.5 END
+hd ::= coalesce("show_arrow_head", true)
+dh ::= coalesce("double_headed", false)
+am ::= coalesce("airmobile", false)
+ap ::= CASE WHEN coalesce("airmobile_position", 0) <> 0 THEN "airmobile_position" ELSE 0.7 END
+hb ::= @w * 2.5
+ax ::= CASE WHEN is_multipart(@g) THEN geometry_n(@g, @element) ELSE @g END
+@@EM@@
+with_variable('pol0',
+  array_foreach(generate_series(1, num_geometries(@g)),
+    CASE WHEN num_points(@ax) >= 2 AND length(@ax) > 0 THEN @@RAMO@@ END),
+  with_variable('pol', array_filter(@pol0, @element IS NOT NULL),
+    CASE WHEN array_length(@pol) > 0 THEN
+      transform(CASE WHEN array_length(@pol) > 1 THEN buffer(collect_geometries(@pol), 0) ELSE @pol[0] END, @crs_loc, @layer_crs)
+    END))
+@@FIM@@

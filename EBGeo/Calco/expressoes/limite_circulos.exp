@@ -1,0 +1,9 @@
+/* Linha de Limite: os círculos 'o' do escalão, preenchidos. */
+@@SEJA@@
+@@LIMITE@@
+@@EM@@
+CASE WHEN @L >= @t AND strpos(@ech, 'o') > 0 THEN
+  with_variable('cs', @@ESCALAO_CIRCULOS@@,
+    CASE WHEN array_length(@cs) > 0 THEN transform(collect_geometries(@cs), @crs_loc, @layer_crs) END)
+END
+@@FIM@@

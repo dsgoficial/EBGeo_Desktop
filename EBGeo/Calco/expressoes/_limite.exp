@@ -1,0 +1,15 @@
+/* Ligações comuns da Linha de Limite: comprimento, escalão, instâncias e o tamanho efetivo
+   do símbolo (resolveSymbolSize de add_boundary_geometry.js com o teto de
+   maxSymbolSizeForLine de boundary-zoom.model.js). */
+@@PROJ@@
+fs := @@FATOR_SOLO@@
+ech := coalesce("echelon", '')
+ij ::= try(from_json("symbol_instances"), "symbol_instances")
+rs := array_foreach(CASE WHEN coalesce(try(array_length(@ij), 0), 0) > 0 THEN @ij ELSE array(map('ratio', 0.5)) END,
+        with_variable('rr', try(to_real(@element['ratio']), NULL), CASE WHEN @rr IS NULL THEN 0.5 ELSE min(0.99, max(0.01, @rr)) END))
+ne ::= CASE WHEN length(@ech) > 0 THEN length(@ech) ELSE 3 END
+ni ::= array_length(@rs)
+L := length(@g)
+s := min(max(CASE WHEN "symbol_size_km" > 0 THEN "symbol_size_km" ELSE 1 END * @fs, 0.001) * 1000 * @k,
+         CASE WHEN @L > 0 THEN @L * 0.5 / (@ni * @ne * 1.8) ELSE 1000000000000 END)
+t ::= 0.001 * 1000 * @k

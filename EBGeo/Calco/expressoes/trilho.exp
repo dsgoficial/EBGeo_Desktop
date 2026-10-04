@@ -1,0 +1,3 @@
+/* Trilho contínuo à esquerda do eixo (rumo - 90), a @@GAP@@ do eixo, com o
+   deslocamento por bissetriz e miter até 4 de offsetGeodesic (geometry-utils.js). */
+array(make_line(@@OFFSET@@))

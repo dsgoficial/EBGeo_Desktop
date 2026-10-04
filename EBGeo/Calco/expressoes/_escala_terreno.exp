@@ -1,0 +1,23 @@
+/* Escala de TERRENO do mapa na feição (metro de terreno por metro de papel), qualquer que
+   seja o SRC do mapa, na esfera do MapLibre (R = 6.378.137 m).
+   SRC projetado: @map_scale é a escala nas unidades do SRC; o fator do SRC é medido
+   transformando 0,001 grau a leste do centroide para @map_crs. Em EPSG:3857 dá
+   1/cos(lat), em UTM perto de 1.
+   SRC geográfico: o QGIS calcula @map_scale com metros por grau aproximados no centro da
+   vista, R_meridional(lat) x (pi - 2|lat|) / 180 (QgsScaleCalculator, método
+   HorizontalMiddle, o padrão; medido em 2026-10-04: 91,2 km por grau a 15,8 S, onde o
+   grau de longitude tem 107,1 km). A expressão desfaz essa conta e aplica o grau de
+   longitude da feição. */
+@@SEJA@@
+cz := centroid(transform($geometry, @layer_crs, 'EPSG:4326'))
+lc ::= y(@map_extent_center) * pi() / 180
+@@EM@@
+CASE WHEN @map_units = 'degrees' THEN
+  @map_scale * (6378137 * cos(y(@cz) * pi() / 180) * pi() / 180)
+  / (6378000 * (1 - 0.0810820288 ^ 2) / (1 - 0.0810820288 ^ 2 * sin(@lc) ^ 2) ^ 1.5
+     * 2 * atan2(abs(cos(@lc)), sqrt(1 - cos(@lc) ^ 2)) / 180)
+ELSE
+  @map_scale / (distance(transform(@cz, 'EPSG:4326', @map_crs), transform(make_point(x(@cz) + 0.001, y(@cz)), 'EPSG:4326', @map_crs))
+                / (6378137 * cos(y(@cz) * pi() / 180) * 0.001 * pi() / 180))
+END
+@@FIM@@

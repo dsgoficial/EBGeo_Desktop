@@ -1,0 +1,8 @@
+/* X: duas retas a +/-45 graus do rumo, meia-largura tamanho/2. I: traço perpendicular de
+   +/- tamanho/1,5. Outros caracteres não têm traço (o 'o' é círculo). */
+CASE
+  WHEN @ch = 'X' THEN collect_geometries(
+    make_line(project(@ci, @s / 2, @az + pi() / 4), project(@ci, @s / 2, @az + pi() / 4 + pi())),
+    make_line(project(@ci, @s / 2, @az - pi() / 4), project(@ci, @s / 2, @az - pi() / 4 + pi())))
+  WHEN @ch = 'I' THEN make_line(project(@ci, @s / 1.5, @az - pi() / 2), project(@ci, @s / 1.5, @az + pi() / 2))
+END

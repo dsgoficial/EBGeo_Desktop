@@ -1,0 +1,37 @@
+/* Linha de Coordenação contínua (290202 fosso, 290999-01 sapa, 290999-02 trincheira).
+   Porte de resolveContinuousLayout e zigzagTooth do EBGeo Web: o período cabe inteiro
+   na linha (L / round(L / período)), teto de 120 dentes, ápice à direita (rumo + 90).
+   Marcadores: @@FLAT@@ (flatRatio), @@PROF@@ (depthRatio), @@DENTE@@ (geometria de um
+   dente a partir de @pa, @pc, @pm, @pe, @px, @fl), @@VAZIO@@ (o que desenhar sem dente),
+   @@CORPO@@ (1 para desenhar os dentes, NULL para desenhar só a reserva). */
+@@SEJA@@
+@@PROJ@@
+fs := @@FATOR_SOLO@@
+p0 ::= min(50, max(0.001, CASE WHEN "symbol_size_km" > 0 THEN "symbol_size_km" ELSE 0.5 END * @fs)) * 1000 * @k
+L := length(@g)
+n := CASE WHEN @L > 0 AND @p0 <= @L THEN min(120, max(1, round(@L / @p0))) ELSE 0 END
+p := CASE WHEN @n > 0 THEN @L / @n ELSE 0 END
+fl ::= @p * min(max(@@FLAT@@, 0), 0.9)
+dp ::= @p * (@@PROF@@)
+eps ::= 0.001 * @k
+@@EM@@
+transform(
+  CASE WHEN @n = 0 THEN @@VAZIO@@
+       WHEN (@@CORPO@@) IS NULL THEN NULL
+  ELSE collect_geometries(array_filter(array_foreach(generate_series(0, @n - 1),
+      @@SEJA@@
+      pa := line_interpolate_point(@g, min(@L, @element * @p))
+      pc := line_interpolate_point(@g, min(@L, @element * @p + @fl))
+      pm := line_interpolate_point(@g, min(@L, @element * @p + @fl + (@p - @fl) / 2))
+      pe := line_interpolate_point(@g, min(@L, (@element + 1) * @p))
+      azd := CASE WHEN distance(@pc, @pm) > @eps THEN azimuth(@pc, @pm)
+                  WHEN distance(@pa, @pm) > @eps THEN azimuth(@pa, @pm)
+                  WHEN distance(@pc, @pe) > @eps THEN azimuth(@pc, @pe) END
+      px ::= project(@pm, @dp, @azd + pi() / 2)
+      @@EM@@
+      CASE WHEN @azd IS NOT NULL THEN @@DENTE@@ END
+      @@FIM@@),
+    @element IS NOT NULL))
+  END,
+  @crs_loc, @layer_crs)
+@@FIM@@

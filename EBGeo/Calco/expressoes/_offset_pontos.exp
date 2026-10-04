@@ -1,0 +1,16 @@
+/* offsetGeodesic (geometry-utils.js) no plano: cada vértice deslocado na bissetriz dos
+   rumos de entrada e saída, alongado por 1/cos(meia virada) com teto 4 (MITER_LIMIT).
+   @@LADO@@ = -90 põe à esquerda (rumo - 90), 90 à direita. Devolve um array de pontos. */
+@@SEJA@@
+og := @@LINHA@@
+on ::= num_points(@og)
+@@EM@@
+array_foreach(generate_series(0, @on - 1),
+  @@SEJA@@
+  ent ::= azimuth(point_n(@og, max(0, @element - 1) + 1), point_n(@og, max(0, @element - 1) + 2)) * 180 / pi()
+  sai ::= azimuth(point_n(@og, min(@element, @on - 2) + 1), point_n(@og, min(@element, @on - 2) + 2)) * 180 / pi()
+  vir ::= ((@sai - @ent) + 540) % 360 - 180
+  @@EM@@
+  project(point_n(@og, @element + 1), (@@DIST@@) * min(1 / cos(@vir / 2 * pi() / 180), 4), (@ent + @vir / 2 + (@@LADO@@)) * pi() / 180)
+  @@FIM@@)
+@@FIM@@

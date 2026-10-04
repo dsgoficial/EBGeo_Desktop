@@ -27,6 +27,10 @@ def aplicar_estilo(layer, tipo):
         QgsMessageLog.logMessage('Estilo de {} indisponível: {}'.format(tipo, e), 'EBGeo', Qgis.MessageLevel.Warning)
         return False
     m.aplicar_estilo(layer, tipo)
+    if tipo in ('coordination_line', 'boundary', 'arrow', 'occupied_front'):
+        # como nos pontuais: feição com "visivel" falso não é desenhada (o Web filtra igual)
+        from .importador.arvore import condicao_exibir, esconder_por_regra
+        esconder_por_regra(layer, condicao_exibir())
     return True
 
 

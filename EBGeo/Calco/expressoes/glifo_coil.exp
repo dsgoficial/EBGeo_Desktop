@@ -1,0 +1,2 @@
+/* 290307 Concertina: laço elíptico apoiado na linha, altura 1,4 x @h (COIL_HEIGHT_RATIO). */
+@@ELIPSE:CENTRO=project(@m, @h * 1.4, @az - pi() / 2);RL=@h;RT=@h * 1.4@@

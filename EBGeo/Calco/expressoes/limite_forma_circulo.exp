@@ -1,0 +1,2 @@
+/* o: círculo de raio tamanho/4 com 32 passos (turf.circle steps 32). */
+CASE WHEN @ch = 'o' THEN make_circle(@ci, @s / 4, 32) END

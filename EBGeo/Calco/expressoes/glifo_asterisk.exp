@@ -1,0 +1,3 @@
+/* 290302 Cerca de arame: três traços de raio @h a 0, 60 e 120 graus do rumo. */
+collect_geometries(array_foreach(array(0, 60, 120),
+  make_line(project(@m, @h, @az + radians(@element)), project(@m, @h, @az + radians(@element + 180)))))

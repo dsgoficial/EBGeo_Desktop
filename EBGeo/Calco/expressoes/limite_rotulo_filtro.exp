@@ -1,0 +1,3 @@
+/* A regra vale se o texto do lado não é vazio e o modo (voltado ao norte ou colado à
+   linha) é o da regra. */
+coalesce(@@CAMPO@@, '') <> '' AND coalesce("text_north_facing", false) = @@NORTE@@

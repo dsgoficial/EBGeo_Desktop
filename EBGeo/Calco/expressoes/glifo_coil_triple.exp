@@ -1,0 +1,2 @@
+/* 290309 Concertina tripla: laço contido entre o eixo e o trilho (gap = 1,35 x tamanho). */
+@@ELIPSE:CENTRO=project(@m, @s * 1.35 / 2, @az - pi() / 2);RL=@h;RT=@s * 1.35 / 2@@

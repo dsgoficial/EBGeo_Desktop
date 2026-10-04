@@ -1,0 +1,10 @@
+/* Trechos do eixo entre glifos que interrompem a linha (losango, pico): o cursor do
+   Web, com o descarte de trecho de até MIN_LENGTH_KM (@t). */
+array_filter(array_foreach(generate_series(0, @n),
+  @@SEJA@@
+  u0 ::= CASE WHEN @element = 0 THEN 0 ELSE min(@L, @c0 + (@element - 1) * @sp2 + @s / 2) END
+  u1 ::= CASE WHEN @element = @n THEN @L ELSE max(0, @c0 + @element * @sp2 - @s / 2) END
+  @@EM@@
+  CASE WHEN @u1 - @u0 > @t THEN line_substring(@g, @u0, @u1) END
+  @@FIM@@),
+  @element IS NOT NULL)

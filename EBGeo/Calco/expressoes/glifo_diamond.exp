@@ -1,0 +1,2 @@
+/* 290199 Linha de barreiras: losango cujos vértices esquerdo e direito estão na linha. */
+make_line(@a, project(@m, @h, @az - pi() / 2), @b, project(@m, @h, @az + pi() / 2), @a)

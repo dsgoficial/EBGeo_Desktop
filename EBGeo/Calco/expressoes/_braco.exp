@@ -1,0 +1,18 @@
+/* Um braço: reta até 60 %, gancho de 0,1 x d a 225 graus (sentido @@SENTIDO@@), reta até
+   a ponta e dois traços de 0,1 x d a +/-150 graus do último rumo. Braço de menos de 1 m
+   não desenha (createRay). */
+@@SEJA@@
+o ::= point_n(@g, 1)
+pp ::= @@PONTA@@
+d ::= distance(@o, @pp)
+azb ::= azimuth(@o, @pp)
+t1 := project(@o, @d * 0.6, @azb)
+t2 := project(@t1, @d * 0.1, @azb + (225 * (@@SENTIDO@@)) * pi() / 180)
+fb ::= azimuth(@t2, @pp)
+@@EM@@
+CASE WHEN @d / @k < 1 THEN array() ELSE
+  array(make_line(@o, @t1), make_line(@t1, @t2), make_line(@t2, @pp),
+        make_line(project(@pp, @d * 0.1, @fb + 150 * pi() / 180), @pp),
+        make_line(project(@pp, @d * 0.1, @fb - 150 * pi() / 180), @pp))
+END
+@@FIM@@

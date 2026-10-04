@@ -1,0 +1,5 @@
+/* Fator dos tamanhos em km (glifos) com a correção DESLIGADA e âncora válida: 2^(z0 - z),
+   isto é, metros de terreno por px agora / no zoom de criação, com px = 0,26 mm de papel.
+   Ligada, ou sem âncora (created_zoom nulo ou 0), vale 1: o glifo fica no terreno. */
+CASE WHEN "zoom_corr" IS NOT NULL AND NOT "zoom_corr" AND coalesce("created_zoom", 0) > 0 AND coalesce(@map_scale, 0) > 0
+  THEN (@@ESCALA_TERRENO@@) * 0.00026 / (@@M_POR_PX_CRIACAO@@) ELSE 1 END

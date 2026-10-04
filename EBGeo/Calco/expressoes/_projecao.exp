@@ -1,0 +1,7 @@
+/* Ligações da projeção local: Transversa de Mercator ESFÉRICA (R do turf, 6.371.008,8 m)
+   centrada no centroide arredondado a 0,1 grau. No plano, 1 m = 1 m de terreno (k = 1).
+   ::= é macro (inlinada no texto), := é ligação (calculada uma vez). */
+c4326 := centroid(transform($geometry, @layer_crs, 'EPSG:4326'))
+crs_loc ::= 'PROJ:+proj=tmerc +lat_0=' || to_string(round(y(@c4326), 1)) || ' +lon_0=' || to_string(round(x(@c4326), 1)) || ' +k=1 +x_0=0 +y_0=0 +R=6371008.8 +units=m +no_defs'
+k ::= 1
+g := transform($geometry, @layer_crs, @crs_loc)

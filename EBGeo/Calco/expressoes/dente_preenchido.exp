@@ -1,0 +1,2 @@
+/* Dente do fosso anticarro: anel fechado, um polígono por dente. */
+make_polygon(make_line(array_cat(array(@pa), CASE WHEN @fl > 0 THEN array(@pc) ELSE array() END, array(@px, @pe, @pa))))

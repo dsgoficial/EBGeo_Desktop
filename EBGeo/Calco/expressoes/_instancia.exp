@@ -1,0 +1,5 @@
+/* Centro e rumo local da instância @@I@@ (getCenterAndBearing): rumo entre os pontos a
+   L x ratio -/+ 10 m, presos a [MIN_LENGTH, L - MIN_LENGTH]. */
+dc ::= @L * @rs[@@I@@]
+ce := line_interpolate_point(@g, @dc)
+az := azimuth(line_interpolate_point(@g, max(@t, @dc - 10 * @k)), line_interpolate_point(@g, min(@L - @t, @dc + 10 * @k)))

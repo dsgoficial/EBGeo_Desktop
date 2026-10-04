@@ -1,0 +1,24 @@
+/* Um ramo da seta a partir do eixo @ax: trilhos a +/- largura/2 (offsetGeodesic), cabeça
+   no último vértice e, com double_headed, cauda no primeiro (resolveHeadLengths). A ordem
+   do anel é a do Web: trilho do lado rumo + 90, cabeça, trilho do lado rumo - 90 de
+   volta, cauda. */
+@@SEJA@@
+N ::= num_points(@ax)
+La := length(@ax)
+pd := @@OFFSET_D@@
+pe := @@OFFSET_E@@
+azf := azimuth(point_n(@ax, @N - 1), point_n(@ax, @N))
+pl := point_n(@ax, @N)
+azt := azimuth(point_n(@ax, 2), point_n(@ax, 1))
+p1 := point_n(@ax, 1)
+nom ::= @hb * @hr
+hl ::= CASE WHEN @dh AND 2 * @nom > @La THEN @nom * @La / (2 * @nom) ELSE @nom END
+cab ::= array(project(@pl, @hb / 2, @azf + pi() / 2), project(@pl, @hl, @azf), project(@pl, @hb / 2, @azf - pi() / 2))
+cau ::= CASE WHEN @dh THEN array(project(@p1, @hb / 2, @azt + pi() / 2), project(@p1, @hl, @azt), project(@p1, @hb / 2, @azt - pi() / 2)) ELSE array() END
+@@EM@@
+CASE
+  WHEN @am THEN @@AEROMOVEL@@
+  WHEN NOT @hd THEN make_polygon(make_line(array_cat(@pd, array_reverse(@pe), array(@pd[0]))))
+  ELSE make_polygon(make_line(array_cat(@pd, @cab, array_reverse(@pe), @cau, array(@pd[0]))))
+END
+@@FIM@@

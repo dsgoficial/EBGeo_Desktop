@@ -1,0 +1,2 @@
+/* Metros de terreno por pixel do Web no zoom de criação (convenção MapLibre de 512 px). */
+78271.517 * cos(y(centroid(transform($geometry, @layer_crs, 'EPSG:4326'))) * pi() / 180) / 2 ^ "created_zoom"

@@ -1,0 +1,22 @@
+/* Seta aeromóvel (generateAirmobileArrowGeometry): trilhos cortados no ponto mais próximo
+   de L x airmobile_position, diagonais cruzadas e dois polígonos que se tocam no
+   cruzamento @hc. */
+@@SEJA@@
+pom := line_interpolate_point(@ax, @La * @ap)
+rd := make_line(@pd)
+re := make_line(@pe)
+dd ::= line_locate_point(@rd, @pom)
+de ::= line_locate_point(@re, @pom)
+l1 := with_variable('q', line_substring(@rd, 0, @dd), array_foreach(generate_series(1, num_points(@q)), point_n(@q, @element)))
+l2 := with_variable('q', line_substring(@rd, @dd, length(@rd)), array_foreach(generate_series(1, num_points(@q)), point_n(@q, @element)))
+r1 := with_variable('q', line_substring(@re, 0, @de), array_foreach(generate_series(1, num_points(@q)), point_n(@q, @element)))
+r2 := with_variable('q', line_substring(@re, @de, length(@re)), array_foreach(generate_series(1, num_points(@q)), point_n(@q, @element)))
+it := intersection(make_line(array_cat(@l1, array_slice(@r2, 1, -1))), make_line(array_cat(@r1, array_slice(@l2, 1, -1))))
+hc ::= CASE WHEN @it IS NULL OR is_empty(@it) THEN @pom ELSE point_n(@it, 1) END
+@@EM@@
+collect_geometries(
+  make_polygon(make_line(array_cat(array_slice(@l1, 0, -2), array(@hc), array_slice(array_reverse(@r1), 1, -1),
+                                   CASE WHEN @hd THEN @cau ELSE array() END, array(@l1[0])))),
+  make_polygon(make_line(array_cat(array_slice(@l2, 1, -1), CASE WHEN @hd THEN @cab ELSE array() END,
+                                   array_slice(array_reverse(@r2), 0, -2), array(@hc), array(@l2[1])))))
+@@FIM@@

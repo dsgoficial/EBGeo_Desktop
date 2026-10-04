@@ -1,0 +1,40 @@
+/* Linha de Coordenação com glifo repetido (290100, 290199, 290302, 290303, 290307,
+   290308, 290309). Porte de resolveGlyphLayout (coordination-line-zoom.model.js) e de
+   buildSegmentsAndGlyphs e glyphRings (add_coordination_line_geometry.js) do EBGeo Web.
+   Marcadores: @@SPAN@@ (spanRatio), @@EIXO@@ (array com o eixo inteiro ou os trechos
+   entre glifos), @@TRILHOS@@ (array com os trilhos contínuos), @@GLIFO@@ (geometria
+   do glifo a partir de @f0, @f1, @a, @b, @az, @m, @h).
+   Distâncias em unidades do plano local; @k converte metro de terreno nelas. */
+@@SEJA@@
+@@PROJ@@
+fs := @@FATOR_SOLO@@
+s := min(50, max(0.001, CASE WHEN "symbol_size_km" > 0 THEN "symbol_size_km" ELSE 0.5 END * @fs)) * 1000 * @k * (@@SPAN@@)
+e := min(500, max(0.002, CASE WHEN "symbol_spacing_km" > 0 THEN "symbol_spacing_km" ELSE 2 END * @fs)) * 1000 * @k
+L := length(@g)
+sp ::= max(@e, @s / 0.5)
+n0 ::= CASE WHEN @L > 0 AND @s <= @L THEN floor((@L - @s) / @sp) + 1 ELSE 0 END
+n := min(120, @n0)
+sp2 := CASE WHEN @n0 > 120 THEN (@L - @s) / 119 ELSE @sp END
+c0 ::= (@L - (@n - 1) * @sp2) / 2
+t ::= 0.001 * 1000 * @k
+@@EM@@
+transform(
+  CASE WHEN @n = 0 THEN @g ELSE
+    collect_geometries(array_cat(
+      @@EIXO@@,
+      @@TRILHOS@@,
+      array_foreach(generate_series(0, @n - 1),
+        @@SEJA@@
+        f0 ::= max(0, @c0 + @element * @sp2 - @s / 2)
+        f1 ::= min(@L, @c0 + @element * @sp2 + @s / 2)
+        a := line_interpolate_point(@g, @f0)
+        b := line_interpolate_point(@g, @f1)
+        az := azimuth(@a, @b)
+        m := make_point((x(@a) + x(@b)) / 2, (y(@a) + y(@b)) / 2)
+        h ::= distance(@a, @b) / 2
+        @@EM@@
+        @@GLIFO@@
+        @@FIM@@)))
+  END,
+  @crs_loc, @layer_crs)
+@@FIM@@

@@ -1,0 +1,10 @@
+/* Âncora do rótulo voltado ao norte (computeTextAnchor): a borda da caixa que encara a
+   linha, pelo octante do rumo do eixo para o rótulo. Quadrantes do QGIS: 0 acima-esq,
+   1 acima, 2 acima-dir, 3 esq, 4 sobre, 5 dir, 6 abaixo-esq, 7 abaixo, 8 abaixo-dir.
+   O QGIS aplica um quadrante por feição: vale o da primeira instância. */
+@@SEJA@@
+@@LIMITE@@
+@@INSTANCIA:I=0@@
+@@EM@@
+array_get(array(1, 2, 5, 8, 7, 6, 3, 0), round(((@az * 180 / pi() + (@@LADO@@)) % 360 + 360) % 360 / 45) % 8)
+@@FIM@@

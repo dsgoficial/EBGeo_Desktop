@@ -1,0 +1,2 @@
+/* 290100 Linha de obstáculos: pico à esquerda (rumo - 90), aberto embaixo. */
+make_line(@a, project(@m, @h, @az - pi() / 2), @b)
