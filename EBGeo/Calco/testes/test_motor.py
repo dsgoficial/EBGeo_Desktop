@@ -1,0 +1,582 @@
+# -*- coding: utf-8 -*-
+"""
+Testes do motor de símbolos pontuais (EBGeo/Calco/motor).
+
+Rodar com o Python do QGIS 4 (PowerShell):
+    & 'C:\\Program Files\\QGIS 4.0.0\\bin\\python-qgis.bat' -m unittest -v EBGeo/Calco/testes/test_motor.py
+ou direto:
+    & '...\\python-qgis.bat' EBGeo/Calco/testes/test_motor.py
+
+A PROVA DE PARIDADE precisa de node e de um checkout do EBGeo Web com node_modules instalados
+(rolldown e @playwright/test com o Chromium baixado): defina EBGEO_WEB com a raiz do ebgeo_web.
+Sem ela, os testes de paridade são pulados e os demais rodam. As imagens de conferência vão
+para EBGEO_TESTE_SAIDA (ou uma pasta temporária, impressa no fim).
+"""
+import base64
+import datetime
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+
+AQUI = os.path.dirname(os.path.abspath(__file__))
+PACOTE = os.path.dirname(os.path.dirname(AQUI))  # .../EBGeo
+if PACOTE not in sys.path:
+    sys.path.insert(0, PACOTE)
+
+from qgis.core import QgsApplication  # noqa: E402
+from qgis.PyQt.QtCore import QByteArray, QRectF, QSize, Qt  # noqa: E402
+from qgis.PyQt.QtGui import QColor, QFont, QImage, QPainter  # noqa: E402
+from qgis.PyQt.QtSvg import QSvgRenderer  # noqa: E402
+
+_APP = QgsApplication.instance()
+if _APP is None:
+    _APP = QgsApplication([], False)
+    _APP.initQgis()
+
+from Calco.motor import declinacao  # noqa: E402
+from Calco.motor.motor import ErroMotor, Motor  # noqa: E402
+
+MOTOR_BUILD = os.path.join(os.path.dirname(AQUI), 'motor', 'build')
+SAIDA = os.environ.get('EBGEO_TESTE_SAIDA') or tempfile.mkdtemp(prefix='ebgeo-motor-')
+os.makedirs(SAIDA, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------------------------
+# Casos
+# ---------------------------------------------------------------------------------------------
+
+def extensao(entidade=0, comando=False, especial=0, m1=0, m2=0):
+    """BrazilianSIDCExtension.encode, reescrito aqui para o teste não depender do bundle."""
+    valor = (entidade << 14) | (int(bool(comando)) << 13) | (especial << 10) | (m1 << 5) | m2
+    return '076' + str(valor).zfill(7)
+
+
+def sidc(conjunto='10', identidade='3', icone='121100', escalao='16', status='0', qg='0',
+         m1='00', m2='00', ext='0760000000'):
+    return '10' + '0' + identidade + conjunto + status + qg + escalao + icone + m1 + m2 + ext
+
+
+def casos_simbolo():
+    cat = Motor.instancia().catalogos()['militar']['porConjunto']
+    casos = []
+
+    def add(nome, **props):
+        casos.append((nome, props))
+
+    # Dois ícones de cada um dos 11 conjuntos, com o escalão/mobilidade quando o conjunto tem.
+    for conjunto, dados in sorted(cat.items()):
+        icones = [i['codigo'] for i in dados['icones'] if i['codigo'] != '000000' and not i['codigo'].endswith('99')]
+        for icone in icones[:2]:
+            esc = '16' if conjunto == '10' else ('33' if conjunto == '15' else '00')
+            add('conjunto {} ícone {}'.format(conjunto, icone), sidc=sidc(conjunto, icone=icone, escalao=esc))
+    # Identidades, status, QG/FT.
+    for ident in '0123456':
+        add('identidade ' + ident, sidc=sidc(identidade=ident))
+    add('planejado', sidc=sidc(status='1'))
+    add('posto de comando', sidc=sidc(qg='2'))
+    add('força-tarefa', sidc=sidc(qg='4'))
+    add('PC de força-tarefa hostil', sidc=sidc(identidade='6', qg='6', escalao='18'))
+    # Extensões brasileiras de ícone.
+    for e in (0, 1):
+        add('121899 ext {}'.format(e), sidc=sidc(icone='121899', ext=extensao(entidade=e)))
+    for e in (0, 1, 5, 10):
+        add('163499 ext {}'.format(e), sidc=sidc(icone='163499', ext=extensao(entidade=e)))
+    for e in (0, 2):
+        add('141299 ext {}'.format(e), sidc=sidc(icone='141299', ext=extensao(entidade=e)))
+    for e in (0, 3, 11):
+        add('20/111299 ext {}'.format(e), sidc=sidc('20', icone='111299', escalao='00', ext=extensao(entidade=e)))
+    add('20/111299 ext 4 hostil', sidc=sidc('20', identidade='6', icone='111299', escalao='00', ext=extensao(entidade=4)))
+    add('20/111999 ext 8', sidc=sidc('20', icone='111999', escalao='00', ext=extensao(entidade=8)))
+    add('30/130199 ext 2', sidc=sidc('30', icone='130199', escalao='00', ext=extensao(entidade=2)))
+    add('40/139900 ext 1', sidc=sidc('40', icone='139900', escalao='00', ext=extensao(entidade=1)))
+    add('121899 em SIDC de 20 dígitos', sidc=sidc(icone='121899')[:20])
+    # Extensões de modificador 1 e 2 (código 99).
+    for e in (1, 7, 16):
+        add('mod1 99 ext {}'.format(e), sidc=sidc(m1='99', ext=extensao(m1=e)))
+    for e in (1, 12):
+        add('mod2 99 ext {}'.format(e), sidc=sidc(m2='99', ext=extensao(m2=e)))
+    add('20 mod2 99 ext 3', sidc=sidc('20', icone='110000', escalao='00', m2='99', ext=extensao(m2=3)))
+    # Rótulos e adaptações gráficas do catálogo brasileiro.
+    for icone in ('121700', '121800', '110200', '162800'):
+        add('rótulo ' + icone, sidc=sidc(icone=icone))
+    add('escudo 200700', sidc=sidc(icone='200700'))
+    add('rádio 111001 hostil', sidc=sidc(identidade='6', icone='111001'))
+    # Modificador especial e comando.
+    for sm in (1, 2, 3, 4):
+        add('modificador especial {}'.format(sm), sidc=sidc(ext=extensao(especial=sm)), specialModifier=str(sm))
+    add('modificador especial 1 hostil', sidc=sidc(identidade='6', ext=extensao(especial=1)))
+    add('equipamento blindado', sidc=sidc('15', icone='120100', escalao='33', ext=extensao(especial=1)))
+    add('comando amigo', sidc=sidc(ext=extensao(comando=True)), isCommand=True)
+    add('comando hostil', sidc=sidc(identidade='6', ext=extensao(comando=True)), isCommand=True)
+    add('comando + especial + 163499', sidc=sidc(icone='163499', ext=extensao(entidade=3, comando=True, especial=2)))
+    # Amplificadores de texto.
+    add('designação e escalão superior', sidc=sidc(), uniqueDesignation='1', higherFormation='3 BIB')
+    add('todos os textos', sidc=sidc(), uniqueDesignation='A', higherFormation='2 Bda', quantity='3',
+        reinforcedReduced='(+)', additionalInformation='Info', credibility='A1', type='Tipo',
+        iffSif='4523', dateTimeGroup='121400Z JUN', altitudeDepth='850 m', location='Local',
+        speed='20 km/h', specialHeadquarters='QG', direction='45', equipmentTeardownTime='10 min')
+    add('quantidade zero', sidc=sidc(), quantity=0)
+    add('texto com escape <&>', sidc=sidc(), uniqueDesignation='A&B <C>')
+    add('texto + extensão brasileira', sidc=sidc(icone='163499', ext=extensao(entidade=2)), uniqueDesignation='1',
+        higherFormation='Gpt Log')
+    # Barra de engajamento e cor.
+    add('barra de engajamento', sidc=sidc('01', icone='110000', escalao='00'), engagementBar='ENG:M:1')
+    add('barra de engajamento com cor', sidc=sidc('01', icone='110000', escalao='00'), engagementBar='ENG:M:1',
+        fillColor='#11FF00')
+    add('cor de preenchimento', sidc=sidc(), fillColor='#FF8800')
+    add('cor curta inválida', sidc=sidc(), fillColor='#fff')
+    add('cor com extensão', sidc=sidc(icone='121899', ext=extensao(entidade=1)), fillColor='#3366CC')
+    # SIDC que o milsymbol não reconhece (20 dígitos com letra).
+    add('SIDC com letra', sidc='1003100016121100000X')
+    return casos
+
+
+def casos_medida():
+    motor = Motor.instancia()
+    casos = [('catálogo ' + c, {'pointCode': c}) for c in motor.codigos_de_medida()]
+    casos += [
+        ('130100 com textos', {'pointCode': '130100', 'tipo': 'P Lib', 'identificacao': 'ALFA',
+                               'gdhIni': '121400Z JUN', 'gdhFim': 'Mdt O'}),
+        ('130500 número 0', {'pointCode': '130500', 'numero': 0}),
+        ('240601 concentração', {'pointCode': '240601', 'numeroConcentracao': 'HA 107'}),
+        ('núcleo de tela', {'pointCode': 'ECHELON', 'echelonCode': 'ECHELON_18', 'identificacao': '1 Bda',
+                            'status': 'preparado'}),
+        ('núcleo FT incoerente', {'pointCode': 'ECHELON_FT', 'echelonCode': 'ECHELON_21'}),
+        ('escalão FT', {'pointCode': 'ESCALAO_FT', 'echelonCode': 'ESCALAO_FT_15'}),
+        ('cor', {'pointCode': '130600', 'fillColor': '#CC0000'}),
+        ('cor no núcleo', {'pointCode': 'ECHELON_16', 'fillColor': '#0055AA', 'status': 'preparado-nao-ocupado',
+                           'identificacao': 'X'}),
+        ('290800 cor (máscara)', {'pointCode': '290800', 'fillColor': '#00AA00'}),
+        ('texto com escape', {'pointCode': '130100', 'identificacao': 'A&B "C"'}),
+    ]
+    return casos
+
+
+def casos_declinacao():
+    return [
+        {'declination': -21.25, 'convergence': 0.62, 'fillColor': '#0077CC'},
+        {'declination': 21.25, 'convergence': -1.15, 'fillColor': '#AA0000'},
+        {'declination': 0.05, 'convergence': 0, 'fillColor': None},
+        {'declination': -0.07, 'convergence': 9.5, 'fillColor': 'vermelho'},
+        {'declination': 45.678, 'convergence': -12.3, 'fillColor': '#123456'},
+        {'declination': 190, 'convergence': 0.001, 'fillColor': '#0077cc'},
+    ]
+
+
+def casos_wmm():
+    return [
+        {'lat': -15.79, 'lon': -47.88, 'data': '2026-10-04T12:00:00Z'},
+        {'lat': -3.1, 'lon': -60.02, 'data': '2025-06-30T00:00:00Z'},
+        {'lat': -30.03, 'lon': -51.23, 'data': '2027-01-01T00:00:00Z'},
+        {'lat': -22.9, 'lon': -43.2, 'data': '2029-11-01T00:00:00Z'},
+        {'lat': 0, 'lon': 0, 'data': '2026-01-01T00:00:00Z'},
+        {'lat': 89.9, 'lon': 120, 'data': '2026-03-15T06:00:00Z'},
+        {'lat': -80, 'lon': 179.9, 'data': '2026-03-15T06:00:00Z'},
+        {'lat': 40.71, 'lon': -74.0, 'data': '2028-07-04T00:00:00Z'},
+        {'lat': 51.5, 'lon': -0.12, 'data': '2025-02-01T00:00:00Z'},
+        {'lat': -33.86, 'lon': 151.2, 'data': '2026-10-04T00:00:00Z'},
+    ]
+
+
+# ---------------------------------------------------------------------------------------------
+# Referência do Web (Chromium via Playwright)
+# ---------------------------------------------------------------------------------------------
+
+_REFERENCIA = {}
+
+
+def node_executavel():
+    """EBGEO_NODE, o node do PATH, ou o instalador padrão do Windows (o .bat do QGIS troca o PATH)."""
+    candidatos = [os.environ.get('EBGEO_NODE'), shutil.which('node')]
+    for var in ('ProgramFiles', 'ProgramW6432'):
+        if os.environ.get(var):
+            candidatos.append(os.path.join(os.environ[var], 'nodejs', 'node.exe'))
+    return next((c for c in candidatos if c and os.path.exists(c)), None)
+
+
+def referencia_web():
+    """Gera o arnês e roda todos os casos no Chromium uma vez; None se não houver EBGEO_WEB."""
+    if 'r' in _REFERENCIA:
+        return _REFERENCIA['r']
+    web = os.environ.get('EBGEO_WEB')
+    node = node_executavel()
+    if not web or not node:
+        _REFERENCIA['r'] = None
+        return None
+    pasta = tempfile.mkdtemp(prefix='ebgeo-paridade-')
+    subprocess.run([node, os.path.join(MOTOR_BUILD, 'build.mjs'), '--web', web, '--paridade', pasta,
+                    '--apenas-paridade'], check=True, capture_output=True, text=True)
+    lista = ([{'tipo': 'simbolo', 'props': p} for _n, p in casos_simbolo()]
+             + [{'tipo': 'medida', 'props': p} for _n, p in casos_medida()]
+             + [{'tipo': 'declinacao', 'props': p} for p in casos_declinacao()]
+             + [{'tipo': 'wmm', 'props': p} for p in casos_wmm()])
+    entrada = os.path.join(pasta, 'casos.json')
+    saida = os.path.join(pasta, 'saida.json')
+    with open(entrada, 'w', encoding='utf-8') as f:
+        json.dump(lista, f, ensure_ascii=False)
+    t = time.perf_counter()
+    r = subprocess.run([node, os.path.join(MOTOR_BUILD, 'paridade.mjs'), '--web', web,
+                        '--arnes', os.path.join(pasta, 'paridade-web.js'), '--casos', entrada, '--saida', saida],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError('paridade.mjs falhou: ' + r.stderr[-2000:])
+    with open(saida, encoding='utf-8') as f:
+        dados = json.load(f)
+    print('\n[paridade] {} ({:.1f} s)'.format(r.stdout.strip(), time.perf_counter() - t))
+    res = iter(dados['resultados'])
+    ref = {
+        'simbolo': [next(res) for _ in casos_simbolo()],
+        'medida': [next(res) for _ in casos_medida()],
+        'declinacao': [next(res) for _ in casos_declinacao()],
+        'wmm': [next(res) for _ in casos_wmm()],
+        'baseline': dados['baseline'],
+    }
+    _REFERENCIA['r'] = ref
+    return ref
+
+
+def comparar(nosso, web, chaves_offset='ancoraX'):
+    """Diferenças entre a saída do QJSEngine e a do Web (lista vazia = paridade)."""
+    if 'erro' in web:
+        return ['web falhou: ' + web['erro']]
+    dif = []
+    if nosso['svgWeb'] != web['svg']:
+        n, w = nosso['svgWeb'], web['svg']
+        i = next((k for k in range(min(len(n), len(w))) if n[k] != w[k]), min(len(n), len(w)))
+        dif.append('svg difere a partir do caractere {}: nosso ...{!r} web ...{!r}'.format(i, n[i:i + 60], w[i:i + 60]))
+    for a, b in (('largura', 'largura'), ('altura', 'altura')):
+        if abs(float(nosso[a]) - float(web[b])) > 1e-9:
+            dif.append('{}: nosso {} web {}'.format(a, nosso[a], web[b]))
+    if (nosso.get('iconOffset') or None) != (web.get('iconOffset') or None):
+        dif.append('iconOffset: nosso {} web {}'.format(nosso.get('iconOffset'), web.get('iconOffset')))
+    return dif
+
+
+# ---------------------------------------------------------------------------------------------
+# Utilidades de render
+# ---------------------------------------------------------------------------------------------
+
+def render_svg(svg, largura=200, altura=200):
+    r = QSvgRenderer(QByteArray(svg.encode('utf-8')))
+    img = QImage(QSize(largura, altura), QImage.Format.Format_ARGB32)
+    img.fill(0)
+    if r.isValid():
+        p = QPainter(img)
+        r.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        r.render(p, QRectF(0, 0, largura, altura))
+        p.end()
+    return r.isValid(), img
+
+
+def pixels_tinta(img, passo=1):
+    n = 0
+    for y in range(0, img.height(), passo):
+        for x in range(0, img.width(), passo):
+            if img.pixelColor(x, y).alpha() > 0:
+                n += 1
+    return n
+
+
+def caixa_tinta(img):
+    xs, ys = [], []
+    for y in range(img.height()):
+        for x in range(img.width()):
+            if img.pixelColor(x, y).alpha() > 40:
+                xs.append(x)
+                ys.append(y)
+    return (min(xs), min(ys), max(xs), max(ys)) if xs else None
+
+
+def grade(itens, arquivo, celula=170, colunas=8):
+    """PNG com a grade de desenhos (svg, rótulo) para conferência visual."""
+    linhas = (len(itens) + colunas - 1) // colunas
+    img = QImage(QSize(colunas * celula, linhas * (celula + 16)), QImage.Format.Format_ARGB32)
+    img.fill(QColor(255, 255, 255))
+    p = QPainter(img)
+    p.setFont(QFont('Arial', 7))
+    for k, (svg, rotulo) in enumerate(itens):
+        cx, cy = (k % colunas) * celula, (k // colunas) * (celula + 16)
+        r = QSvgRenderer(QByteArray(svg.encode('utf-8')))
+        r.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        r.render(p, QRectF(cx + 8, cy + 4, celula - 16, celula - 16))
+        p.setPen(QColor(0, 0, 0))
+        p.drawText(QRectF(cx, cy + celula - 10, celula, 24), Qt.AlignmentFlag.AlignHCenter, rotulo[:34])
+        p.setPen(QColor(220, 220, 220))
+        p.drawRect(cx, cy, celula - 1, celula + 15)
+    p.end()
+    img.save(arquivo)
+    return arquivo
+
+
+# ---------------------------------------------------------------------------------------------
+# Testes
+# ---------------------------------------------------------------------------------------------
+
+class TestCarga(unittest.TestCase):
+    def test_carga_e_versao(self):
+        Motor.descartar()
+        t = time.perf_counter()
+        m = Motor.instancia()
+        carga = time.perf_counter() - t
+        print('\n[desempenho] carga do bundle: {:.3f} s ({:.0f} KiB)'.format(
+            carga, os.path.getsize(os.path.join(os.path.dirname(MOTOR_BUILD), 'ebgeo-simbologia.js')) / 1024))
+        self.assertEqual(m.versao['milsymbol'], '3.0.4')
+        self.assertIs(Motor.instancia(), m)
+        self.assertLess(carga, 3.0)
+
+    def test_catalogos(self):
+        c = Motor.instancia().catalogos()
+        conj = c['militar']['porConjunto']
+        self.assertEqual(len(conj), 11)
+        self.assertEqual(sum(len(v['icones']) for v in conj.values()), 504)
+        self.assertEqual(sum(len(v['mod1']) for v in conj.values()), 225)
+        self.assertEqual(sum(len(v['mod2']) for v in conj.values()), 99)
+        self.assertEqual(conj['10']['extensoes']['icone']['163499'], list(range(11)))
+        self.assertTrue(conj['10']['aplicavel']['comando'])
+        self.assertTrue(conj['10']['camposTexto']['fields'])
+        self.assertEqual(len(c['medida']['porCodigo']), 130)
+        self.assertEqual(sum(len(v) for v in c['medida']['categorias'].values()), 130)
+        self.assertEqual(len(c['militar']['identidades']), 7)
+
+    def test_bundle_sem_comentario_nem_mapa(self):
+        with open(os.path.join(os.path.dirname(MOTOR_BUILD), 'ebgeo-simbologia.js'), encoding='utf-8') as f:
+            texto = f.read()
+        self.assertNotIn('sourceMappingURL', texto)
+        self.assertNotIn('@fileoverview', texto)
+        self.assertNotIn('military_tools/', texto)
+        # Um único comentário de bloco de licença (milsymbol, MIT) e a linha de origem do build.
+        self.assertEqual(texto.count('/*'), 2, 'comentários no bundle: {}'.format(texto.count('/*')))
+
+
+class TestSimboloMilitar(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.motor = Motor.instancia()
+
+    def test_paridade_com_o_web(self):
+        ref = referencia_web()
+        if ref is None:
+            self.skipTest('EBGEO_WEB ou node ausente: paridade não medida')
+        casos = casos_simbolo()
+        self.assertGreaterEqual(len(casos), 50)
+        iguais_svg = iguais_tudo = 0
+        falhas = []
+        for (nome, props), web in zip(casos, ref['simbolo']):
+            nosso = self.motor.simbolo_militar(props)
+            dif = comparar(nosso, web)
+            if not dif:
+                iguais_tudo += 1
+            if 'erro' not in web and nosso['svgWeb'] == web['svg']:
+                iguais_svg += 1
+            if dif:
+                falhas.append('{}: {}'.format(nome, '; '.join(dif)))
+        print('\n[paridade] símbolo militar: {} casos, SVG byte a byte {}, SVG+tamanho+âncora {}'.format(
+            len(casos), iguais_svg, iguais_tudo))
+        for f in falhas:
+            print('  DIFERENÇA ' + f)
+        self.assertEqual(falhas, [])
+
+    def test_pior_caso_sem_pos_processamento_reprova(self):
+        """O comparador tem de acusar um SIDC brasileiro desenhado sem a extensão."""
+        ref = referencia_web()
+        casos = casos_simbolo()
+        alvos = [i for i, (n, _p) in enumerate(casos) if n in ('163499 ext 5', 'rótulo 121700', 'comando amigo',
+                                                               '20/111299 ext 3', 'modificador especial 2')]
+        self.assertEqual(len(alvos), 5)
+        for i in alvos:
+            nome, props = casos[i]
+            nosso = self.motor.simbolo_militar(props)
+            # Degradação da saída REAL: o mesmo SIDC, com os códigos zerados como o gerador faz,
+            # mas sem applyBrazilianModifications.
+            s30 = nosso['sidc']
+            render = s30[:20]
+            if s30[10:16] in ('163499', '111299'):
+                render = render[:10] + '000000' + render[16:]
+            bruto = self.motor.svg_milsymbol_bruto(render)
+            degradado = dict(nosso, svgWeb=bruto)
+            alvo = {'svg': nosso['svgWeb'], 'largura': nosso['largura'], 'altura': nosso['altura'],
+                    'iconOffset': nosso['iconOffset']}
+            if ref is not None:
+                alvo = ref['simbolo'][i]
+            self.assertNotEqual(comparar(degradado, alvo), [], nome + ': o comparador aprovou o desenho sem extensão')
+            self.assertEqual(comparar(nosso, alvo), [], nome)
+
+    def test_sidc_invalido(self):
+        with self.assertRaises(ErroMotor):
+            self.motor.simbolo_militar({'sidc': 'XXXX'})
+        with self.assertRaises(ErroMotor):
+            self.motor.simbolo_militar({})
+        r = self.motor.simbolo_militar({'sidc': '1003100016121100000X'})
+        self.assertFalse(r['valido'])
+        r = self.motor.simbolo_militar({'sidc': '10031000161211000000'})
+        self.assertTrue(r['valido'])
+
+    def test_baseline_corrigida(self):
+        """Texto com dominant-baseline sai com y deslocado e sem o atributo."""
+        r = self.motor.simbolo_militar({'sidc': sidc(icone='121700')})  # SF vira Cmdos
+        self.assertIn('Cmdos', r['svg'])
+        self.assertIn('dominant-baseline', r['svgWeb'])
+        self.assertNotIn('dominant-baseline', r['svg'])
+        ref = referencia_web()
+        if ref is not None:
+            b = ref['baseline']
+            print('\n[baseline] Chromium: middle {} central {} hanging {}'.format(
+                b['bold/middle'], b['bold/central'], b['bold/hanging']))
+            self.assertAlmostEqual(b['bold/middle'], 0.2592, places=3)
+            self.assertAlmostEqual(b['bold/central'], 0.35, places=3)
+        # Prova no QSvgRenderer: o texto corrigido desce em relação ao original.
+        _ok, a = render_svg(r['svgWeb'], 300, 300)
+        _ok, c = render_svg(r['svg'], 300, 300)
+        self.assertNotEqual(a, c)
+
+    def test_svg_valido_no_qsvgrenderer(self):
+        ruins = []
+        for nome, props in casos_simbolo():
+            r = self.motor.simbolo_militar(props)
+            ok, img = render_svg(r['svg'], 120, 120)
+            if not ok or pixels_tinta(img, 3) == 0:
+                ruins.append(nome)
+        self.assertEqual(ruins, [])
+
+    def test_desempenho_1000_simbolos(self):
+        casos = casos_simbolo()
+        t = time.perf_counter()
+        for k in range(1000):
+            self.motor.simbolo_militar(casos[k % len(casos)][1])
+        dt = time.perf_counter() - t
+        print('\n[desempenho] 1000 símbolos militares: {:.2f} s ({:.2f} ms cada)'.format(dt, dt))
+        self.assertLess(dt, 60)
+        medidas = casos_medida()
+        t = time.perf_counter()
+        for k in range(1000):
+            self.motor.medida(medidas[k % len(medidas)][1])
+        dt = time.perf_counter() - t
+        print('[desempenho] 1000 medidas de coordenação: {:.2f} s ({:.2f} ms cada)'.format(dt, dt))
+
+    def test_grade_de_simbolos(self):
+        itens = []
+        for nome, props in casos_simbolo():
+            r = self.motor.simbolo_militar(props)
+            itens.append((r['svg'], nome))
+        arq = grade(itens, os.path.join(SAIDA, 'grade_simbolos.png'))
+        print('\n[render] ' + arq)
+        self.assertTrue(os.path.exists(arq))
+
+
+class TestMedida(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.motor = Motor.instancia()
+
+    def test_130_entradas_validas_no_qsvgrenderer(self):
+        codigos = self.motor.codigos_de_medida()
+        self.assertEqual(len(codigos), 130)
+        validas = 0
+        ruins = []
+        for c in codigos:
+            r = self.motor.medida({'pointCode': c})
+            ok, img = render_svg(r['svg'], 120, 120)
+            if ok and pixels_tinta(img, 2) > 0:
+                validas += 1
+            else:
+                ruins.append(c)
+        print('\n[medida] {} de {} entradas do catálogo com SVG válido e tinta no QSvgRenderer'.format(validas, len(codigos)))
+        self.assertEqual(ruins, [])
+
+    def test_paridade_com_o_web(self):
+        ref = referencia_web()
+        if ref is None:
+            self.skipTest('EBGEO_WEB ou node ausente')
+        falhas = []
+        iguais = 0
+        casos = casos_medida()
+        for (nome, props), web in zip(casos, ref['medida']):
+            nosso = self.motor.medida(props)
+            dif = comparar(nosso, web)
+            if web.get('anchor') != nosso['anchor']:
+                dif.append('anchor')
+            if dif:
+                falhas.append('{}: {}'.format(nome, '; '.join(dif)))
+            else:
+                iguais += 1
+        print('\n[paridade] medida: {} casos ({} do catálogo), iguais em SVG, tamanho e âncora: {}'.format(
+            len(casos), len(self.motor.codigos_de_medida()), iguais))
+        for f in falhas:
+            print('  DIFERENÇA ' + f)
+        self.assertEqual(falhas, [])
+
+    def test_ancora_bottom_vira_deslocamento_do_centro(self):
+        r = self.motor.medida({'pointCode': '130100'})
+        self.assertEqual(r['anchor'], 'bottom')
+        self.assertAlmostEqual(r['ancoraY'], round(-r['altura'] / 2 + r['iconOffset'][1], 2))
+
+    def test_codigo_inexistente(self):
+        with self.assertRaises(ErroMotor):
+            self.motor.medida({'pointCode': 'NAO_EXISTE'})
+
+    def test_grade_de_medidas(self):
+        itens = []
+        for nome, props in casos_medida():
+            r = self.motor.medida(props)
+            itens.append((r['svg'], nome.replace('catálogo ', '')))
+        arq = grade(itens, os.path.join(SAIDA, 'grade_medidas.png'), celula=130, colunas=12)
+        print('\n[render] ' + arq)
+
+
+class TestDeclinacao(unittest.TestCase):
+    def test_js_num(self):
+        for v, esperado in ((200.0, '200'), (1e-7, '1e-7'), (0.00001, '0.00001'), (1e21, '1e+21'),
+                            (123456789012345680000.0, '123456789012345680000'), (-0.5, '-0.5'),
+                            (200.00000000000003, '200.00000000000003'), (0.1 + 0.2, '0.30000000000000004')):
+            self.assertEqual(declinacao.js_num(v), esperado)
+        self.assertEqual(declinacao.js_to_fixed(21.25, 1), '21.3')  # empate exato: JS sobe
+        self.assertEqual(declinacao.js_to_fixed(0.05, 1), '0.1')    # 0.05 é 0.05000000000000000277
+
+    def test_paridade_svg_e_wmm(self):
+        ref = referencia_web()
+        if ref is None:
+            self.skipTest('EBGEO_WEB ou node ausente')
+        iguais = 0
+        for p, web in zip(casos_declinacao(), ref['declinacao']):
+            nosso = declinacao.gerar_svg(p['declination'], p['convergence'], p['fillColor'])
+            self.assertEqual(nosso, web['svg'], p)
+            iguais += 1
+        for p, web in zip(casos_wmm(), ref['wmm']):
+            data = datetime.datetime.fromisoformat(p['data'].replace('Z', '+00:00'))
+            nosso = declinacao.calcular_declinacao(p['lat'], p['lon'], 0, data)
+            for k in ('declination', 'inclination', 'intensity'):
+                self.assertEqual(nosso[k], web[k], (p, k, nosso[k], web[k]))
+            self.assertEqual(declinacao.calcular_convergencia(p['lat'], p['lon']), web['convergence'], p)
+        print('\n[paridade] declinação: {} SVG iguais; WMM {} pontos iguais (2 casas)'.format(iguais, len(casos_wmm())))
+
+    def test_qsvgrenderer_desenha_as_pontas(self):
+        """O SVG do Web vai sem mudança: o Qt 6.8 desenha o <marker>. Pior caso: sem ele, a ponta some."""
+        svg = declinacao.renderizar(-21.3, 0.6)['svg']
+        self.assertEqual(svg, declinacao.gerar_svg(-21.3, 0.6))
+        sem = svg.replace(' marker-end="url(#arrowHead)"', '')
+        _ok, img = render_svg(svg, 400, 500)
+        _ok, img_sem = render_svg(sem, 400, 500)
+
+        def ponta(im):  # região da ponta NM
+            return sum(1 for x in range(70, 110) for y in range(80, 120) if im.pixelColor(x, y).alpha() > 0)
+        print('\n[declinação] tinta na ponta NM: com marker {}, sem marker {}'.format(ponta(img), ponta(img_sem)))
+        self.assertGreater(ponta(img), 1.5 * ponta(img_sem))
+        grade([(svg, 'declinação -21,3 / conv. 0,6'), (declinacao.gerar_svg(21.25, -1.15, '#AA0000'), '21,25 / -1,15')],
+              os.path.join(SAIDA, 'declinacao.png'), celula=300, colunas=2)
+
+    def test_wmm2025_coeficientes(self):
+        # Valor de controle: g(1,0) do WMM2025 publicado pela NOAA.
+        with open(declinacao.ARQUIVO_COF, encoding='ascii') as f:
+            linhas = f.read().splitlines()
+        self.assertIn('WMM-2025', linhas[0])
+        self.assertTrue(linhas[1].split()[:3] == ['1', '0', '-29351.8'])
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2, exit=False)
+    print('\nImagens em: ' + SAIDA)
