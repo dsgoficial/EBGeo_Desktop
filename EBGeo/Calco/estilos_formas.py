@@ -10,7 +10,7 @@ reserva dos tipos militares quando estilos_taticos ou estilos_pontuais ainda
 não existem: linha pelo eixo e bitmap do arquivo como marcador raster.
 
 Unidades (ANALISE_IMPORTACAO_EBGEO.md, seção 7):
-- lineWidth do Web é px fixo na tela: vira milímetros a 0,26 mm/px;
+- lineWidth do Web é px fixo na tela: vira milímetros a 0,2646 mm/px;
 - tamanho com correção de zoom ligada é fixo NO TERRENO: vira metros pela
   convenção MapLibre de 512 px, m/px = 78271,517 · cos(lat) / 2^z, com
   z = createdAtZoom. A CONFIRMAR lado a lado com o Web: o próprio ebgeo_web
@@ -33,7 +33,7 @@ try:
 except ImportError:  # zoom.py é de outro módulo; a constante é a mesma
     M_POR_PX_Z0 = 78271.517
 
-MM_POR_PX = 0.26
+MM_POR_PX = 25.4 / 96  # um pixel lógico (CSS) a 96 dpi: 0,2646 mm
 FONTE = 'Noto Sans'
 
 TIPOS = ('point', 'line', 'polygon', 'circle', 'ellipse', 'rectangle', 'sector', 'text', 'image',

@@ -131,6 +131,48 @@ class TesteFerramentas(unittest.TestCase):
         self.assertGreater(f['largura_px'], 0)
 
 
+class TesteFerramentasOutroSrc(unittest.TestCase):
+    """O mesmo gesto num mapa em UTM 22S (EPSG:31982) e em Web Mercator: o calco grava em
+    graus, no lugar certo, e o zoom de criação não depende do SRC do mapa."""
+
+    def _gesto(self, epsg):
+        caminho = os.path.join(tempfile.mkdtemp(), 'calco_{}.gpkg'.format(epsg.replace(':', '_')))
+        calco = Calco(caminho)
+        calco.criar()
+        calco.carregar(estilizar_novas=False)
+        definir_calco_ativo(calco)
+        canvas = QgsMapCanvas()
+        canvas.resize(800, 600)
+        crs = QgsCoordinateReferenceSystem(epsg)
+        canvas.setDestinationCrs(crs)
+        from qgis.core import QgsCoordinateTransform
+        tr = QgsCoordinateTransform(QgsCoordinateReferenceSystem('EPSG:4326'), crs, QgsProject.instance())
+        canvas.setExtent(tr.transformBoundingBox(QgsRectangle(-51.28, -30.07, -51.18, -29.99)))
+        canvas.refresh()
+        ft = FerramentaLinha(canvas, 'coordination_line')
+        _clique(canvas, ft, 400, 300)
+        _clique(canvas, ft, 600, 300, Qt.MouseButton.RightButton)
+        f = list(calco.camada('coordination_line').getFeatures())[-1]
+        centro = canvas.getCoordinateTransform().toMapCoordinates(400, 300)
+        esperado = QgsCoordinateTransform(crs, QgsCoordinateReferenceSystem('EPSG:4326'), QgsProject.instance()).transform(centro)
+        p0 = QgsPointXY(next(f.geometry().vertices()))
+        return f, p0, esperado
+
+    def test_utm_e_mercator(self):
+        zooms = {}
+        for epsg in ('EPSG:31982', 'EPSG:3857', 'EPSG:4326'):
+            f, p0, esperado = self._gesto(epsg)
+            self.assertAlmostEqual(p0.x(), esperado.x(), places=6, msg=epsg)
+            self.assertAlmostEqual(p0.y(), esperado.y(), places=6, msg=epsg)
+            self.assertTrue(-52 < p0.x() < -51 and -31 < p0.y() < -29, (epsg, p0))  # gravado em graus
+            zooms[epsg] = f['created_zoom']
+        print('\n[src] zoom de criação por SRC do mapa:', zooms)
+        # projetados: mesmo zoom; em graus o mapa estica o eixo x por 1/cos(lat) e o canvas ajusta
+        # a extensão ao formato da janela, então a escala horizontal vista muda um pouco (0,2 medido)
+        self.assertLessEqual(abs(zooms['EPSG:31982'] - zooms['EPSG:3857']), 0.1, zooms)
+        self.assertLessEqual(max(zooms.values()) - min(zooms.values()), 0.3, zooms)
+
+
 if __name__ == '__main__':
     r = unittest.main(exit=False, verbosity=2).result
     sys.exit(0 if r.wasSuccessful() else 1)

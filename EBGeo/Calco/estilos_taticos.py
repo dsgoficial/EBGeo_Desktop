@@ -19,7 +19,7 @@ pontuais e de formas):
     centroide da feição arredondado a 0,1 grau, e trabalha em metros no plano; o fator
     k de metro de terreno para unidade do plano vale 1. A variante em EPSG:3857 com
     k = 1 / cos(lat do centroide) continua disponível (PROJECAO = '3857').
-  - Pixel do Web vira 0,26 mm de papel (MM_POR_PX, o mesmo de estilos_pontuais.py).
+  - Pixel do Web vira 0,2646 mm de papel (MM_POR_PX, o mesmo de estilos_pontuais.py).
   - Metros de terreno por pixel do Web no zoom de criação z0 (convenção MapLibre de
     512 px): 78271,517 x cos(lat) / 2^z0.
   - Escala de TERRENO na feição: @map_scale dividido pelo fator do SRC do mapa medido
@@ -28,7 +28,7 @@ pontuais e de formas):
   - zoom_corr ligado com âncora (created_zoom > 0): preso ao TERRENO. Glifos em km de
     terreno; traço e texto valem px x metros-por-px(z0) de terreno, convertidos em mm
     pela escala de terreno, com os tetos do Web (traço 60 px, texto 255 px).
-  - zoom_corr desligado com âncora: preso à TELA. Traço e texto fixos em mm (px x 0,26);
+  - zoom_corr desligado com âncora: preso à TELA. Traço e texto fixos em mm (px x 0,2646);
     glifos fixos em mm também: o km de criação vira px no zoom de criação e o px vira
     km de terreno pela escala atual (o 2^(z0 - z) do Web), entre 0,001 e 50 km
     (espaçamento entre 0,002 e 500 km).
@@ -62,7 +62,7 @@ from qgis.PyQt.QtGui import QColor
 DIR_EXPRESSOES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'expressoes')
 
 # px do Web em mm de papel (a mesma constante de estilos_pontuais.py e estilos_formas.py).
-MM_POR_PX = 0.26
+MM_POR_PX = 25.4 / 96  # um pixel lógico (CSS) a 96 dpi: 0,2646 mm
 
 # 'tmerc' (Transversa de Mercator local esférica) ou '3857' (Mercator com fator k).
 PROJECAO = 'tmerc'
@@ -383,7 +383,7 @@ def expr_frente_ocupada(projecao=None):
 def expr_largura_px(coluna, padrao, teto, zoom=True):
     """
     Largura em mm de um tamanho em px do Web. Com zoom, e zoom_corr ligado com âncora,
-    vale px x 2^(z - z0) (preso ao terreno) até o teto em px; senão, px x 0,26 mm.
+    vale px x 2^(z - z0) (preso ao terreno) até o teto em px; senão, px x 0,264646 mm.
     """
     base = 'CASE WHEN "{c}" > 0 THEN "{c}" ELSE {p} END'.format(c=coluna, p=padrao) if coluna else str(padrao)
     if not zoom:

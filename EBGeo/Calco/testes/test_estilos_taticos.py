@@ -68,7 +68,7 @@ from Calco import estilos_taticos as et  # noqa: E402
 from Calco import gpkg, schema  # noqa: E402
 
 R_TURF = 6371008.8          # raio do turf (earthRadius), m
-MM_POR_PX = 0.26
+MM_POR_PX = 25.4 / 96
 LIMITE_DESVIO_M = 2.0       # tolerância de posição contra o Web, m (ver relatório)
 
 SAIDA = os.environ.get('EBGEO_TESTE_SAIDA') or tempfile.mkdtemp(prefix='ebgeo_estilos_')
@@ -190,10 +190,10 @@ def mapa(centro, escala=50000, crs='EPSG:3857', tamanho=(1000, 800)):
 def escala_do_zoom(z):
     """
     Escala de um mapa em EPSG:3857 equivalente ao zoom z do MapLibre (512 px), com o px do
-    Web a 0,26 mm: terreno 78271,517 x cos(lat) / 2^z m/px, e a escala Mercator do QGIS é
+    Web a 0,2646 mm (96 dpi): terreno 78271,517 x cos(lat) / 2^z m/px, e a escala Mercator do QGIS é
     a de terreno dividida por cos(lat).
     """
-    return 78271.517 / (2 ** z) / 0.00026
+    return 78271.517 / (2 ** z) / (MM_POR_PX / 1000)
 
 
 def avaliar(expr, vl, f, ms=None):

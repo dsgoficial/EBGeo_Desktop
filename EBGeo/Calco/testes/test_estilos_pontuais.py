@@ -93,8 +93,15 @@ def contexto(lyr, feicao=None, escala=None):
     ctx = QgsExpressionContext()
     ctx.appendScopes(QgsExpressionContextUtils.globalProjectLayerScopes(lyr))
     if escala is not None:
+        # escala de TERRENO pedida; o mapa simulado é EPSG:3857, cujo @map_scale vale a escala
+        # de terreno dividida por cos(lat), como o QGIS calcula (ver _escala_terreno.exp)
+        lat = LAT0
+        if feicao is not None and not feicao.geometry().isNull():
+            lat = feicao.geometry().centroid().asPoint().y()
         s = QgsExpressionContextScope()
-        s.setVariable('map_scale', escala)
+        s.setVariable('map_scale', escala / math.cos(math.radians(lat)))
+        s.setVariable('map_crs', 'EPSG:3857')
+        s.setVariable('map_units', 'meters')
         ctx.appendScope(s)
     if feicao is not None:
         ctx.setFeature(feicao)
@@ -441,7 +448,7 @@ class TestGeometriaDoDesenho(unittest.TestCase):
         caixa = caixa_escura(img, cx, cy, 200)
         largura_px = caixa[2] - caixa[0] + 1
         esperado = f['largura_px'] * estilos_pontuais.MM_POR_PX * 96 / 25.4
-        print('\n[tamanho] tinta {} px, marcador {:.1f} px (largura_px {} × 0,26 mm a 96 dpi)'.format(
+        print('\n[tamanho] tinta {} px, marcador {:.1f} px (largura_px {} × 0,2646 mm a 96 dpi)'.format(
             largura_px, esperado, f['largura_px']))
         # O SVG do milsymbol tem uma margem pequena em volta do quadro.
         self.assertGreater(largura_px, 0.85 * esperado)
@@ -455,7 +462,7 @@ class TestGeometriaDoDesenho(unittest.TestCase):
         f = next(lyr.getFeatures())
         expr = QgsExpression(estilos_pontuais.expressao_largura('military_symbol'))
         m_px = estilos_pontuais.METROS_POR_PX_ZOOM0 * math.cos(math.radians(LAT0))
-        # Escala em que um pixel de tela (0,26 mm) vale um pixel do MapLibre no zoom z.
+        # Escala em que um pixel de tela (0,2646 mm) vale um pixel do MapLibre no zoom z.
         escala = lambda z: m_px / 2 ** z / (estilos_pontuais.MM_POR_PX / 1000)  # noqa: E731
         mm14 = expr.evaluate(contexto(lyr, f, escala(14)))
         mm16 = expr.evaluate(contexto(lyr, f, escala(16)))
@@ -560,7 +567,13 @@ class TestFixture03SvgERaster(unittest.TestCase):
                 cx, cy = px(LON0, LAT0)
                 res[via] = (img, caixa_tinta(img, cx, cy, 440, limiar=128), cx, cy, next(lyr.getFeatures()))
             (ia, ca, cx, cy, fa), (ib, cb, _x, _y, fb) = res['svg'], res['raster']
-            dif = max(abs(a - b) for a, b in zip(ca, cb))
+            if tipo == 'magnetic_declination':
+                # a borda direita é o fim do texto da legenda, que o QSvgRenderer escreve com a
+                # fonte do Qt e o Chrome (PNG do arquivo) com a dele: setas, arcos e linha de base
+                # coincidem (conferido em imagem, 2026-10-04), então a régua usa esquerda, topo e base
+                dif = max(abs(ca[i] - cb[i]) for i in (0, 1, 3))
+            else:
+                dif = max(abs(a - b) for a, b in zip(ca, cb))
             relatorio.append('{} ({}, bitmapVersion {}): tinta svg {} raster {}; largura_px {} / {}; '
                              'âncora ({}, {}) / ({}, {}); maior diferença {} px'.format(
                                  nome, tipo, p.get('bitmapVersion'), ca, cb, fa['largura_px'], fb['largura_px'],

@@ -14,10 +14,11 @@ O renderer só desenha as feições com "visivel" verdadeiro (nulo conta como ve
 TAMANHO. O Web desenha o ícone com icon-size = size, ou, com a correção de zoom ligada e o
 zoom de referência gravado, min(10, size × 2^(zoom − createdAtZoom)): preso ao TERRENO até
 dez vezes o tamanho de criação. Aqui isso vira milímetros por pixel lógico do desenho:
-  correção ligada: min(10 × 0,26, size × 78271,517 × cos(lat) / 2^created_zoom × 1000 / @map_scale)
-  correção desligada (ou created_zoom nulo ou 0): size × 0,26
+  correção ligada: min(10 × 0,2646, size × 78271,517 × cos(lat) / 2^created_zoom × 1000 / escala de terreno)
+  (a escala de terreno vem de expressoes/_escala_terreno.exp, independente do SRC do mapa)
+  correção desligada (ou created_zoom nulo ou 0): size × 0,2646
 O fator 78271,517 m/px no zoom 0 é a convenção de 512 px do MapLibre (A CONFIRMAR lado a lado
-com o Web: o KMZ do Web usa a de 256 px), e 0,26 mm por pixel lógico é a tela de 96 dpi. A
+com o Web: o KMZ do Web usa a de 256 px), e 0,2646 mm por pixel lógico é a tela de 96 dpi. A
 largura do marcador é largura_px × fator, e o deslocamento é (ancora_dx, ancora_dy) × fator,
 girado junto com o símbolo, como o icon-offset do MapLibre.
 """
@@ -34,7 +35,7 @@ TIPOS = simbolos.TIPOS_SVG
 
 # Tamanho padrão do Web quando "size" é nulo (symbol.layers.js: SYMBOL_SIZE e DECLINATION_SIZE).
 TAMANHO_PADRAO = {'magnetic_declination': 0.6}
-MM_POR_PX = 0.26
+MM_POR_PX = 25.4 / 96  # um pixel lógico (CSS) a 96 dpi: 0,2646 mm
 METROS_POR_PX_ZOOM0 = 78271.517
 TETO_ICON_SIZE = 10
 NOME_ESTILO = 'EBGeo calco'
@@ -47,9 +48,20 @@ def expressao_mm_por_px(tipo):
         "with_variable('s', coalesce(\"size\", {s}), "
         "if(coalesce(\"zoom_corr\", true) AND coalesce(\"created_zoom\", 0) > 0 AND coalesce(@map_scale, 0) > 0, "
         "min({teto}, @s * {m0} * cos(radians(y(transform(@geometry, @layer_crs, 'EPSG:4326')))) "
-        "/ (2 ^ \"created_zoom\") * 1000 / @map_scale), "
+        "/ (2 ^ \"created_zoom\") * 1000 / ({escala})), "
         "@s * {mm}))"
-    ).format(s=s, teto=TETO_ICON_SIZE * MM_POR_PX, m0=METROS_POR_PX_ZOOM0, mm=MM_POR_PX)
+    ).format(s=s, teto=TETO_ICON_SIZE * MM_POR_PX, m0=METROS_POR_PX_ZOOM0, mm=MM_POR_PX,
+             escala=_escala_terreno())
+
+
+def _escala_terreno():
+    """
+    Escala de TERRENO na feição, a mesma das linhas táticas (expressoes/_escala_terreno.exp).
+    O @map_scale cru está nas unidades do SRC do mapa: em EPSG:3857 ele vale a escala de terreno
+    dividida por cos(lat), e o símbolo saía 8 % menor a 23 graus S (medido na fixture 06).
+    """
+    from .estilos_taticos import compor, finalizar
+    return finalizar(compor('_escala_terreno'))
 
 
 def expressao_largura(tipo):

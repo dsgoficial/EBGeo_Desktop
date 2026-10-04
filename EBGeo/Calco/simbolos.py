@@ -117,9 +117,35 @@ def _texto_assinatura(tp, valor):
         return '1' if valor else '0'
     if tp == 'real':
         return _real_como_qgis(valor)
-    if tp == 'json' and not isinstance(valor, str):
-        return json.dumps(valor, ensure_ascii=False)
+    if tp == 'json':
+        return _json_canonico(valor)
     return valor if isinstance(valor, str) else str(valor)
+
+
+def _json_canonico(valor):
+    """
+    JSON como o to_json() do QGIS escreve a coluna JSON lida do GeoPackage: compacto, chaves em
+    ordem, sem escapar acento. O texto gravado na coluna pode ter outro espaçamento ou ordem
+    (json.dumps do importador), e compará-lo cru com o to_json acendia o aviso de SVG velho em
+    todo símbolo de engenharia importado.
+    """
+    if isinstance(valor, str):
+        try:
+            valor = json.loads(valor)
+        except ValueError:
+            return valor
+    return json.dumps(_inteiros(valor), ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+
+
+def _inteiros(v):
+    """O to_json do QGIS escreve 1.0 como 1; o json do Python escreveria 1.0."""
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    if isinstance(v, dict):
+        return {k: _inteiros(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_inteiros(x) for x in v]
+    return v
 
 
 def texto_assinatura(tipo, atributos):
@@ -141,6 +167,9 @@ def _termo_expressao(tp, coluna):
         return "if({}, '1', '0')".format(c)
     if tp == 'real':
         return "coalesce(to_string({}), '')".format(c)
+    if tp == 'json':
+        # a coluna JSON chega como texto ou como mapa conforme a camada; to_json(texto) dá nulo
+        return "coalesce(to_json(from_json({c})), to_json({c}), '')".format(c=c)
     return "coalesce(to_string({}), '')".format(c)
 
 
