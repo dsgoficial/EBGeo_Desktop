@@ -66,8 +66,7 @@ PAINEIS = {
         ('tipo', 'Tipo'), ('identificacao', 'Identificação'), ('gdh_ini', 'GDH início'), ('gdh_fim', 'GDH fim'),
         ('numero', 'Número'), ('numero_concentracao', 'Número da concentração'), ('altitude', 'Altitude')]]
     + _ICONE,
-    'engineering_symbol': [('point_code', 'Item (C 5-36)', ('texto',)),
-                           ('engineering', 'Valores (JSON)', ('texto',))] + _ICONE,
+    'engineering_symbol': [('point_code', 'Símbolo (C 5-36)', ('engenharia',))] + _ICONE,
     'magnetic_declination': [('declination', 'Declinação (graus)', ('leitura',)),
                              ('convergence', 'Convergência (graus)', ('leitura',)),
                              ('calculation_date', 'Data do cálculo', ('leitura',)),
@@ -267,6 +266,16 @@ class PainelCalco(QDockWidget):
                 b = QPushButton('Configurar...')
                 b.clicked.connect(lambda _=False, ed=ed: self._construtor(ed))
                 h.addWidget(b)
+        elif kind == 'engenharia':
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 0, 0)
+            rot = QLabel(_rotulo_engenharia(None if nulo else str(valor)))
+            rot.setWordWrap(True)
+            h.addWidget(rot, 1)
+            b = QPushButton('Configurar...')
+            b.clicked.connect(self._seletor_engenharia)
+            h.addWidget(b)
         elif kind == 'medida':
             w = QComboBox()
             for codigo, rotulo in opcoes_medida():
@@ -294,6 +303,15 @@ class PainelCalco(QDockWidget):
             return None
         self.widgets[col] = w
         return w
+
+    def _seletor_engenharia(self):
+        from .seletor_engenharia import SeletorEngenharia
+        feat = self.layer.getFeature(self.fid)
+        dlg = SeletorEngenharia(feat['point_code'], feat['engineering'], self)
+        if dlg.exec():
+            self._pendentes.update(dlg.valores())
+            self._gravar_pendentes()
+            QTimer.singleShot(0, self._selecao_mudou)
 
     def _medida_mudou(self, codigo):
         """Troca de medida: nas famílias de escalão (Núcleo, Escalão, com ou sem FT) o escalão
@@ -391,6 +409,17 @@ class PainelCalco(QDockWidget):
             self.iface.messageBar().pushWarning('EBGeo', 'Não foi possível gerar o símbolo: {}'.format(e))
         gravar_atributos(self.layer, self.fid, valores)
         QTimer.singleShot(0, self._selecao_mudou)
+
+
+def _rotulo_engenharia(codigo):
+    try:
+        from .construtor_sidc import catalogos
+        for it in catalogos()['engenharia']['itens']:
+            if str(it['codigo']) == str(codigo):
+                return '{}. {}'.format(it['numero'], it['titulo'])
+    except Exception:
+        pass
+    return str(codigo or '')
 
 
 def _catalogo_medida():

@@ -168,6 +168,13 @@ class GerenciadorCalco:
             ultimo = QgsSettings().value(CHAVE_SIDC, '')
             if ultimo:
                 attrs['sidc'] = ultimo
+        elif tipo == 'engineering_symbol' and not attrs.get('engineering'):
+            try:
+                import json
+                from .motor.motor import Motor
+                attrs['engineering'] = json.dumps(Motor.instancia().engenharia_rascunho(attrs.get('point_code') or '9'))
+            except Exception as e:
+                self.iface.messageBar().pushWarning('EBGeo', 'Engenharia sem rascunho: {}'.format(e))
         elif tipo == 'magnetic_declination':
             try:
                 from .motor import declinacao
