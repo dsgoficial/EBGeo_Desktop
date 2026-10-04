@@ -304,7 +304,7 @@ class LaunchNOAA(QgsProcessingAlgorithm):
         try:
             if output_layer_points is not None and output_layer_points.featureCount() > 0:
                 text_format = QgsTextFormat()
-                text_format.setFont(QFont("Arial", 12, QFont.Bold))
+                text_format.setFont(QFont("Arial", 12, QFont.Weight.Bold))
                 text_format.setSize(12)
                 text_format.setColor(QColor("black"))
 

@@ -6,7 +6,7 @@ class _CloseGuard(QObject):
         self.plugin = plugin
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Close:
+        if event.type() == QEvent.Type.Close:
             enabled = self.plugin.settings.value("qgislight/enabled", "false") == "true"
             if enabled:
                 try:

@@ -61,11 +61,11 @@ class HideToolbar(QObject):
 
     def eventFilter(self, obj, event):
         if obj is self.canvas and self.active:
-            if event.type() == QEvent.Enter:
+            if event.type() == QEvent.Type.Enter:
                 for tb in self.visible_toolbars:
                     tb.hide()
                 self.menu_bar.hide()
-            elif event.type() == QEvent.Leave:
+            elif event.type() == QEvent.Type.Leave:
                 for tb in self.visible_toolbars:
                     tb.show()
                 if self.menu_visible:

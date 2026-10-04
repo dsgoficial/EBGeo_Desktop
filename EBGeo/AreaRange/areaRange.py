@@ -93,7 +93,7 @@ class AreaRange(QObject):
             ang_check = True
             ang_op_check = True
             while dist_check:
-                inp_dist = QInputDialog.getText(qid, "Digite o alcance", "Alcance (em unidades do mapa): ", QLineEdit.Normal)[0]
+                inp_dist = QInputDialog.getText(qid, "Digite o alcance", "Alcance (em unidades do mapa): ", QLineEdit.EchoMode.Normal)[0]
                 if not inp_dist:
                     return
                 try:
@@ -102,7 +102,7 @@ class AreaRange(QObject):
                 except:
                     QMessageBox.critical(None , u"Erro", u"Entre um valor numérico para a distância.")
             while ang_check:
-                inp_ang = QInputDialog.getText(qid, "Digite o azimute de disparo", "Azimute (GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
+                inp_ang = QInputDialog.getText(qid, "Digite o azimute de disparo", "Azimute (GG.MM.SS ou Decimal): ", QLineEdit.EchoMode.Normal)[0]
                 if not inp_ang:
                     return
                 if len(inp_ang.split(".")) == 3:
@@ -118,7 +118,7 @@ class AreaRange(QObject):
                     except:
                         QMessageBox.critical(None , u"Erro", u"Entre um formato válido para o azimute.")
             while ang_op_check:
-                inp_op_ang = QInputDialog.getText(qid, "Digite o ângulo de abertura", "Ângulo de abertura (GG.MM.SS ou Decimal): ", QLineEdit.Normal)[0]
+                inp_op_ang = QInputDialog.getText(qid, "Digite o ângulo de abertura", "Ângulo de abertura (GG.MM.SS ou Decimal): ", QLineEdit.EchoMode.Normal)[0]
                 if not inp_op_ang:
                     return
                 if len(inp_op_ang.split(".")) == 3:
@@ -147,7 +147,7 @@ class AreaRange(QObject):
         name_check = True
         same_crs = True
         while name_check:
-            input_name = QInputDialog.getText(qid, "Selecione a Camada", "Digite o nome da Camada de Pontos contendo os campos 'Alcance', 'Azimute' e 'Abertura'", QLineEdit.Normal)[0]
+            input_name = QInputDialog.getText(qid, "Selecione a Camada", "Digite o nome da Camada de Pontos contendo os campos 'Alcance', 'Azimute' e 'Abertura'", QLineEdit.EchoMode.Normal)[0]
             if not input_name:
                 return 
             layerlist = self.iface.mapCanvas().layers()
