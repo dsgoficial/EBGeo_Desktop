@@ -60,7 +60,7 @@ PAINEIS = {
         ('type_amplifier', 'Tipo (V)'), ('iff_sif', 'IFF/SIF (P)'), ('credibility', 'Avaliação (J)'),
         ('equipment_teardown_time', 'Tempo de desmontagem (AE)'), ('engagement_bar', 'Barra de engajamento (AO)')]]
     + _ICONE,
-    'coordination_measure': [('point_code', 'Código', ('medida',)), ('echelon_code', 'Escalão', ('texto',)),
+    'coordination_measure': [('point_code', 'Medida', ('medida',)), ('echelon_code', 'Escalão', ('escalao_medida',)),
                              ('status', 'Situação do núcleo', ('combo', STATUS_NUCLEO))]
     + [(c, rot, ('texto',)) for c, rot in [
         ('tipo', 'Tipo'), ('identificacao', 'Identificação'), ('gdh_ini', 'GDH início'), ('gdh_fim', 'GDH fim'),
@@ -268,12 +268,49 @@ class PainelCalco(QDockWidget):
                 b.clicked.connect(lambda _=False, ed=ed: self._construtor(ed))
                 h.addWidget(b)
         elif kind == 'medida':
-            w = QLineEdit('' if nulo else str(valor))
-            w.editingFinished.connect(lambda c=col, w=w: self._mudou(c, w.text() or None))
+            w = QComboBox()
+            for codigo, rotulo in opcoes_medida():
+                w.addItem(rotulo, codigo)
+            i = w.findData(None if nulo else str(valor))
+            if i < 0 and not nulo:
+                w.addItem(str(valor), str(valor))
+                i = w.count() - 1
+            w.setCurrentIndex(max(i, 0))
+            w.currentIndexChanged.connect(lambda _i, w=w: self._medida_mudou(w.currentData()))
+        elif kind == 'escalao_medida':
+            feat = self.layer.getFeature(self.fid)
+            prefixo = prefixo_familia(feat['point_code'])
+            w = QComboBox()
+            if prefixo is None:
+                w.addItem('Não se aplica', None)
+                w.setEnabled(False)
+            else:
+                for nn, rotulo in escaloes_medida():
+                    w.addItem(rotulo, '{}_{}'.format(prefixo, nn))
+                i = w.findData(None if nulo else str(valor))
+                w.setCurrentIndex(max(i, 0))
+                w.currentIndexChanged.connect(lambda _i, c=col, w=w: self._mudou(c, w.currentData()))
         else:
             return None
         self.widgets[col] = w
         return w
+
+    def _medida_mudou(self, codigo):
+        """Troca de medida: nas famílias de escalão (Núcleo, Escalão, com ou sem FT) o escalão
+        acompanha a família, mantendo o número; o painel é remontado para o escalão certo."""
+        if self._carregando or self.fid is None:
+            return
+        feat = self.layer.getFeature(self.fid)
+        prefixo = prefixo_familia(codigo)
+        mud = {'point_code': codigo}
+        if prefixo:
+            atual = str(feat['echelon_code'] or '')
+            nn = atual.rsplit('_', 1)[-1] if atual[-2:].isdigit() else _escalao_padrao()
+            mud['echelon_code'] = '{}_{}'.format(prefixo, nn)
+        self._pendentes.update(mud)
+        self._gravar_pendentes()
+        # remontar fora do sinal: apagar o combo dentro do próprio currentIndexChanged derruba o QGIS
+        QTimer.singleShot(0, self._selecao_mudou)
 
     def _construtor(self, editor):
         feat = self.layer.getFeature(self.fid)
@@ -353,7 +390,43 @@ class PainelCalco(QDockWidget):
         except Exception as e:
             self.iface.messageBar().pushWarning('EBGeo', 'Não foi possível gerar o símbolo: {}'.format(e))
         gravar_atributos(self.layer, self.fid, valores)
-        self._selecao_mudou()
+        QTimer.singleShot(0, self._selecao_mudou)
+
+
+def _catalogo_medida():
+    try:
+        from .construtor_sidc import catalogos
+        return catalogos()['medida']
+    except Exception:
+        return None
+
+
+def _escalao_padrao():
+    c = _catalogo_medida()
+    return (c or {}).get('escalaoPadrao', '16')
+
+
+def opcoes_medida():
+    """(código, rótulo) das medidas do catálogo, mais as quatro famílias de escalão."""
+    c = _catalogo_medida()
+    if not c:
+        return []
+    ops = [('ECHELON', 'Núcleo: Núcleo (escolha o escalão)'), ('ECHELON_FT', 'Núcleo: Núcleo de Força-Tarefa'),
+           ('ESCALAO', 'Escalão: Escalão'), ('ESCALAO_FT', 'Escalão: Escalão de Força-Tarefa')]
+    for item in c['lista']:
+        ops.append((item['code'], '{}: {}'.format(item['category'], item['label'])))
+    return ops
+
+
+def prefixo_familia(codigo):
+    """Prefixo do echelonCode para as famílias de escalão; None para as demais medidas."""
+    return {'ECHELON': 'ECHELON', 'ECHELON_FT': 'ECHELON_FT',
+            'ESCALAO': 'ESCALAO', 'ESCALAO_FT': 'ESCALAO_FT'}.get(str(codigo or ''))
+
+
+def escaloes_medida():
+    c = _catalogo_medida()
+    return sorted((c or {}).get('escaloes', {}).items())
 
 
 def _instancias(texto, antigas):
