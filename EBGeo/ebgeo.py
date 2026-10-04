@@ -148,7 +148,7 @@ class EBGeo(QObject):
 
 		self.ms_action = self.add_action(
 		 	os.path.join(os.path.dirname(__file__), 'icons', 'militarySimbology.png'),
-		 	text=u'Simbologia Militar',
+		 	text=u'Simbologia Militar: camadas MD33 antigas',
 		 	callback=self.loadMilitarySimbology,
 		 	parent=self.ebGeo,
 		 	add_to_menu=False,
