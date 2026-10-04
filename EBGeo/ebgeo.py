@@ -34,6 +34,7 @@ class EBGeo(QObject):
 	def initGui(self):
 		self.initVariables()
 		self.loadTools()
+		self.loadCalco()
 		pluginProvider.initProcessing(self)
 		self.initiateToolsSignals()
 
@@ -48,6 +49,17 @@ class EBGeo(QObject):
 		self.fieldToolbox = None
 		self.menuBar.insertMenu(self.iface.firstRightStandardMenu().menuAction(), self.ebGeo)
 
+	def loadCalco(self):
+		"""Simbologia militar do EBGeo Web (calco) e importação do .ebgeo."""
+		self.calco = None
+		try:
+			from .Calco.gerenciador import GerenciadorCalco
+			self.calco = GerenciadorCalco(self.iface, self.ebGeo)
+			self.calco.initGui()
+		except Exception as e:
+			QgsApplication.messageLog().logMessage(
+				f"Calco não carregou: {e}", "EBGeo", Qgis.MessageLevel.Critical)
+
 	def unload(self):
 		self.iface.currentLayerChanged.disconnect(self.resetCurrentLayerSignals)
 		for tool in [
@@ -60,6 +72,8 @@ class EBGeo(QObject):
 			self.editingStopped.disconnect(tool.setToolEnabled)
 			# connect edit button toggling signal to all tools that use it
 			self.iface.actionToggleEditing().triggered.disconnect(tool.setToolEnabled)
+		if getattr(self, 'calco', None) is not None:
+			self.calco.unload()
 		QgsApplication.processingRegistry().removeProvider(self.provider)
 		for action in self.actions:
 			self.iface.removePluginMenu(u'EBGeo',	action)
