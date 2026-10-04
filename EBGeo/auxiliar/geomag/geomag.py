@@ -20,7 +20,10 @@ from datetime import date
 
 class GeoMag:
 
-    def GeoMag(self, dlat, dlon, h=0, time=date.today()): # latitude (decimal degrees), longitude (decimal degrees), altitude (feet), date
+    def GeoMag(self, dlat, dlon, h=0, time=None): # latitude (decimal degrees), longitude (decimal degrees), altitude (feet), date
+        # a data padrão é a de HOJE na chamada; como argumento padrão ela congelava no carregamento do QGIS
+        if time is None:
+            time = date.today()
         #time = date('Y') + date('z')/365
         time = time.year+((time - date(time.year,1,1)).days/365.0)
         alt = h/3280.8399
