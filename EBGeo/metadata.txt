@@ -18,7 +18,7 @@ about=
 	+PORTUGUÊS:
 	Ferramentas para planejamento de atividades militares.
 	Atualmente conta com as seguintes funcionalidades:
-	- Simbologia Militar (de acordo com Manual MD33-M-02)
+	- Simbologia Militar do EBGeo Web (SIDC com extensão brasileira, medidas de coordenação, engenharia, linhas de limite e de coordenação do MD33) e importação do arquivo .ebgeo
 	- Calculador de coordenadas e dimensões
 	- Conversão de unidades angulares
 	- Criação de pontos por coordenadas
