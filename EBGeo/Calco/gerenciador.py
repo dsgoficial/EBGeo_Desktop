@@ -157,7 +157,9 @@ class GerenciadorCalco:
         elif tipo == 'magnetic_declination':
             try:
                 from .motor import declinacao
-                attrs.update(declinacao.calcular(ponto_wgs.y(), ponto_wgs.x()))
+                web = declinacao.calcular(ponto_wgs.y(), ponto_wgs.x()) or {}
+                m = schema.mapa_web(tipo)
+                attrs.update({m[k]: v for k, v in web.items() if k in m})
             except Exception as e:
                 self.iface.messageBar().pushWarning('EBGeo', 'Declinação não calculada: {}'.format(e))
         return attrs

@@ -342,7 +342,16 @@ class PainelCalco(QDockWidget):
         except ImportError:
             return
         p = feat.geometry().asPoint()
-        valores = declinacao.calcular(p.y(), p.x())
+        web = declinacao.calcular(p.y(), p.x()) or {}
+        m = schema.mapa_web(self.tipo)
+        valores = {m[k]: v for k, v in web.items() if k in m}
+        attrs = {f.name(): feat[f.name()] for f in self.layer.fields()}
+        attrs.update(valores)
+        try:
+            from .. import simbolos
+            valores.update(simbolos.renderizar(self.tipo, attrs))
+        except Exception as e:
+            self.iface.messageBar().pushWarning('EBGeo', 'Não foi possível gerar o símbolo: {}'.format(e))
         gravar_atributos(self.layer, self.fid, valores)
         self._selecao_mudou()
 

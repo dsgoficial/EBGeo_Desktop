@@ -123,6 +123,12 @@ class TesteFerramentas(unittest.TestCase):
         f = list(lyr.getFeatures())[-1]
         self.assertEqual(f['sidc'], schema.padroes('military_symbol')['sidc'])
         self.assertTrue(f['ebgeo_id'])
+        # o motor gerou o SVG na criação, com a assinatura dos campos que desenham
+        from Calco import simbolos
+        self.assertTrue(f['svg'])
+        attrs = {c.name(): f[c.name()] for c in lyr.fields()}
+        self.assertEqual(f['svg_assinatura'], simbolos.assinatura('military_symbol', attrs))
+        self.assertGreater(f['largura_px'], 0)
 
 
 if __name__ == '__main__':

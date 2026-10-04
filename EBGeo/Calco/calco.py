@@ -22,7 +22,9 @@ def aplicar_estilo(layer, tipo):
             from . import estilos_pontuais as m
         else:
             from . import estilos_formas as m
-    except ImportError:
+    except Exception as e:  # módulo ausente ou com erro: a camada fica com o estilo padrão do QGIS
+        from qgis.core import QgsMessageLog, Qgis
+        QgsMessageLog.logMessage('Estilo de {} indisponível: {}'.format(tipo, e), 'EBGeo', Qgis.MessageLevel.Warning)
         return False
     m.aplicar_estilo(layer, tipo)
     return True
