@@ -35,6 +35,7 @@ class EBGeo(QObject):
 		self.initVariables()
 		self.loadTools()
 		self.loadCalco()
+		self.restaurarInterfaceSimplificada()
 		pluginProvider.initProcessing(self)
 		self.initiateToolsSignals()
 
@@ -48,6 +49,32 @@ class EBGeo(QObject):
 		self.ebGeo.setTitle('EBGeo')
 		self.fieldToolbox = None
 		self.menuBar.insertMenu(self.iface.firstRightStandardMenu().menuAction(), self.ebGeo)
+
+	def restaurarInterfaceSimplificada(self):
+		"""O Simplificar Interface saiu do plugin (2026-10-04). Quem o deixou ligado ficou com as
+		barras originais escondidas e as simplificadas criadas: devolve as barras e os painéis guardados
+		por ele, apaga as simplificadas e limpa as chaves qgislight do QgsSettings. Roda uma vez só."""
+		from qgis.core import QgsSettings
+		from qgis.PyQt.QtWidgets import QToolBar, QDockWidget
+		conf = QgsSettings()
+		if conf.value('qgislight/enabled') is None and conf.value('qgislight/toolbars') is None:
+			return
+		janela = self.iface.mainWindow()
+		for nome in ('mMainToolBar', 'mEditingToolBar'):
+			for barra in janela.findChildren(QToolBar, nome):
+				janela.removeToolBar(barra)
+				barra.deleteLater()
+		for item in conf.value('qgislight/toolbars', []) or []:
+			barra = janela.findChild(QToolBar, item.get('name', ''))
+			if barra is not None:
+				barra.show()
+		for item in conf.value('qgislight/panels', []) or []:
+			painel = janela.findChild(QDockWidget, item.get('name', ''))
+			if painel is not None and not item.get('hidden'):
+				painel.show()
+		janela.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+		conf.remove('qgislight')
+		QgsApplication.messageLog().logMessage('Interface simplificada antiga desfeita.', 'EBGeo', Qgis.MessageLevel.Info)
 
 	def loadCalco(self):
 		"""Simbologia militar do EBGeo Web (calco) e importação do .ebgeo."""
@@ -80,13 +107,6 @@ class EBGeo(QObject):
 			self.iface.removeToolBarIcon(action)
 			self.iface.unregisterMainWindowAction(action)
 			del action
-		if hasattr(self, "qgisLightPlugin"):
-			try:
-				self.qgisLightPlugin.unload()
-			except Exception as e:
-				QgsApplication.messageLog().logMessage(
-                f"Erro ao descarregar QGISLight: {e}", "EBGeo"
-            )
 		if self.ebGeo is not None:
 			self.menuBar.removeAction(self.ebGeo.menuAction())
 		del self.toolbar
@@ -374,16 +394,6 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.zoom_to_action)
 
-		self.simplifyInterface_action = self.add_action(
-			os.path.join(os.path.dirname(__file__), 'icons', 'hide.png'),
-			text=u'Simplificar Interface',
-			callback=self.loadSimplifyInterface,
-			parent=self.ebGeo,
-			add_to_menu=False,
-			add_to_toolbar=False
-		)
-		self.simplifyInterface_action.setCheckable(True)
-		self.ebGeo.addAction(self.simplifyInterface_action)
 
 		# self.hidde_action = self.add_action(
 		# 	os.path.join(os.path.dirname(__file__), 'icons', 'hide.png'),
@@ -565,31 +575,6 @@ class EBGeo(QObject):
         """
 		if self.mainVisib.isOpen == False:
 			self.mainVisib.initGui()
-
-	def loadSimplifyInterface(self):
-		from .SimplifyInterface.simplify_interface import SimplifyInterface
-		if not hasattr(self, "simplifyInterface"):	
-			self.simplifyInterface = SimplifyInterface(self.iface)
-		if getattr(self.simplifyInterface, "is_active", False):
-			# segundo acionamento: volta a interface ao jeito de antes
-			self.simplifyInterface.disable(store=True)
-			self.simplifyInterface.is_active = False
-			self.simplifyInterface_action.setChecked(False)
-			return
-		try:
-			self.simplifyInterface.enable(store=True)
-		except Exception as e:
-			# falhou no meio: desfaz o que já tinha mudado, para a interface não ficar pela metade
-			try:
-				self.simplifyInterface.disable(store=True)
-			except Exception:
-				pass
-			self.simplifyInterface.is_active = False
-			self.simplifyInterface_action.setChecked(False)
-			self.iface.messageBar().pushCritical('EBGeo', 'Simplificar Interface falhou e a interface foi restaurada: {}'.format(e))
-			return
-		self.simplifyInterface.is_active = True
-		self.simplifyInterface_action.setChecked(True)
 
 	def loadHideToolbar(self):
 		from .HideToolbar.hideToolbar import HideToolbar
