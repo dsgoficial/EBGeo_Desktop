@@ -10,6 +10,10 @@ para poder ser usado e testado em Python puro.
 Cada campo é (coluna, tipo, padrão, propriedade_web). A propriedade_web é o
 nome em properties do GeoJSON do .ebgeo; None quando a coluna não vem do Web.
 Tipos: 'str', 'real', 'int', 'bool', 'json', 'datetime'.
+
+Além das colunas fixas, o importador cria colunas dinâmicas `attr_<chave saneada>` com os
+`attributes` livres das feições (o nome original fica como alias do campo); o JSON `atributos`
+continua sendo a fonte para o caminho de volta.
 """
 
 CRS = 'EPSG:4326'
@@ -67,6 +71,8 @@ _ROTULO = [
     ('label_size', 'real', 14.0, 'labelSize'),
     ('label_outline_color', 'str', '#ffffff', 'labelOutlineColor'),
     ('label_outline_width', 'real', 1.0, 'labelOutlineWidth'),
+    ('label_zoom_corr', 'bool', None, 'labelZoomCorrectionEnabled'),
+    ('label_created_zoom', 'real', None, 'labelCreatedAtZoom'),
 ]
 
 _FORMA = [
@@ -211,7 +217,7 @@ TIPOS = {
                    ('size', 'real', 10.0, 'size'),
                    ('opacity', 'real', 1.0, 'opacity'),
                    ('marker_symbol', 'str', 'circle', 'markerSymbol'),
-                   ('zoom_corr', 'bool', False, 'sizeZoomCorrectionEnabled'),
+                   ('zoom_corr', 'bool', True, 'sizeZoomCorrectionEnabled'),  # ausente = ligada no Web
                    ('created_zoom', 'real', None, 'sizeCreatedAtZoom')]
                   + _ROTULO,
     },

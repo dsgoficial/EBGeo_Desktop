@@ -79,6 +79,16 @@ class GerenciadorCalco:
         self.menu.addSeparator()
         self.acao_painel = self._acao('propriedades.svg', 'Painel de propriedades', self.alternar_painel)
         self.acao_painel.setCheckable(True)
+        # atlas importados de .ebgeo: a carga preguiçosa dos mapas volta a funcionar ao reabrir o projeto
+        QgsProject.instance().readProject.connect(self._religar_atlas)
+
+    def _religar_atlas(self, *_):
+        try:
+            from .importador import arvore
+            arvore.religar(QgsProject.instance())
+        except Exception as e:
+            from qgis.core import QgsMessageLog, Qgis
+            QgsMessageLog.logMessage('Atlas .ebgeo não religado: {}'.format(e), 'EBGeo', Qgis.MessageLevel.Warning)
 
     def _acao(self, icone, texto, callback):
         a = QAction(_icone(icone), texto, self.iface.mainWindow())
@@ -90,6 +100,10 @@ class GerenciadorCalco:
         return a
 
     def unload(self):
+        try:
+            QgsProject.instance().readProject.disconnect(self._religar_atlas)
+        except (TypeError, RuntimeError):
+            pass
         canvas = self.iface.mapCanvas()
         for ft in self.ferramentas.values():
             if canvas.mapTool() is ft:

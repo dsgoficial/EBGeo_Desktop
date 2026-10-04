@@ -13,6 +13,7 @@ from .pointsWithKmAndName import GeradorPontosQuilometragem
 from .launchNOAA import LaunchNOAA
 from .lineOfSight import LineOfSight
 from .generateMgrsAttribute import GenerateMgrsAttribute
+from ..Calco.importador.algoritmo import ImportarEbgeo
 class Provider(QgsProcessingProvider):
 
     def __init__(self):
@@ -30,6 +31,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(LaunchNOAA())
         self.addAlgorithm(LineOfSight())
         self.addAlgorithm(GenerateMgrsAttribute())
+        self.addAlgorithm(ImportarEbgeo())
 
     def load(self):
         ProcessingConfig.settingIcons[self.name()] = self.icon()

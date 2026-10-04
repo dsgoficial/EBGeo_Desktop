@@ -493,6 +493,11 @@ Feitas no Python do QGIS 4.0.0 instalado (PyQt6, Python 3.12), com scripts de ba
 
 A implementação vai direto no branch `qgis4` (decisão do chefe, 2026-10-04), sem branch de feature.
 
+**Critério de aceite (chefe, 2026-10-04): o carregamento preserva estilo, atributos e imagens.**
+- Estilo: toda propriedade que o Web desenha aparece desenhada no QGIS, não só gravada em coluna.
+- Atributos: os `attributes` livres viram colunas reais da tabela (nome saneado, nome original como alias), além do JSON para o caminho de volta.
+- Imagens: feição `image` e ícones personalizados desenhados; fotos anexas gravadas e visíveis no formulário da feição.
+
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 1 | Leitor (`ebgeo_reader.py`) sem dependência de QGIS, com testes nas 5 fixtures | contagem por balde igual à da seção 3.3 nas 5 fixtures; arquivo truncado, versão 3.1 e ZIP sem `data.json` recusados com a mensagem certa |
