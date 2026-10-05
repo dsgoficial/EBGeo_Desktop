@@ -1107,7 +1107,10 @@ class TesteRegrasArea(unittest.TestCase):
         self.assertEqual(ex['line_color'], ea.VERDE_OBSTACULO)
         self.assertNotIn('minas', ex)  # já tem as três
         # a hachura acompanha o tipo
-        self.assertEqual(regras.ao_mudar('coordination_area', ant, {'hatch_type': 'dots'}), {'hatch_enabled': True})
+        # e a opacidade 0 vai a 1 com a hachura (decisão do chefe, 2026-10-05: hachura visível)
+        self.assertEqual(regras.ao_mudar('coordination_area', ant, {'hatch_type': 'dots'}), {'hatch_enabled': True, 'opacity': 1.0})
+        self.assertEqual(regras.ao_mudar('coordination_area', dict(ant, opacity=0.5), {'hatch_type': 'dots'}),
+                         {'hatch_enabled': True})
         self.assertEqual(regras.ao_mudar('coordination_area', dict(ant, hatch_enabled=True, hatch_type='dots'),
                                          {'hatch_type': 'none'}), {'hatch_enabled': False})
         self.assertEqual(regras.ao_mudar('coordination_area', ant, {'tipo': 'x'}), {})
