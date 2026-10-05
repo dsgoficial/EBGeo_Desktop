@@ -53,4 +53,3 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 - **Rótulos de 1 ou 2 letras no setor 1 de Unidades:** cerca de 6 % menores que no manual, pelo leiaute do milsymbol, igual no Web.
 - **Auditoria de chaves em paralelo:** `EBGeo/Calco/testes/test_chaves_ausentes.py` parou em silêncio logo depois de carregar quando rodou junto com outras suítes; sozinho passa (cerca de 10 min). Causa não achada.
 - **Ponto com zoom de referência vazio:** o Web o desenha no teto de 500 px (defeito do Web, a corrigir lá por decisão do chefe); o Desktop não escala, como o rótulo.
-- **`icons/dsg.png`:** o ícone antigo segue listado no `resources.qrc` compilado; sair exige recompilar os recursos.

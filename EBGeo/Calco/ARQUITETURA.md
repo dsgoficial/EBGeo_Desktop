@@ -100,7 +100,7 @@ O estilo de cada tabela vai como padrão para o `layer_styles` do GeoPackage, e 
 ## 8. Armadilhas do QGIS 4
 
 - Enums do QGIS sem escopo funcionam; enums do Qt sem escopo (`QEvent.MouseMove`, `QFont.Bold`) dão `AttributeError`.
-- `qgis.PyQt.QtQml` não existe: importe `PyQt6.QtQml`. Não há `pyrcc6`: ícone novo vai por caminho de arquivo (`icones/`).
+- `qgis.PyQt.QtQml` não existe: importe `PyQt6.QtQml`. O QGIS 4 não traz compilador de recursos (nem `pyrcc`, nem `rcc`): ícone novo vai por caminho de arquivo (`icones/`), e o `EBGeo/resources_rc.py` se regenera com o `rcc` do Qt 6 de fora (receita e régua em `EBGeo/testes/test_recursos.py`).
 - `QSvgRenderer` ignora `dominant-baseline` e `dy`; o bundle reescreve o `y`.
 - Coluna JSON gravada pelo QGIS: passe o objeto, não o texto, ou sai uma string JSON escapada (`schema.valor_json_para_qgis`). Na leitura ela chega como lista na camada do importador e como texto na aberta à mão, e `from_json` de uma lista dá nulo sem erro: as expressões testam `array_length` antes.
 
