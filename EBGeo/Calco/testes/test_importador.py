@@ -51,8 +51,8 @@ from Calco.importador import leitor, escritor, arvore  # noqa: E402
 
 TMP = tempfile.mkdtemp(prefix='ebgeo_importador_')
 
-# Seção 3.3 de ANALISE_IMPORTACAO_EBGEO.md: balde -> contagem (01, 02, 03, 04, 05); None = ausente.
-SECAO_3_3 = {
+# Contagem por balde medida nas cinco fixtures da linha 2.x (01, 02, 03, 04, 05); None = balde ausente.
+CONTAGEM_POR_BALDE = {
     'points': (168, 1, 381, 381, 381), 'lines': (42, 0, 80, 80, 80), 'polygons': (7, 0, 68, 68, 68),
     'texts': (2, 0, 19, 19, 19), 'images': (4, 0, 11, 11, 11), 'circles': (22, 0, 42, 42, 42),
     'ellipses': (1, 0, 5, 5, 5), 'rectangles': (1, 0, 5, 5, 5), 'setores': (1, 0, 6, 6, 6),
@@ -68,9 +68,9 @@ FIXTURE_30 = '06-completo-3.0.ebgeo'
 RELATORIO_30 = '_relatorio-de-geracao-3.0.json'
 
 
-def esperado_secao_3_3(i):
+def esperado_por_balde(i):
     out = {}
-    for balde, ns in SECAO_3_3.items():
+    for balde, ns in CONTAGEM_POR_BALDE.items():
         if ns[i]:
             out[schema.BALDE_PARA_TIPO[balde]] = ns[i]
     return out
@@ -278,12 +278,12 @@ class TestLeitorPioresCasos(unittest.TestCase):
 
 class TestContagem(unittest.TestCase):
 
-    def test_secao_3_3_nas_cinco(self):
+    def test_contagem_por_balde_nas_cinco(self):
         for i, nome in enumerate(ARQUIVOS):
             with self.subTest(fixture=nome):
                 destino, rel = importar(nome)
                 relido = escritor.contar_gpkg(destino)          # a prova: releitura
-                self.assertEqual(relido, esperado_secao_3_3(i))
+                self.assertEqual(relido, esperado_por_balde(i))
                 # instrumento independente do leitor: o data.json cru
                 self.assertEqual(relido, contagem_bruta(bruto_do_arquivo(fixture(nome))[1]))
                 self.assertEqual(rel.descartadas, [])
@@ -295,7 +295,7 @@ class TestContagem(unittest.TestCase):
         ds = ogr.Open(destino, 1)
         ds.ExecuteSQL('DELETE FROM point WHERE fid = (SELECT min(fid) FROM point)')
         ds = None
-        self.assertNotEqual(escritor.contar_gpkg(destino), esperado_secao_3_3(2))
+        self.assertNotEqual(escritor.contar_gpkg(destino), esperado_por_balde(2))
 
     def test_fixture_30(self):
         caminho = fixture(FIXTURE_30)

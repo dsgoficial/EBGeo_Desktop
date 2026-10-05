@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Árvore de camadas do calco importado (QGIS): armazenar por tipo, apresentar
-por camada EBGeo (seção 4.5 de ANALISE_IMPORTACAO_EBGEO.md).
+por camada EBGeo (seção 2 de EBGeo/Calco/ARQUITETURA.md).
 
 - grupo do atlas (nome do arquivo), mutuamente exclusivo: o Web mostra um
   mapa por vez, e o currentMap abre ligado;

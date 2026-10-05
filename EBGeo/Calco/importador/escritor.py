@@ -3,7 +3,7 @@
 Escritor do calco: grava o .ebgeo aberto pelo leitor num GeoPackage, uma
 tabela por tipo (schema.py), só com GDAL/OGR (sem QGIS).
 
-Geometria QGIS por tipo (seção 5 de ANALISE_IMPORTACAO_EBGEO.md):
+Geometria QGIS por tipo (tabela na seção 2 de EBGeo/Calco/ARQUITETURA.md):
 - tipos táticos (boundary, coordination_line, occupied_front) pelo eixo em
   properties.baseCoordinates; a seta (arrow) vira MultiLineString com um ramo
   por parte (branches[] quando isMerged); a geometria gravada pelo Web vai

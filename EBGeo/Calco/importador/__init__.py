@@ -7,5 +7,5 @@ Importador do arquivo .ebgeo (EBGeo Web) para o calco em GeoPackage.
 - arvore: monta a árvore de camadas no projeto QGIS;
 - algoritmo: o algoritmo de Processing "Importar arquivo .ebgeo".
 
-Ver ANALISE_IMPORTACAO_EBGEO.md na raiz do repositório.
+Ver a seção 5 (Importador .ebgeo) de EBGeo/Calco/ARQUITETURA.md.
 """

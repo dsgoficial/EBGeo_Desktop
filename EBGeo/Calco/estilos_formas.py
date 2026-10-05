@@ -9,7 +9,7 @@ devolve False para tipo que não é daqui. `estilo_simples` é o estilo de
 reserva dos tipos militares quando estilos_taticos ou estilos_pontuais ainda
 não existem: linha pelo eixo e bitmap do arquivo como marcador raster.
 
-Unidades (ANALISE_IMPORTACAO_EBGEO.md, seção 7):
+Unidades (seção 6 de ARQUITETURA.md):
 - lineWidth do Web é px fixo na tela: vira milímetros a 0,2646 mm/px;
 - tamanho com correção de zoom ligada é fixo NO TERRENO: vira metros pela
   convenção MapLibre de 512 px, m/px = 78271,517 · cos(lat) / 2^z, com
