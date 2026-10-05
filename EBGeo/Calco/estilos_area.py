@@ -74,6 +74,11 @@ CHAVE_ULTIMO_TIPO = 'EBGeo/calco/ultimo_tipo_area'  # QgsSettings: a área nova 
 BORDA_DA_DECORACAO = ('151000', '270800')  # a decoração desenha a borda (OUTLINE_HIDDEN_CODES)
 
 POSICOES_TEXTO = [('borda', 'Sobre a borda'), ('interna', 'Interna'), ('externa', 'Externa')]
+ESTILOS_TRACO = [('solid', 'Sólida'), ('dashed', 'Tracejada'), ('dotted', 'Pontilhada'), ('dash-dot', 'Traço-ponto'),
+                 ('long-dash', 'Traço longo'), ('short-dash', 'Traço curto'), ('dot-dot-dash', 'Ponto-ponto-traço')]
+HACHURAS = [('none', 'Nenhuma'), ('diagonal-right', 'Diagonal /'), ('diagonal-left', 'Diagonal \\'),
+            ('horizontal', 'Horizontal'), ('vertical', 'Vertical'), ('cross', 'Cruz +'),
+            ('cross-diagonal', 'Cruz X'), ('dots', 'Pontos')]
 TIPOS_MINA = [('ap', 'Antipessoal'), ('ac', 'Anticarro'), ('qualquer', 'Qualquer tipo'), ('vazia', 'Vazia')]
 MINAS_PADRAO = ['qualquer', 'ap', 'ac']
 ESCALOES = ['XXXXXX', 'XXXXX', 'XXXX', 'XXX', 'XX', 'X', 'III', 'II', 'I', 'ooo', 'oo', 'o', 'Ø', '++']
@@ -112,34 +117,13 @@ def tamanho_inicial_km(latitude, z, px=18):
 
 def troca_de_simbolo(atuais, novo):
     """
-    Atributos a gravar ao trocar o tipo (updateSymbol do Web): cada valor de aparência que a
-    área ainda tem no padrão do tipo ANTERIOR passa ao padrão do novo; valor escolhido fica.
+    Atributos a gravar ao trocar o tipo (updateSymbol do Web), com o symbol_code: cada valor de
+    aparência que a área ainda tem no padrão do tipo ANTERIOR passa ao padrão do novo; valor
+    escolhido fica. A regra é de regras.py, que o guardião aplica em qualquer edição; aqui ela
+    serve à área que nasce no último tipo (gerenciador).
     """
-    ant = CATALOGO_AREA.get(atuais.get('symbol_code'), CATALOGO_AREA[SIMBOLO_PADRAO])
-    nov = CATALOGO_AREA.get(novo, CATALOGO_AREA[SIMBOLO_PADRAO])
-    mud = {'symbol_code': novo if novo in CATALOGO_AREA else SIMBOLO_PADRAO}
-    for col, valor in nov['padroes'].items():
-        atual = atuais.get(col)
-        if atual is None or _igual(atual, ant['padroes'].get(col)):
-            mud[col] = valor
-    pos_ant = ant.get('posicao', 'borda')
-    if not atuais.get('text_position') or atuais.get('text_position') == pos_ant:
-        mud['text_position'] = nov.get('posicao', 'borda')
-    if nov.get('minas') and not atuais.get('minas'):
-        import json
-        mud['minas'] = json.dumps(MINAS_PADRAO)
-    return mud
-
-
-def _igual(a, b):
-    if isinstance(b, float) or isinstance(a, float):
-        try:
-            return abs(float(a) - float(b)) < 1e-9
-        except (TypeError, ValueError):
-            return False
-    if isinstance(b, str) and isinstance(a, str):
-        return a.lower() == b.lower()
-    return a == b
+    from .regras import padroes_da_troca_area
+    return padroes_da_troca_area(atuais, novo)
 
 
 # ---------------------------------------------------------------------------
@@ -519,12 +503,29 @@ def rotulagem_area(projecao=None):
 # API
 # ---------------------------------------------------------------------------
 
+EXPRESSAO_HACHURA_LIGADA = "coalesce(\"hatch_type\", 'none') <> 'none'"
+
+
+def hachura_acompanha_o_tipo(layer):
+    """
+    hatch_enabled segue hatch_type (updateHatchType do Web): valor padrão aplicado na
+    atualização, que o QGIS renova em qualquer caminho de edição, com ou sem o plugin. O
+    formulário nativo só mostra o tipo de hachura; sem isto, escolher a hachura nele não a
+    desenharia (o estilo pede as duas colunas, COND_HACHURA).
+    """
+    from qgis.core import QgsDefaultValue
+    i = layer.fields().indexOf('hatch_enabled')
+    if i >= 0:
+        layer.setDefaultValueDefinition(i, QgsDefaultValue(EXPRESSAO_HACHURA_LIGADA, True))
+
+
 def aplicar_estilo(layer, tipo='coordination_area', projecao=None):
     if tipo != 'coordination_area':
         return False
     layer.setRenderer(renderer_area(projecao))
     layer.setLabeling(rotulagem_area(projecao))
     layer.setLabelsEnabled(True)
+    hachura_acompanha_o_tipo(layer)
     layer.triggerRepaint()
     return True
 

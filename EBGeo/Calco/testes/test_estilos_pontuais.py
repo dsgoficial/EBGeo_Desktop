@@ -621,15 +621,18 @@ class TestFixture03SvgERaster(unittest.TestCase):
         self.assertGreater(abs(svg['ancora_dy']), 3, nome + ': sem âncora o PNG ficaria deslocado')
 
 
-class TestRegenerador(unittest.TestCase):
+class TestGuardiaoRedesenha(unittest.TestCase):
+    """O SVG em dia pelo guardião da camada (guardiao.py), em comandos de edição e no commit."""
+
     def setUp(self):
+        from Calco import guardiao
         self.caminho = os.path.join(tempfile.mkdtemp(prefix='ebgeo-regen-'), 'calco.gpkg')
         gpkg.criar_calco(self.caminho)
         self.lyr = camada(self.caminho, 'military_symbol')
-        self.reg = simbolos.RegeneradorSvg(self.lyr, 'military_symbol')
+        self.g = guardiao.Guardiao(self.lyr, 'military_symbol')
 
     def tearDown(self):
-        self.reg.desconectar()
+        self.g.desconectar()
         if self.lyr.isEditable():
             self.lyr.rollBack()
 
@@ -641,48 +644,49 @@ class TestRegenerador(unittest.TestCase):
         self.assertTrue(self.lyr.addFeature(f))
         return f.id()
 
+    def _comando(self, acao):
+        self.lyr.beginEditCommand('teste')
+        r = acao()
+        self.lyr.endEditCommand()
+        return r
+
     def test_nascer_mudar_e_lote(self):
         self.lyr.startEditing()
-        fid = self._nova(sidc=INFANTARIA)
-        self.assertEqual(self.reg.processar(), 1)
+        fid = self._comando(lambda: self._nova(sidc=INFANTARIA))
+        self.assertEqual(self.g.regeneradas, 1)
         f = self.lyr.getFeature(fid)
         self.assertIsNotNone(f['svg'])
         self.assertEqual(f['svg_assinatura'], simbolos.assinatura('military_symbol', {n: f[n] for n in f.fields().names()}))
         svg1 = f['svg']
 
-        # Mudar um amplificador regenera; mudar o tamanho não.
+        # Mudar um amplificador redesenha; mudar o tamanho não.
         idx = self.lyr.fields().indexOf('unique_designation')
-        self.lyr.changeAttributeValue(fid, idx, '7')
-        self.lyr.changeAttributeValue(fid, self.lyr.fields().indexOf('size'), 2.0)
-        self.assertEqual(self.reg.processar(), 1)
+        self._comando(lambda: self.lyr.changeAttributeValue(fid, idx, '7'))
+        self._comando(lambda: self.lyr.changeAttributeValue(fid, self.lyr.fields().indexOf('size'), 2.0))
+        self.assertEqual(self.g.regeneradas, 2)
         f = self.lyr.getFeature(fid)
         self.assertNotEqual(f['svg'], svg1)
         self.assertIn('>7<', simbolos.svg_de_coluna(f['svg']))
-        self.assertEqual(self.reg.processar(), 0, 'a própria gravação não pode anotar de novo')
 
-        # Lote: 40 feições novas e uma mudança em todas viram um passe cada.
-        fids = [self._nova(sidc=INFANTARIA, unique_designation=str(k)) for k in range(40)]
-        self.assertEqual(self.reg.processar(), 40)
-        for k in fids:
-            self.lyr.changeAttributeValue(k, idx, 'L')
-        self.assertEqual(len(self.reg._pendentes), 40)
-        self.assertEqual(self.reg.processar(), 40)
-        self.assertEqual(self.reg.processar(), 0)
+        # Lote: 40 feições num comando (colar) e uma mudança em todas num comando (calculadora).
+        fids = self._comando(lambda: [self._nova(sidc=INFANTARIA, unique_designation=str(k)) for k in range(40)])
+        self.assertEqual(self.g.regeneradas, 42)
+        self._comando(lambda: [self.lyr.changeAttributeValue(k, idx, 'L') for k in fids])
+        self.assertEqual(self.g.regeneradas, 82)
 
-        # Mexer à mão numa coluna de saída não dispara nada (sem recursão).
-        self.lyr.changeAttributeValue(fid, self.lyr.fields().indexOf('svg_assinatura'), 'x')
-        self.assertEqual(len(self.reg._pendentes), 0)
+        # Mexer à mão numa coluna de saída não redesenha (sem recursão).
+        self._comando(lambda: self.lyr.changeAttributeValue(fid, self.lyr.fields().indexOf('svg_assinatura'), 'x'))
+        self.assertEqual(self.g.regeneradas, 82)
 
     def test_sidc_invalido_nao_grava_e_registra(self):
         self.lyr.startEditing()
-        fid = self._nova(sidc='XXXX')
-        self.assertEqual(self.reg.processar(), 0)
+        fid = self._comando(lambda: self._nova(sidc='XXXX'))
         self.assertIsNone(self.lyr.getFeature(fid)['svg'])
-        self.assertEqual(len(self.reg.erros), 1)
+        self.assertEqual(len(self.g.erros_svg), 1)
 
-    def test_commit_processa_o_pendente(self):
+    def test_commit_desenha_o_que_entrou_fora_de_comando(self):
         self.lyr.startEditing()
-        self._nova(sidc=PC)
+        self._nova(sidc=PC)  # pela API, sem comando
         self.assertTrue(self.lyr.commitChanges())
         lyr = camada(self.caminho, 'military_symbol')
         f = next(lyr.getFeatures())

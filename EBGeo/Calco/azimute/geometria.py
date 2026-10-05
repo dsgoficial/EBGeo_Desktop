@@ -42,7 +42,6 @@ AREA = 'area'
 ROTULO_MODO = {PONTO: 'Ponto', ROTA: 'Rota', AREA: 'Área'}
 DESCRICAO_MODO = {PONTO: 'Observação, alvo, referência', ROTA: 'Itinerário, patrulha, marcha',
                   AREA: 'Setor, zona, perímetro'}
-ROTULO_NORTE = {NM: 'Norte Magnético (NM)', NQ: 'Norte de Quadrícula (NQ)', NV: 'Norte Verdadeiro (NV)'}
 
 # Rosa dos ventos do painel (COMPASS_PRESETS)
 PRESETS = [('N', 0), ('NE', 45), ('E', 90), ('SE', 135), ('S', 180), ('SO', 225), ('O', 270), ('NO', 315)]

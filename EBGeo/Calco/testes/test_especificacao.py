@@ -176,8 +176,10 @@ class TesteEspecificacao(unittest.TestCase):
         self.assertIn('Manobra: Linha de Contato (140200)', [list(d)[0] for d in mapa])
 
     def test_tipos_sem_especificacao_ficam_de_fora(self):
-        self.assertEqual(esp.TIPOS_COM_FORMULARIO, frozenset({'coordination_line'}))
-        self.assertIsNone(esp.formulario('military_symbol'))
+        # na escala cada frente registra o seu tipo; o tipo sem construtor segue sem especificação
+        self.assertIn('coordination_line', esp.TIPOS_COM_FORMULARIO)
+        self.assertNotIn('tipo_sem_formulario', esp.TIPOS_COM_FORMULARIO)
+        self.assertIsNone(esp.formulario('tipo_sem_formulario'))
 
 
 if __name__ == '__main__':

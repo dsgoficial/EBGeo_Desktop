@@ -563,6 +563,8 @@ def _novo_registro(lyr, valores, tipos):
     for col, val in valores.items():
         idx = defn.GetFieldIndex(col)
         if idx >= 0:
+            if schema.coluna_de_cor(col):
+                val = schema.cor_canonica(val)  # como o formulário nativo a regrava (minúsculas)
             _set(feat, idx, tipos.get(col, 'str'), val)
     return feat
 

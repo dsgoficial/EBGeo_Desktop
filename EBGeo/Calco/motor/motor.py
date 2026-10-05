@@ -22,11 +22,11 @@ import threading
 try:  # QGIS 4 (Qt 6); o shim qgis.PyQt não traz QtQml.
     from PyQt6.QtCore import QObject, pyqtSlot
     from PyQt6.QtGui import QFont, QFontMetricsF
-    from PyQt6.QtQml import QJSEngine, QJSValue
+    from PyQt6.QtQml import QJSEngine, QJSValue  # noqa: F401 (os testes o importam daqui)
 except ImportError:  # pragma: no cover - QGIS 3 (Qt 5)
     from PyQt5.QtCore import QObject, pyqtSlot
     from PyQt5.QtGui import QFont, QFontMetricsF
-    from PyQt5.QtQml import QJSEngine, QJSValue
+    from PyQt5.QtQml import QJSEngine, QJSValue  # noqa: F401
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
 ARQUIVO_BUNDLE = os.path.join(PASTA, 'ebgeo-simbologia.js')
@@ -183,12 +183,6 @@ class Motor:
 
     def codigos_de_medida(self):
         return self._converter(self._api.property('codigosDeMedida').call([]))
-
-    def corrigir_texto_para_qt(self, svg):
-        r = self._api.property('corrigirTextoParaQt').call([svg])
-        if r.isError():
-            raise ErroMotor(_mensagem_de_erro(r))
-        return r.toString()
 
     def catalogos(self):
         """Catálogos da interface (gerados no build, lidos do JSON ao lado do bundle)."""

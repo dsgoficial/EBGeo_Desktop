@@ -874,6 +874,9 @@ class TestPainel(unittest.TestCase):
         return lyr, eid
 
     def _reler(self, eid):
+        # o dock edita no buffer da camada (Salvar e Descartar): relê o disco depois do Salvar
+        self.painel.salvar()
+        _APP.processEvents()
         nova = QgsVectorLayer(gpkg.uri_camada(self.caminho, 'coordination_area'), 'r', 'ogr')
         return next(nova.getFeatures('"ebgeo_id" = \'{}\''.format(eid)))
 
@@ -888,10 +891,12 @@ class TestPainel(unittest.TestCase):
         for cod, cols in esperados.items():
             with self.subTest(cod=cod):
                 self._nova(symbol_code=cod)
-                self.assertTrue(cols <= set(self.painel.widgets), cols - set(self.painel.widgets))
+                # o dock da especificação monta todas as linhas e esconde as que não valem para o tipo
+                vis = self.painel.campos_visiveis()
+                self.assertTrue(cols <= vis, cols - vis)
         self._nova(symbol_code='150000')
-        self.assertNotIn('escalao', self.painel.widgets)
-        self.assertNotIn('portoes', self.painel.widgets)
+        self.assertNotIn('escalao', self.painel.campos_visiveis())
+        self.assertNotIn('portoes', self.painel.campos_visiveis())
         cb = self.painel.widgets['symbol_code']
         self.assertEqual(cb.count(), 7)
 

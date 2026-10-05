@@ -427,9 +427,27 @@ def valor_json_para_qgis(valor):
     return valor
 
 
+def coluna_de_cor(nome):
+    """A coluna guarda uma cor do esquema ('color', '*_color'); as attr_* do usuário ficam de fora."""
+    return not nome.startswith('attr_') and (nome == 'color' or nome.endswith('_color'))
+
+
+def cor_canonica(valor):
+    """
+    A cor '#rrggbb' em minúsculas, como o widget nativo de cor a regrava (QColor.name()) ao salvar
+    QUALQUER mudança no formulário (medido no QGIS 4.0.0): gravada assim, salvar o nome pelo
+    formulário não muda a coluna. O que não é '#hex' passa como veio.
+    """
+    return valor.lower() if isinstance(valor, str) and valor.startswith('#') else valor
+
+
 def atributos_para_qgis(tipo, atributos):
-    """Cópia de {coluna: valor} com as colunas JSON do tipo prontas para o provedor do QGIS."""
+    """
+    Cópia de {coluna: valor} pronta para o provedor do QGIS: as colunas JSON do tipo como objeto
+    e as cores em minúsculas (cor_canonica).
+    """
     if tipo not in TIPOS:
         return dict(atributos)
     js = colunas_json(tipo)
-    return {k: (valor_json_para_qgis(v) if k in js else v) for k, v in atributos.items()}
+    return {k: (valor_json_para_qgis(v) if k in js else cor_canonica(v) if coluna_de_cor(k) else v)
+            for k, v in atributos.items()}

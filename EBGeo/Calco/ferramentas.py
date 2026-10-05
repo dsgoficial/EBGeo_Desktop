@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from qgis.core import (
     Qgis, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsDistanceArea,
-    QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsWkbTypes,
+    QgsFeature, QgsGeometry, QgsPointXY, QgsProject,
 )
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal

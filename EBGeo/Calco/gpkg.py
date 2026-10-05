@@ -70,7 +70,32 @@ def garantir_tabela_tipo(ds, tipo):
     for nome, tp, padrao, _web in schema.campos(tipo):
         if nome not in existentes:
             lyr.CreateField(_campo_ogr(nome, tp, padrao))
+    _comentarios(lyr, tipo)
     return lyr
+
+
+def _comentarios(lyr, tipo):
+    """
+    A dica de cada campo (a do Web, formulario/especificacao.dicas) como comentário da coluna: o
+    formulário nativo a mostra no rótulo, sem código e sem o plugin (medido no QGIS 4.0.0; o
+    GeoPackage a guarda em gpkg_data_columns). Coluna já com a dica fica como está.
+    """
+    try:
+        from .formulario.especificacao import dicas
+        por_coluna = dicas(tipo)
+    except Exception:  # especificação indisponível: a tabela segue sem dicas
+        return
+    defn = lyr.GetLayerDefn()
+    for coluna, dica in por_coluna.items():
+        i = defn.GetFieldIndex(coluna)
+        if i < 0 or not hasattr(ogr, 'ALTER_COMMENT_FLAG'):
+            continue
+        atual = defn.GetFieldDefn(i)
+        if atual.GetComment() == dica:
+            continue
+        fd = ogr.FieldDefn(atual.GetName(), atual.GetType())
+        fd.SetComment(dica)
+        lyr.AlterFieldDefn(i, fd, ogr.ALTER_COMMENT_FLAG)
 
 
 def garantir_tabela_apoio(ds, nome):

@@ -6,7 +6,7 @@ Dock de propriedades montado da especificação (ui/painel.py), piloto da Linha 
   - edita no BUFFER de edição: o disco só muda no Salvar, Descartar volta ao estado de antes,
     Ctrl+Z desfaz, e a edição aberta pelo operador continua aberta depois do Salvar;
   - a feição bloqueada aparece só para leitura;
-  - os demais tipos seguem gravando direto, como antes do piloto.
+  - o Limite, que gravava direto até a escala, também edita no buffer.
 Grava capturas do dock em EBGEO_TESTE_SAIDA (padrão: temporária).
 
 Rodar com o Python do QGIS 4:
@@ -73,6 +73,8 @@ class TestePainelFormulario(unittest.TestCase):
     def _capturar(self, nome):
         self.painel.show()
         _app.processEvents()
+        from Calco.ui.blocos.previa import esperar
+        esperar(self.painel)  # a amostra do estilo desenha fora da interface
         self.painel.grab().save(os.path.join(SAIDA, nome))
 
     def tearDown(self):
@@ -183,21 +185,30 @@ class TestePainelFormulario(unittest.TestCase):
         self.assertTrue(self.painel.salvar())
         self.assertAlmostEqual(list(self._disco(eid).geometry().vertices())[0].x(), -51.1, places=6)
 
-    def test_outros_tipos_como_antes(self):
+    def test_limite_tambem_no_buffer(self):
+        """
+        Na escala todos os tipos ganharam especificação: o Limite, que gravava direto, edita no
+        buffer como a Linha de Coordenação (o detalhe em test_formulario_taticos.py).
+        """
         lyr = self.calco.camada('boundary')
         a = dict(schema.padroes('boundary'), ebgeo_id=str(uuid.uuid4()))
         eid = gravar_feicao(lyr, 'boundary', QgsGeometry.fromPolylineXY([QgsPointXY(-51.2, -30.0), QgsPointXY(-51.1, -30.0)]), a)
         self.painel._camada_mudou(lyr)
         self.painel.mostrar_feicao(lyr, eid)
         self.painel._selecao_mudou()
-        self.assertTrue(self.painel.barra_edicao.isHidden())
+        self.assertFalse(self.painel.barra_edicao.isHidden())
         ed = self.painel.widgets['text_top']
         ed.setText('ALFA')
         ed.editingFinished.emit()
         self.painel._gravar_pendentes()
-        self.assertFalse(lyr.isEditable())
-        vl = QgsVectorLayer(gpkg.uri_camada(self.caminho, 'boundary'), 'r', 'ogr')
-        self.assertEqual(next(vl.getFeatures('"ebgeo_id" = \'{}\''.format(eid)))['text_top'], 'ALFA')
+        self.assertTrue(lyr.isEditable())
+
+        def disco():
+            vl = QgsVectorLayer(gpkg.uri_camada(self.caminho, 'boundary'), 'r', 'ogr')
+            return next(vl.getFeatures('"ebgeo_id" = \'{}\''.format(eid)))['text_top']
+        self.assertEqual(disco(), '')
+        self.assertTrue(self.painel.salvar())
+        self.assertEqual(disco(), 'ALFA')
 
 
 if __name__ == '__main__':

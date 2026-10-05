@@ -24,9 +24,9 @@ import os
 from osgeo import ogr
 
 from qgis.core import (
-    QgsProject, QgsVectorLayer, QgsLayerTreeGroup, QgsLayerTreeLayer, QgsRuleBasedRenderer,
+    QgsProject, QgsVectorLayer, QgsLayerTreeGroup, QgsRuleBasedRenderer,
     QgsNullSymbolRenderer, QgsVectorLayerSimpleLabeling, QgsRuleBasedLabeling, QgsPalLayerSettings,
-    QgsProperty, QgsMapLayer,
+    QgsProperty, QgsPropertyCollection, QgsMapLayer,
 )
 
 from .. import schema, gpkg
@@ -167,65 +167,88 @@ def condicao_exibir(grupos_ocultos=None):
 
 
 def esconder_por_regra(layer, condicao):
-    """Embrulha o renderer e o rótulo da camada numa regra raiz com a condição."""
-    r = layer.renderer()
-    if r is not None and not isinstance(r, QgsNullSymbolRenderer):
-        rb = r.clone() if isinstance(r, QgsRuleBasedRenderer) else QgsRuleBasedRenderer.convertFromRenderer(r)
-        if rb is None:
-            sub = layer.subsetString()
-            layer.setSubsetString('({}) AND ({})'.format(sub, condicao) if sub else condicao)
-            return 'subset'
+    """
+    Embrulha o renderer e o rótulo da camada numa regra raiz com a condição.
+
+    Nenhuma referência Python ao renderer ou ao rótulo velhos pode sobreviver ao setRenderer e ao
+    setLabeling que os apagam: solta depois, ela faz o SIP escrever oito bytes zero na memória já
+    reaproveitada (medido em 2026-10-05: a expressão do rótulo do Ponto ficava com quatro caracteres
+    nulos em cerca de 7 de cada 10 repetições, e o layer_styles guardava o estilo cortado ali).
+    Por isso o velho só é lido dentro de _copia_renderer e _copia_rotulo, que devolvem cópias.
+    """
+    rb = _copia_renderer(layer)
+    if rb is not None:
         velha = rb.rootRule()
         raiz = QgsRuleBasedRenderer.Rule(None)
         env = QgsRuleBasedRenderer.Rule(None, 0, 0, condicao, 'Visível no EBGeo')
         for filho in velha.children():
             env.appendChild(filho.clone())
         raiz.appendChild(env)
-        novo = QgsRuleBasedRenderer(raiz)
-        layer.setRenderer(novo)
-    lab = layer.labeling()
-    if lab is not None and layer.labelsEnabled():
-        if isinstance(lab, QgsVectorLayerSimpleLabeling):
-            s = QgsPalLayerSettings(lab.settings())
-            dd = s.dataDefinedProperties()
-            atual = dd.property(QgsPalLayerSettings.Property.Show)
-            expr = condicao
-            if atual is not None and atual.isActive() and atual.expressionString():
-                expr = '({}) AND ({})'.format(condicao, atual.expressionString())
-            dd.setProperty(QgsPalLayerSettings.Property.Show, QgsProperty.fromExpression(expr))
-            s.setDataDefinedProperties(dd)
-            layer.setLabeling(QgsVectorLayerSimpleLabeling(s))
-        elif isinstance(lab, QgsRuleBasedLabeling):
-            velha = lab.rootRule()
-            raiz = QgsRuleBasedLabeling.Rule(None)
-            env = QgsRuleBasedLabeling.Rule(None)
-            env.setFilterExpression(condicao)
-            env.setDescription('Visível no EBGeo')
-            for filho in velha.children():
-                env.appendChild(filho.clone())
-            raiz.appendChild(env)
-            layer.setLabeling(QgsRuleBasedLabeling(raiz))
+        layer.setRenderer(QgsRuleBasedRenderer(raiz))
+    elif _sem_regra(layer):
+        sub = layer.subsetString()
+        layer.setSubsetString('({}) AND ({})'.format(sub, condicao) if sub else condicao)
+        return 'subset'
+    copia = _copia_rotulo(layer)
+    if isinstance(copia, QgsPalLayerSettings):
+        dd = QgsPropertyCollection(copia.dataDefinedProperties())  # cópia, não referência
+        atual = QgsProperty(dd.property(QgsPalLayerSettings.Property.Show))
+        expr = condicao
+        if atual.isActive() and atual.expressionString():
+            expr = '({}) AND ({})'.format(condicao, atual.expressionString())
+        dd.setProperty(QgsPalLayerSettings.Property.Show, QgsProperty.fromExpression(expr))
+        copia.setDataDefinedProperties(dd)
+        layer.setLabeling(QgsVectorLayerSimpleLabeling(copia))
+    elif copia is not None:
+        raiz = QgsRuleBasedLabeling.Rule(None)
+        env = QgsRuleBasedLabeling.Rule(None)
+        env.setFilterExpression(condicao)
+        env.setDescription('Visível no EBGeo')
+        for filho in copia.children():
+            env.appendChild(filho.clone())
+        raiz.appendChild(env)
+        layer.setLabeling(QgsRuleBasedLabeling(raiz))
     return 'regra'
 
 
-def _salvar_estilo_padrao(layer):
-    try:
-        res, msg = layer.saveStyleToDatabaseV2(layer.name(), 'EBGeo Desktop: estilo do tipo', True, '')
-        ok = not msg
-    except AttributeError:
-        msg = layer.saveStyleToDatabase(layer.name(), 'EBGeo Desktop: estilo do tipo', True, '')
-        ok = not msg
-    return ok, msg
+def _copia_renderer(layer):
+    """O renderer da camada como cópia por regras (None sem renderer, nulo ou inconversível)."""
+    r = layer.renderer()
+    if r is None or isinstance(r, QgsNullSymbolRenderer):
+        return None
+    return r.clone() if isinstance(r, QgsRuleBasedRenderer) else QgsRuleBasedRenderer.convertFromRenderer(r)
+
+
+def _sem_regra(layer):
+    """O renderer existe e não vira regra: a condição vai no filtro da camada."""
+    r = layer.renderer()
+    return r is not None and not isinstance(r, QgsNullSymbolRenderer)
+
+
+def _copia_rotulo(layer):
+    """Cópia do rótulo ligado: QgsPalLayerSettings (simples), a regra raiz clonada ou None."""
+    lab = layer.labeling()
+    if lab is None or not layer.labelsEnabled():
+        return None
+    if isinstance(lab, QgsVectorLayerSimpleLabeling):
+        return QgsPalLayerSettings(lab.settings())
+    if isinstance(lab, QgsRuleBasedLabeling):
+        return lab.rootRule().clone()
+    return None
 
 
 def salvar_estilos(caminho, tipos=None, log=None):
     """
-    Grava o estilo de cada tipo como padrão no layer_styles do próprio GPKG,
-    para a tabela reabrir estilizada num QGIS sem o plugin. Devolve {tipo: módulo usado}.
+    Grava o estilo de cada tipo como padrão no layer_styles do próprio GPKG, para a tabela reabrir
+    estilizada num QGIS sem o plugin, com a prova da escrita (calco.gravar_estilo). Devolve
+    {tipo: módulo usado}; estilo que o arquivo não guardou, nem regravado, levanta
+    EstiloNaoGravado depois de tentar os demais tipos.
     """
+    from ..calco import gravar_estilo, EstiloNaoGravado
     log = log or _log
     _CACHE_ESTILO.pop(os.path.abspath(caminho), None)  # GPKG regravado: ícones podem ter mudado
     usados = {}
+    falhas = []
     for tipo in tipos or list(schema.TIPOS):
         d = schema.TIPOS[tipo]
         lyr = QgsVectorLayer('{}|layername={}'.format(caminho, d['tabela']), d['nome_pt'], 'ogr')
@@ -235,10 +258,14 @@ def salvar_estilos(caminho, tipos=None, log=None):
         esconder_por_regra(lyr, COND_VISIVEL)
         lyr.setDisplayExpression('"nome"')
         lyr.setMapTipTemplate('<b>[% "nome" %]</b><br/>[% "descricao" %]')
-        ok, msg = _salvar_estilo_padrao(lyr)
-        if not ok:
-            log.warning('estilo do tipo %s não foi salvo no GeoPackage: %s', tipo, msg)
+        try:
+            gravar_estilo(lyr, lyr.name(), 'EBGeo Desktop: estilo do tipo')
+        except EstiloNaoGravado as e:
+            log.error('%s', e)
+            falhas.append(str(e))
         usados[tipo] = modulo
+    if falhas:
+        raise EstiloNaoGravado('; '.join(falhas))
     return usados
 
 
@@ -306,7 +333,7 @@ def camada_fotos(caminho, projeto=None, criar=True):
 
 
 def _configurar_form_fotos(l):
-    from qgis.core import (QgsEditFormConfig, QgsAttributeEditorField, QgsAttributeEditorHtmlElement,
+    from qgis.core import (QgsAttributeEditorField, QgsAttributeEditorHtmlElement,
                            QgsEditorWidgetSetup, Qgis)
     nomes = l.fields().names()
     for col, alias in (('ebgeo_id', 'Feição (id EBGeo)'), ('foto_id', 'Foto (id)'), ('nome', 'Nome'),

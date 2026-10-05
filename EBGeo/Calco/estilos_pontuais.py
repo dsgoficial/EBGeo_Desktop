@@ -78,9 +78,15 @@ def expressao_deslocamento(tipo):
 
 
 def expressao_divergente(tipo):
-    """Verdadeiro quando o desenho gravado não corresponde aos campos atuais (ou não existe)."""
-    return ('CASE WHEN "svg" IS NOT NULL THEN coalesce("svg_assinatura", \'\') <> {a} '
-            'ELSE "bitmap_b64" IS NULL END').format(a=simbolos.expressao_assinatura(tipo))
+    """
+    Verdadeiro quando o desenho gravado não corresponde aos campos atuais (ou não existe). A
+    assinatura da cor em maiúsculas (desenho gravado antes da cor sem caixa, simbolos.COLUNAS_COR)
+    só é calculada quando a canônica não bate.
+    """
+    return ('CASE WHEN "svg" IS NULL THEN "bitmap_b64" IS NULL '
+            'WHEN coalesce("svg_assinatura", \'\') = {a} THEN FALSE '
+            'ELSE coalesce("svg_assinatura", \'\') <> {b} END').format(
+                a=simbolos.expressao_assinatura(tipo), b=simbolos.expressao_assinatura(tipo, 'alta'))
 
 
 def _girar(camada, tipo):
@@ -166,16 +172,11 @@ def aplicar_estilo(layer, tipo):
 
 def salvar_estilo_padrao(layer, nome=NOME_ESTILO, descricao='Estilo do calco EBGeo (abre sem o plugin)'):
     """
-    Grava o estilo atual em layer_styles do GeoPackage como padrão da tabela. Devolve a
-    mensagem de erro ('' quando deu certo).
+    Grava o estilo atual em layer_styles do GeoPackage como padrão da tabela, com a prova da
+    escrita (calco.gravar_estilo). Devolve a mensagem de erro ('' quando o arquivo o guardou).
     """
-    if hasattr(layer, 'saveStyleToDatabaseV2'):
-        # QGIS 4: (bandeiras SaveStyleResult, mensagem). Só QML e gravação contam: o SLD é
-        # cópia de cortesia e não traduz as propriedades definidas por dado.
-        resultado, mensagem = layer.saveStyleToDatabaseV2(nome, descricao, True, '')
-        valor = resultado.value if hasattr(resultado, 'value') else int(resultado)
-        from qgis.core import QgsMapLayer
-        falhas = [n for n in ('QmlGenerationFailed', 'DatabaseWriteFailed')
-                  if valor & getattr(QgsMapLayer.SaveStyleResult, n).value]
-        return '' if not falhas else '{}: {}'.format(', '.join(falhas), mensagem)
-    return layer.saveStyleToDatabase(nome, descricao, True, '') or ''
+    from .calco import gravar_estilo, EstiloNaoGravado
+    try:
+        return gravar_estilo(layer, nome, descricao)[1]
+    except EstiloNaoGravado as e:
+        return str(e)

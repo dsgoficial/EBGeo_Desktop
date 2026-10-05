@@ -80,6 +80,9 @@ class TestePainel(unittest.TestCase):
         self.assertGreater(cb.count(), 80)
         cb.setCurrentIndex(cb.findData('ESCALAO_FT'))
         _app.processEvents()  # o painel se remonta no ciclo seguinte
+        # a Medida edita no buffer (formulário da especificação): o disco só muda no Salvar
+        self.assertEqual(self._reler(lyr, eid)['point_code'], 'ECHELON')
+        self.assertTrue(self.painel.salvar())
         f = self._reler(lyr, eid)
         self.assertEqual(f['point_code'], 'ESCALAO_FT')
         self.assertEqual(f['echelon_code'], 'ESCALAO_FT_16')
@@ -90,6 +93,7 @@ class TestePainel(unittest.TestCase):
         self.assertEqual(cb_esc.count(), 13)
         cb_esc.setCurrentIndex(cb_esc.findData('ESCALAO_FT_18'))
         self.painel._gravar_pendentes()
+        self.assertTrue(self.painel.salvar())
         self.assertEqual(self._reler(lyr, eid)['echelon_code'], 'ESCALAO_FT_18')
 
     def test_linha_coordenacao_troca_simbolo_e_tamanho_em_metros(self):
@@ -120,6 +124,9 @@ class TestePainel(unittest.TestCase):
         ed.setText('3 BIB')
         ed.editingFinished.emit()
         self.painel._gravar_pendentes()
+        # o Símbolo Militar edita no buffer, e o guardião da camada redesenha: o disco só muda no Salvar
+        self.assertIsNone(self._reler(lyr, eid)['unique_designation'])
+        self.assertTrue(self.painel.salvar())
         f = self._reler(lyr, eid)
         self.assertEqual(f['unique_designation'], '3 BIB')
         self.assertNotEqual(f['svg'], antes['svg'])
@@ -131,7 +138,12 @@ class TestePainel(unittest.TestCase):
                             QgsGeometry.fromPolylineXY([QgsPointXY(-51.2, -30.0), QgsPointXY(-51.1, -30.05)]), a)
         lyr = self._selecionar('boundary', eid)
         self.painel._inverter()
-        pts = list(self._reler(lyr, eid).geometry().vertices())
+        # o Limite edita no buffer (formulário da especificação): o disco só muda no Salvar
+        g = self._reler(lyr, eid).geometry()
+        self.assertAlmostEqual(list(g.vertices())[0].x(), -51.2, places=6)
+        self.assertTrue(self.painel.salvar())
+        g = self._reler(lyr, eid).geometry()
+        pts = list(g.vertices())
         self.assertAlmostEqual(pts[0].x(), -51.1, places=6)
         self.assertAlmostEqual(pts[-1].x(), -51.2, places=6)
 

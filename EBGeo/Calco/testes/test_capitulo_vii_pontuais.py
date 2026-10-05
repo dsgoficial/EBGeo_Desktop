@@ -53,7 +53,6 @@ from Calco.calco import Calco, definir_calco_ativo  # noqa: E402
 from Calco.ferramentas import gravar_feicao  # noqa: E402
 from Calco.importador import escritor, leitor  # noqa: E402
 from Calco.motor.motor import Motor  # noqa: E402
-from Calco.ui import painel as modulo_painel  # noqa: E402
 from Calco.ui.painel import PainelCalco  # noqa: E402
 
 SAIDA = os.environ.get('EBGEO_TESTE_SAIDA') or tempfile.mkdtemp(prefix='ebgeo-cap7-')
@@ -170,11 +169,14 @@ class TestPainelMedidas(unittest.TestCase):
         return eid
 
     def _f(self, eid):
+        # o painel da Medida edita no buffer (formulário da especificação): Salvar antes de reler o disco
+        self.painel._gravar_pendentes()
+        self.painel.salvar()
         return _reler(self.caminho, 'coordination_measure', eid)
 
     def _rotulo(self, col):
         w = self.painel.widgets[col]
-        return self.painel.form.labelForField(w).text()
+        return [rot for _el, _c, _fl, w2, rot in self.painel._linhas if w2 is w][0].text()
 
     def _trocar_medida(self, codigo):
         cb = self.painel.widgets['point_code']
@@ -196,7 +198,7 @@ class TestPainelMedidas(unittest.TestCase):
 
     def test_setor_de_tiro_secundaria_parada_no_terreno(self):
         eid = self._nova(point_code='140500', rotation=0.0)
-        pri, sec = self.painel.widgets['rotation'], self.painel.widgets['angulo_secundario']
+        pri, sec = self.painel.widgets['rotation'], self.painel.widgets['angulo_secundario'].spin
         self.assertEqual(self._rotulo('rotation'), 'Direção principal')
         self.assertEqual(self._rotulo('angulo_secundario'), 'Direção secundária')
         self.assertEqual((pri.value(), sec.value()), (0, 315))  # sem valor: -45 do Web
@@ -242,10 +244,10 @@ class TestPainelMedidas(unittest.TestCase):
     def test_demais_medidas_sem_minas_e_com_rotacao_livre(self):
         self._nova(point_code='130100')
         for c in ('mina1', 'mina2', 'mina3', 'angulo_secundario'):
-            self.assertNotIn(c, self.painel.widgets)
+            self.assertNotIn(c, self.painel.campos_visiveis())
         w = self.painel.widgets['rotation']
         self.assertEqual((w.minimum(), w.maximum(), w.singleStep()), (-180, 180, 15))
-        self.assertEqual(self._rotulo('rotation'), 'Rotação (graus)')
+        self.assertEqual(self._rotulo('rotation'), 'Rotação')  # o rótulo do Web
 
     def test_seletor_sem_area_minada_pontual(self):
         self._nova(point_code='130100')
@@ -519,9 +521,12 @@ class TestLimiteEquipeEIndeterminado(unittest.TestCase):
         self.assertAlmostEqual(_hav_m(no_eixo[0][-1], no_eixo[1][0]), 3600, delta=10)
 
     def test_painel_oferece_os_dois_e_mantem_xxxxx(self):
-        self.assertEqual(modulo_painel.ESCALOES_LIMITE,
+        from Calco.estilos_area import ESCALOES
+        from Calco.formulario import especificacao as esp
+        self.assertEqual(ESCALOES,
                          ['XXXXXX', 'XXXXX', 'XXXX', 'XXX', 'XX', 'X', 'III', 'II', 'I', 'ooo', 'oo', 'o', 'Ø', '++'])
-        opcoes = dict((v, r) for v, r in modulo_painel.PAINEIS['boundary'][0][2][1])
+        mapa = esp.formulario('boundary').campo('echelon').widget.config['map']
+        opcoes = {list(d.values())[0]: list(d)[0] for d in mapa}
         self.assertEqual((opcoes['Ø'], opcoes['++']), ('Ø', '++'))
 
 
@@ -577,7 +582,8 @@ class TestImportador(unittest.TestCase):
         m = self._f('coordination_measure', 'minas')
         self.assertEqual((m['mina1'], m['mina2'], m['mina3']), ('ac', 'qualquer', 'vazia'))
         self.assertEqual(self._f('coordination_measure', 'fogos')['rotation'], 135.0)
-        self.assertEqual(self._f('coordination_measure', 'destruicao')['fill_color'], VERDE)
+        # o importador grava a cor na forma canônica (minúsculas), a que o formulário nativo regrava
+        self.assertEqual(self._f('coordination_measure', 'destruicao')['fill_color'], schema.cor_canonica(VERDE))
         self.assertEqual(self._f('boundary', 'equipe')['echelon'], 'Ø')
         self.assertEqual(self._f('boundary', 'indeterminado')['echelon'], '++')
 

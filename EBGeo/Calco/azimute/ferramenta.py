@@ -73,6 +73,9 @@ class AzimuteDistancia(QObject):
         self.ferramenta = FerramentaAzimute(self.canvas, self)
         self.bandas = {}
         self._camada_sel = None
+        # (camada, fid, no_buffer) da edição aberta pelo dock de propriedades: o Salvar dela entra
+        # no buffer do dock (Descartar volta). None na ferramenta solta, que grava direto.
+        self._do_dock = None
         iface.currentLayerChanged.connect(self._camada_mudou)
         self._camada_mudou(iface.activeLayer())
 
@@ -265,14 +268,23 @@ class AzimuteDistancia(QObject):
         if alvo is None:
             return False
         layer, fid = alvo
-        ok = gravacao.atualizar(layer, fid, estado)
+        do_dock = self._do_dock if self._do_dock and self._do_dock[:2] == (layer, fid) else None
+        if do_dock is not None:
+            # no buffer do dock: o _editar da gravação não fecha a edição que o dock abriu
+            res = []
+            do_dock[2](lambda: res.append(gravacao.atualizar(layer, fid, estado)), 'Calco: Azimute e Distância')
+            ok = bool(res and res[0])
+        else:
+            ok = gravacao.atualizar(layer, fid, estado)
         if not ok:
             self.iface.messageBar().pushCritical('EBGeo', 'Azimute e Distância: não foi possível gravar as alterações.')
             return False
-        self.iface.messageBar().pushSuccess('EBGeo', 'Construção atualizada.')
+        self.iface.messageBar().pushSuccess('EBGeo', 'Construção atualizada no painel do calco: Salvar grava, Descartar volta.'
+                                            if do_dock else 'Construção atualizada.')
         f = layer.getFeature(fid)
         if f.isValid():
             self._abrir_edicao(layer, fid)
+            self._do_dock = do_dock
         return True
 
     # ------------------------------------------------------------------ seleção
@@ -327,7 +339,27 @@ class AzimuteDistancia(QObject):
             return
         self._abrir_edicao(*alvo)
 
+    def editar_feicao(self, layer, fid, no_buffer=None):
+        """
+        Abre o painel em edição para a construção da feição (o "Editar pernas..." do dock de
+        propriedades). Não troca a ferramenta do mapa: "Clicar no mapa", no painel, a liga.
+        Com `no_buffer` (o PainelCalco._no_buffer do dock), o Salvar do painel grava num comando
+        do buffer do dock, e o Salvar e o Descartar do dock decidem. Devolve False quando a feição
+        não tem construção.
+        """
+        if layer is None or fid is None:
+            return False
+        if self._camada_sel is not layer:
+            self._camada_mudou(layer)
+        if not self._abrir_edicao(layer, fid):
+            return False
+        self._do_dock = (layer, fid, no_buffer) if no_buffer is not None else None
+        self.painel.show()
+        self.painel.raise_()
+        return True
+
     def _abrir_edicao(self, layer, fid):
+        self._do_dock = None  # aberta pela seleção ou pela criação: ferramenta solta
         f = layer.getFeature(fid)
         polar = gravacao.construcao_da_feicao(f)
         if polar is None:

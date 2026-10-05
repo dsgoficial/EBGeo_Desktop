@@ -178,6 +178,8 @@ def divergencias(tipo, props, linha):
                 ok = obtido is None
         elif tp == 'datetime':
             ok = obtido is not None and _iso_ms(obtido) == int(esperado)
+        elif schema.coluna_de_cor(col) and isinstance(esperado, str):
+            ok = obtido == schema.cor_canonica(esperado)  # a cor gravada na forma canônica, em minúsculas
         else:
             ok = obtido == (esperado if isinstance(esperado, str) else
                             json.dumps(esperado, ensure_ascii=False) if isinstance(esperado, (dict, list)) else str(esperado))

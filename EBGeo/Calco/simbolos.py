@@ -6,15 +6,14 @@ Ponte entre a feição do calco e o motor de símbolos pontuais.
 - assinatura(tipo, atributos): hash dos campos que DESENHAM, recalculável por expressão nativa
   do QGIS (expressao_assinatura), para o estilo acusar SVG velho sem o plugin;
 - renderizar(tipo, atributos): as colunas de desenho prontas para gravar (svg em base64,
-  svg_assinatura, largura_px, altura_px, ancora_dx, ancora_dy);
-- RegeneradorSvg(layer, tipo): regrava essas colunas quando a feição nasce ou um campo que
-  desenha muda, na camada em edição.
+  svg_assinatura, largura_px, altura_px, ancora_dx, ancora_dy), que o guardião da camada
+  (guardiao.py) regrava quando a feição nasce ou um campo que desenha muda.
 
 A ideia da assinatura é a de layers/bitmap-drawing-signature.js do Web (assinatura igual,
 pixels iguais), com uma diferença deliberada: aqui entra a lista FECHADA dos campos que o
 gerador lê (e não "tudo menos uma lista de exclusão"), porque a assinatura tem de caber numa
-expressão do estilo que o QGIS avalia sem o plugin. A versão do bundle não entra: regerar
-depois de atualizar o motor é ação explícita (regenerar_camada).
+expressão do estilo que o QGIS avalia sem o plugin. A versão do bundle não entra: o símbolo
+gravado por um motor anterior só é redesenhado quando um campo que desenha muda.
 """
 import base64
 import hashlib
@@ -47,10 +46,6 @@ CAMPOS_DESENHO_OPCIONAIS = {
 def campos_que_desenham(tipo):
     """Todos os campos cuja mudança redesenha o símbolo."""
     return CAMPOS_DESENHO[tipo] + CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])
-
-# Colunas que o renderizador escreve; mudança nelas nunca dispara regeneração.
-COLUNAS_SAIDA = ('svg', 'svg_assinatura', 'largura_px', 'altura_px', 'ancora_dx', 'ancora_dy')
-
 
 def _tipo_coluna(tipo, coluna):
     for nome, tp, _padrao, _web in schema.campos(tipo):
@@ -161,24 +156,52 @@ def _inteiros(v):
     return v
 
 
-def texto_assinatura(tipo, atributos):
-    """O texto que vai para o md5, exposto para teste e depuração."""
+# A cor entra na assinatura sem a caixa: o widget nativo de cor regrava '#00B04E' (a do Web) como
+# '#00b04e' ao salvar QUALQUER mudança (medido no QGIS 4.0.0), e o desenho é o mesmo. A assinatura
+# canônica leva a cor em minúsculas; a feição assinada antes, com a cor em caixa alta (o
+# importador gravava a do Web crua), segue em dia pela variante em maiúsculas
+# (assinaturas_aceitas, expressao_assinatura(tipo, 'alta')).
+COLUNAS_COR = ('fill_color',)
+
+
+def _caixa(texto, caixa):
+    return texto.upper() if caixa == 'alta' else texto.lower()
+
+
+def texto_assinatura(tipo, atributos, caixa='baixa'):
+    """O texto que vai para o md5, exposto para teste e depuração; a cor na `caixa` pedida."""
+    def termo(coluna):
+        t = _texto_assinatura(_tipo_coluna(tipo, coluna), atributos.get(coluna))
+        return _caixa(t, caixa) if coluna in COLUNAS_COR else t
     partes = [VERSAO_ASSINATURA, tipo]
     for coluna in CAMPOS_DESENHO[tipo]:
-        partes.append(_texto_assinatura(_tipo_coluna(tipo, coluna), atributos.get(coluna)))
-    opcionais = [_texto_assinatura(_tipo_coluna(tipo, c), atributos.get(c)) for c in CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])]
+        partes.append(termo(coluna))
+    opcionais = [termo(c) for c in CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])]
     if any(opcionais):
         partes += opcionais
     return '|'.join(partes)
 
 
+def assinaturas_aceitas(tipo, atributos):
+    """A assinatura canônica (cor em minúsculas) e a da cor em maiúsculas, que vale para o desenho gravado antes."""
+    return {hashlib.md5(texto_assinatura(tipo, atributos, c).encode('utf-8')).hexdigest() for c in ('baixa', 'alta')}
+
+
+def assinatura_em_dia(tipo, atributos):
+    """O desenho gravado (svg_assinatura) corresponde aos campos atuais."""
+    gravada = atributos.get('svg_assinatura')
+    return not _vazio(gravada) and gravada in assinaturas_aceitas(tipo, atributos)
+
+
 def assinatura(tipo, atributos):
-    """md5 dos campos que desenham; a expressao_assinatura(tipo) dá o mesmo valor no QGIS."""
+    """md5 dos campos que desenham, com a cor em minúsculas; a expressao_assinatura(tipo) dá o mesmo valor no QGIS."""
     return hashlib.md5(texto_assinatura(tipo, atributos).encode('utf-8')).hexdigest()
 
 
-def _termo_expressao(tp, coluna):
+def _termo_expressao(tp, coluna, caixa='baixa'):
     c = '"{}"'.format(coluna)
+    if coluna in COLUNAS_COR:
+        return "{}(coalesce(to_string({}), ''))".format('upper' if caixa == 'alta' else 'lower', c)
     if tp == 'bool':
         return "if({}, '1', '0')".format(c)
     if tp == 'real':
@@ -189,13 +212,13 @@ def _termo_expressao(tp, coluna):
     return "coalesce(to_string({}), '')".format(c)
 
 
-def expressao_assinatura(tipo):
-    """Expressão nativa do QGIS que reproduz assinatura(tipo, atributos) por feição."""
+def expressao_assinatura(tipo, caixa='baixa'):
+    """Expressão nativa do QGIS que reproduz assinatura(tipo, atributos) por feição (a cor na `caixa`)."""
     termos = ["'{}|{}'".format(VERSAO_ASSINATURA, tipo)]
     for coluna in CAMPOS_DESENHO[tipo]:
-        termos.append(_termo_expressao(_tipo_coluna(tipo, coluna), coluna))
+        termos.append(_termo_expressao(_tipo_coluna(tipo, coluna), coluna, caixa))
     texto = " || '|' || ".join(termos)
-    opcionais = [_termo_expressao(_tipo_coluna(tipo, c), c) for c in CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])]
+    opcionais = [_termo_expressao(_tipo_coluna(tipo, c), c, caixa) for c in CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])]
     if opcionais:
         texto += " || if({} = '', '', '|' || {})".format(' || '.join(opcionais), " || '|' || ".join(opcionais))
     return 'md5(' + texto + ')'
@@ -317,119 +340,3 @@ def svg_de_coluna(valor):
     if _vazio(valor) or not valor:
         return None
     return base64.b64decode(valor).decode('utf-8')
-
-
-# ---------------------------------------------------------------------------------------------
-# Regeneração por sinal
-# ---------------------------------------------------------------------------------------------
-
-try:
-    from qgis.PyQt.QtCore import QObject, QTimer
-    from qgis.core import Qgis, QgsMessageLog
-except ImportError:  # pragma: no cover - uso sem QGIS (schema e assinatura continuam testáveis)
-    QObject = object
-    QTimer = None
-
-
-class RegeneradorSvg(QObject):
-    """
-    Mantém svg, svg_assinatura, largura_px, altura_px, ancora_dx e ancora_dy em dia na camada
-    em edição. Os sinais só ANOTAM a feição; a regeneração roda depois, num único passe por
-    volta do laço de eventos, e por isso uma edição em lote (calculadora de campo, colar 500
-    feições) vira um passe só. Antes do commit, o que ficou pendente é processado.
-
-    A recursão é cortada em dois pontos: mudança em coluna de saída nunca anota, e durante a
-    própria gravação os sinais são ignorados. A gravação usa changeAttributeValues, que entra
-    na pilha de desfazer como uma edição comum; desfazer o SIDC regenera de novo pelo sinal.
-    """
-
-    def __init__(self, layer, tipo, parent=None):
-        super().__init__(parent or layer)
-        if tipo not in TIPOS_SVG:
-            raise ValueError('Tipo sem desenho SVG: {}'.format(tipo))
-        self.layer = layer
-        self.tipo = tipo
-        self._pendentes = set()
-        self._gravando = False
-        self._agendado = False
-        self.erros = []
-        self.regeneradas = 0
-        nomes = layer.fields().names()
-        self._idx_desenho = {layer.fields().indexOf(c) for c in campos_que_desenham(tipo) if c in nomes}
-        self._idx_saida = {c: layer.fields().indexOf(c) for c in COLUNAS_SAIDA if c in nomes}
-        layer.featureAdded.connect(self._ao_adicionar)
-        layer.attributeValueChanged.connect(self._ao_mudar_atributo)
-        layer.beforeCommitChanges.connect(self.processar)
-
-    def desconectar(self):
-        for sinal, slot in ((self.layer.featureAdded, self._ao_adicionar),
-                            (self.layer.attributeValueChanged, self._ao_mudar_atributo),
-                            (self.layer.beforeCommitChanges, self.processar)):
-            try:
-                sinal.disconnect(slot)
-            except (TypeError, RuntimeError):
-                pass
-
-    def _anotar(self, fid):
-        if self._gravando:
-            return
-        self._pendentes.add(fid)
-        if QTimer is not None and not self._agendado:
-            self._agendado = True
-            QTimer.singleShot(0, self.processar)
-
-    def _ao_adicionar(self, fid):
-        self._anotar(fid)
-
-    def _ao_mudar_atributo(self, fid, idx, _valor):
-        if idx in self._idx_desenho:
-            self._anotar(fid)
-
-    def processar(self, *_args):
-        """Regenera as feições anotadas. Devolve quantas foram regravadas."""
-        self._agendado = False
-        if not self._pendentes or not self.layer.isEditable():
-            self._pendentes.clear()
-            return 0
-        pendentes, self._pendentes = self._pendentes, set()
-        feitas = 0
-        for fid in sorted(pendentes):
-            f = self.layer.getFeature(fid)
-            if not f.isValid():
-                continue
-            if self.regenerar_feicao(f):
-                feitas += 1
-        self.regeneradas += feitas
-        return feitas
-
-    def regenerar_feicao(self, feicao, forcar=False):
-        atributos = {n: feicao[n] for n in feicao.fields().names()}
-        nova = assinatura(self.tipo, atributos)
-        if not forcar and atributos.get('svg_assinatura') == nova and not _vazio(atributos.get('svg')):
-            return False
-        try:
-            colunas = renderizar(self.tipo, atributos)
-        except Exception as erro:  # o motor rejeitou (SIDC inválido etc.): o aviso do estilo fica
-            self.erros.append((feicao.id(), str(erro)))
-            try:
-                QgsMessageLog.logMessage('Símbolo não regenerado (fid {}): {}'.format(feicao.id(), erro),
-                                         'EBGeo', Qgis.MessageLevel.Warning)
-            except Exception:  # pragma: no cover
-                pass
-            return False
-        valores = {self._idx_saida[c]: v for c, v in colunas.items() if c in self._idx_saida}
-        self._gravando = True
-        try:
-            ok = self.layer.changeAttributeValues(feicao.id(), valores)
-        finally:
-            self._gravando = False
-        return bool(ok)
-
-    def regenerar_camada(self, forcar=True):
-        """Regenera todas as feições da camada em edição (depois de atualizar o motor)."""
-        feitas = 0
-        for f in self.layer.getFeatures():
-            if self.regenerar_feicao(f, forcar=forcar):
-                feitas += 1
-        self.regeneradas += feitas
-        return feitas

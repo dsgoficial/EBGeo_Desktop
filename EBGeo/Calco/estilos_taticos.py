@@ -45,7 +45,6 @@ from qgis.core import (
     QgsGeometryGeneratorSymbolLayer,
     QgsLabelLineSettings,
     QgsLineSymbol,
-    QgsMapLayer,
     QgsPalLayerSettings,
     QgsProperty,
     QgsRuleBasedLabeling,
@@ -67,8 +66,6 @@ MM_POR_PX = 25.4 / 96  # um pixel lógico (CSS) a 96 dpi: 0,2646 mm
 
 # 'tmerc' (Transversa de Mercator local esférica) ou '3857' (Mercator com fator k).
 PROJECAO = 'tmerc'
-
-TIPOS_ESTILO = ('coordination_line', 'boundary', 'arrow', 'occupied_front')
 
 # Catálogo MD33 de coordination_line_catalog.js (LINEAR_SYMBOLS), chaveado pelo id, na ordem
 # do combo do Web (symbolOptionGroups: grupo a grupo; dentro do grupo, a de Object.values, em
@@ -790,17 +787,13 @@ def aplicar_estilo(layer, tipo, projecao=None):
 
 def salvar_estilo_padrao(layer, nome=None, descricao='Estilo tático do EBGeo Desktop'):
     """
-    Grava o estilo atual da camada no layer_styles do GeoPackage como padrão
-    (useAsDefault=True), para a camada abrir desenhada sem o plugin.
+    Grava o estilo atual da camada no layer_styles do GeoPackage como padrão (useAsDefault=True),
+    para a camada abrir desenhada sem o plugin, com a prova da escrita (calco.gravar_estilo).
     Devolve (sucesso, mensagem).
     """
+    from .calco import gravar_estilo, EstiloNaoGravado
     nome = nome or layer.dataProvider().uri().table() or layer.name()
-    if hasattr(layer, 'saveStyleToDatabaseV2'):
-        res, msg = layer.saveStyleToDatabaseV2(nome, descricao, True, '')
-        R = QgsMapLayer.SaveStyleResult
-        # O SLD não exprime Geometry Generator; só a QML e a gravação no banco importam.
-        valor = getattr(res, 'value', res)
-        ok = not (int(valor) & (R.DatabaseWriteFailed.value | R.QmlGenerationFailed.value))
-        return ok, msg
-    msg = layer.saveStyleToDatabase(nome, descricao, True, '')
-    return not msg, msg
+    try:
+        return gravar_estilo(layer, nome, descricao)
+    except EstiloNaoGravado as e:
+        return False, str(e)

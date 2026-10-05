@@ -34,8 +34,13 @@ def aplicar_formulario(layer, tipo):
     especificados = [c for c in spec.campos() if c.coluna in nomes]
     for c in especificados:
         i = campos.indexOf(c.coluna)
-        layer.setEditorWidgetSetup(i, QgsEditorWidgetSetup(c.widget.tipo, dict(c.widget.config)))
+        config = dict(c.widget.config)
+        if c.opcoes_da_camada is not None and 'map' in config:
+            # opções do arquivo (os ícones próprios do Ponto), legíveis também sem o plugin
+            config['map'] = list(config['map']) + [{rotulo: valor} for valor, rotulo, _img in c.opcoes_da_camada(layer)]
+        layer.setEditorWidgetSetup(i, QgsEditorWidgetSetup(c.widget.tipo, config))
         layer.setFieldAlias(i, c.rotulo)
+        _restricao(layer, i, c.restricao)
     proprios = colunas_proprias(layer, spec)
     for col in proprios:
         layer.setEditorWidgetSetup(campos.indexOf(col), QgsEditorWidgetSetup('TextEdit', {'IsMultiline': False, 'UseHtml': False}))
@@ -83,6 +88,22 @@ def aplicar_formulario(layer, tipo):
     layer.setEditFormConfig(fc)
     _tabela_sem_ocultos(layer, spec.ocultos)
     return True
+
+
+def _restricao(layer, i, restricao):
+    """
+    Restrição forte por expressão (vai no estilo, categoria Fields, e vale sem o plugin): o
+    formulário não grava o valor que a reprova. Campo sem restrição na especificação perde a que
+    tiver, para o reaplicar do estilo não deixar uma velha.
+    """
+    from qgis.core import QgsFieldConstraints
+    C = QgsFieldConstraints.Constraint
+    if restricao:
+        layer.setConstraintExpression(i, restricao[0], restricao[1])
+        layer.setFieldConstraint(i, C.ConstraintExpression, QgsFieldConstraints.ConstraintStrength.ConstraintStrengthHard)
+    elif layer.constraintExpression(i):
+        layer.removeFieldConstraint(i, C.ConstraintExpression)
+        layer.setConstraintExpression(i, '')
 
 
 def _termina_em_texto_longo(filhos):
@@ -147,7 +168,12 @@ def _preencher(pai, filhos, campos):
 def _campo(pai, campo, campos):
     i = campos.indexOf(campo.coluna)
     if i >= 0:
-        pai.addChildElement(QgsAttributeEditorField(campo.coluna, i, pai))
+        el = QgsAttributeEditorField(campo.coluna, i, pai)
+        pai.addChildElement(el)
+        if campo.rotulo_em_cima and campo.widget.config.get('IsMultiline'):
+            # o texto longo fica com a sobra da aba; sem o esticamento, o editor de cor da mesma aba
+            # cresce junto e fica com 200 px de altura (medido no QGIS 4.0.0, aba Linha da Linha)
+            el.setVerticalStretch(1)
 
 
 def _tabela_sem_ocultos(layer, ocultos):

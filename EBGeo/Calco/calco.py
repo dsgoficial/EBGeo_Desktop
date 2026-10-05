@@ -5,7 +5,7 @@ carregado num grupo da árvore de camadas.
 """
 import os
 
-from qgis.core import QgsProject, QgsVectorLayer, QgsLayerTreeGroup
+from qgis.core import QgsProject, QgsVectorLayer
 
 from . import schema, gpkg
 
@@ -52,17 +52,105 @@ def aplicar_formulario(layer, tipo):
 
 def salvar_estilo_padrao(layer, descricao=None):
     """
-    Grava o estilo atual como padrão no layer_styles do GeoPackage. A descrição leva a marca do
-    plugin e a impressão digital do estilo (descricao_estilo), que o carregar compara depois.
+    Grava o estilo atual como padrão no layer_styles do GeoPackage, provado por gravar_estilo. A
+    descrição leva a marca do plugin e a impressão digital do estilo (descricao_estilo), que o
+    carregar compara depois. Devolve False, com o erro no log do EBGeo, se o arquivo não o guardou.
     """
     descricao = descricao_estilo(layer) if descricao is None else descricao
     try:
-        res = layer.saveStyleToDatabaseV2(layer.name(), descricao, True, '')
-        ok = res[0] if isinstance(res, tuple) else res
-        return bool(ok == 0 or ok is True or getattr(ok, 'value', 1) == 0)
-    except AttributeError:
-        layer.saveStyleToDatabase(layer.name(), descricao, True, '')
-        return True
+        return gravar_estilo(layer, layer.name(), descricao)[0]
+    except EstiloNaoGravado as e:
+        from qgis.core import QgsMessageLog, Qgis
+        QgsMessageLog.logMessage(str(e), 'EBGeo', Qgis.MessageLevel.Critical)
+        return False
+
+
+# ---------------------------------------------------------------------------------------------
+# Prova da escrita do estilo
+#
+# O saveStyleToDatabaseV2 diz sucesso pelo que mandou gravar, não pelo que o arquivo guardou: o
+# OGR guarda o texto até o primeiro caractere nulo, e um estilo com nulo na memória saía cortado
+# com o salvar dizendo sucesso (medido em 2026-10-05, o Ponto com 77 mil de 198 mil caracteres;
+# a causa era a do esconder_por_regra, no importador). Toda gravação de estilo do plugin passa
+# por gravar_estilo, que relê o styleQML e o compara com o QML que a camada exporta, o mesmo que
+# o QGIS manda gravar (medido igual caractere a caractere).
+# ---------------------------------------------------------------------------------------------
+
+class EstiloNaoGravado(RuntimeError):
+    """O layer_styles não guardou o estilo que se quis gravar."""
+
+
+def qml_do_estilo(layer):
+    """O QML que o saveStyleToDatabaseV2 manda gravar (todas as categorias)."""
+    from qgis.core import QgsMapLayer, QgsReadWriteContext
+    from qgis.PyQt.QtXml import QDomDocument
+    doc = QDomDocument()
+    layer.exportNamedStyle(doc, QgsReadWriteContext(), QgsMapLayer.StyleCategory.AllStyleCategories)
+    return doc.toString()
+
+
+def _arquivo_e_tabela(layer):
+    from qgis.core import QgsProviderRegistry
+    partes = QgsProviderRegistry.instance().decodeUri(layer.providerType(), layer.source())
+    caminho = partes.get('path') or ''
+    return (caminho, partes.get('layerName') or '') if os.path.isfile(caminho) else (None, None)
+
+
+def estilo_gravado(caminho, tabela, nome):
+    """O styleQML do estilo `nome` da tabela no layer_styles, relido pelo OGR ('' se não há)."""
+    from osgeo import ogr
+    ds = ogr.Open(caminho)
+    if ds is None or ds.GetLayerByName('layer_styles') is None:
+        return ''
+    try:
+        sql = ("SELECT styleQML FROM layer_styles WHERE f_table_name = '{}' AND styleName = '{}' "
+               "ORDER BY update_time DESC LIMIT 1").format(tabela.replace("'", "''"), nome.replace("'", "''"))
+        res = ds.ExecuteSQL(sql)
+        try:
+            f = res.GetNextFeature() if res is not None else None
+            return (f.GetField(0) or '') if f is not None else ''
+        finally:
+            if res is not None:
+                ds.ReleaseResultSet(res)
+    finally:
+        ds = None
+
+
+def _salvar_no_banco(layer, nome, descricao):
+    """saveStyleToDatabaseV2 como padrão; devolve a mensagem de falha que o QGIS acusar ('' sem)."""
+    from qgis.core import QgsMapLayer
+    if not hasattr(layer, 'saveStyleToDatabaseV2'):
+        return layer.saveStyleToDatabase(nome, descricao, True, '') or ''
+    res, msg = layer.saveStyleToDatabaseV2(nome, descricao, True, '')
+    valor = res.value if hasattr(res, 'value') else int(res)
+    # o SLD é cópia de cortesia e não exprime o Geometry Generator: só QML e banco contam
+    falhas = [n for n in ('QmlGenerationFailed', 'DatabaseWriteFailed')
+              if valor & getattr(QgsMapLayer.SaveStyleResult, n).value]
+    return '{}: {}'.format(', '.join(falhas), msg) if falhas else ''
+
+
+def gravar_estilo(layer, nome, descricao, tentativas=2):
+    """
+    Grava o estilo atual como padrão da tabela e PROVA a escrita: relê o styleQML no arquivo e o
+    compara com o QML que se quis gravar. Divergiu, regrava; persistiu, EstiloNaoGravado. Camada
+    que não é de arquivo não tem o que reler e devolve o que o QGIS disse. Devolve (True, '').
+    """
+    quis = qml_do_estilo(layer)
+    if '\x00' in quis:
+        raise EstiloNaoGravado('o estilo de {} tem caractere nulo na memória, na posição {}: o GeoPackage '
+                               'o guardaria cortado ali'.format(layer.name(), quis.index('\x00')))
+    caminho, tabela = _arquivo_e_tabela(layer)
+    msg = ''
+    for _ in range(max(1, tentativas)):
+        msg = _salvar_no_banco(layer, nome, descricao)
+        if caminho is None:
+            return not msg, msg
+        relido = estilo_gravado(caminho, tabela, nome)
+        if relido == quis:
+            return True, ''
+    raise EstiloNaoGravado(
+        'o layer_styles de {} não guardou o estilo de {}: {} caracteres relidos de {} gravados{}'.format(
+            os.path.basename(caminho), tabela, len(relido), len(quis), ' ({})'.format(msg) if msg else ''))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -222,14 +310,6 @@ class Calco:
             return 'em dia'
         salvar_estilo_padrao(lyr, descricao)
         return 'novo' if salvo is None else 'atualizado'
-
-    @staticmethod
-    def _tem_estilo_padrao(lyr):
-        try:
-            n, ids, nomes, descs, msg = lyr.listStylesInDatabase()
-            return n > 0
-        except Exception:
-            return False
 
     def camada(self, tipo):
         camadas = self.camadas_no_projeto()

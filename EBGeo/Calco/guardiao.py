@@ -17,6 +17,16 @@ Como funciona:
   - `atualizado_em`: o formulário assado traz o valor padrão `now()` aplicado na atualização,
     que o QGIS renova em qualquer caminho, com ou sem o plugin. Na camada sem esse padrão
     (estilo do operador), o guardião o renova no comando dele.
+  - Símbolos pontuais desenhados por SVG (simbolos.TIPOS_SVG: militar, medida, engenharia e
+    declinação): quando a edição muda um campo que desenha (ou a regra o muda), ou a feição nasce
+    dentro de um comando (adicionar feição, colar), o guardião regrava o SVG e as colunas de
+    desenho no MESMO comando das regras, se a assinatura não bate; o Ctrl+Z desfaz o desenho
+    junto com a regra, e desfazer a edição volta o desenho gravado antes. Antes de gravar a
+    camada, a feição mudada no buffer com assinatura divergente é redesenhada (edição pela API
+    fora de comando). O motor que rejeita o símbolo (SIDC inválido) deixa o desenho como estava,
+    e o estilo mostra o aviso vermelho. Nesses tipos, o "valor padrão do provedor" que o
+    formulário nativo grava no campo igual ao DEFAULT da coluna volta a ser o valor, no mesmo
+    comando (sem isso, o SIDC padrão acendia o aviso até o commit).
 
 O retrato guarda só as colunas que as regras leem, mais a linha inteira das feições bloqueadas.
 """
@@ -25,9 +35,9 @@ from datetime import datetime, timezone
 from qgis.core import QgsFeatureRequest, QgsMessageLog, Qgis
 from qgis.PyQt.QtCore import QObject
 
-from . import regras
+from . import regras, schema, simbolos
 
-TIPOS_GUARDADOS = regras.TIPOS_COM_REGRAS
+TIPOS_GUARDADOS = regras.TIPOS_COM_REGRAS | frozenset(simbolos.TIPOS_SVG)
 COLUNA_ATUALIZADO = 'atualizado_em'
 
 
@@ -49,9 +59,15 @@ class Guardiao(QObject):
         self._anterior = {}
         self._travadas = {}
         self._mudancas = {}
+        self._novas = set()
+        self._indefinidos = {}
         self._aplicando = False
         self.aplicadas = 0
         self.revertidas = 0
+        self.svg = tipo in simbolos.TIPOS_SVG
+        self.desenho = frozenset(simbolos.campos_que_desenham(tipo)) if self.svg else frozenset()
+        self.regeneradas = 0
+        self.erros_svg = []
         self._conexoes = [
             (layer.editCommandStarted, self._comando_comecou),
             (layer.editCommandEnded, self._comando_terminou),
@@ -62,6 +78,8 @@ class Guardiao(QObject):
             (layer.afterCommitChanges, self.recarregar),
             (layer.updatedFields, self.recarregar),
         ]
+        if self.svg:
+            self._conexoes.append((layer.beforeCommitChanges, self._antes_de_gravar))
         for sinal, slot in self._conexoes:
             sinal.connect(slot)
         self.recarregar()
@@ -92,6 +110,8 @@ class Guardiao(QObject):
         f = self.layer.getFeature(fid)
         if f.isValid():
             self._retratar(f, self.layer.fields().names())
+        if self.svg and not self._aplicando and self.layer.isEditCommandActive():
+            self._novas.add(fid)
 
     def _atualizar(self, fid, col, valor):
         if col in self.vigiados:
@@ -108,15 +128,19 @@ class Guardiao(QObject):
     # ---------- sinais ----------
     def _comando_comecou(self, *_):
         if not self._aplicando:
-            self._mudancas = {}
+            self._mudancas, self._novas, self._indefinidos = {}, set(), {}
 
     def _comando_destruido(self, *_):
         if not self._aplicando:
-            self._mudancas = {}
+            self._mudancas, self._novas, self._indefinidos = {}, set(), {}
 
     def _atributo_mudou(self, fid, idx, valor):
         col = self.layer.fields().at(idx).name()
         if regras.nao_definido(valor):
+            # só nos campos que desenham, e com DEFAULT de verdade: a descrição vazia (DEFAULT '')
+            # o provedor grava '' no commit, mas defaultValue() a dá nula
+            if self.svg and col in self.desenho and not self._aplicando and self.layer.isEditCommandActive()                     and valor.defaultValueClause():
+                self._indefinidos.setdefault(fid, set()).add(col)
             return
         valor = regras.valor(valor)
         if self._aplicando or not self.layer.isEditCommandActive():
@@ -125,9 +149,11 @@ class Guardiao(QObject):
         self._mudancas.setdefault(fid, {})[col] = valor
 
     def _comando_terminou(self, *_):
-        if self._aplicando or not self._mudancas:
+        if self._aplicando or not (self._mudancas or self._novas or self._indefinidos):
             return
         mudancas, self._mudancas = self._mudancas, {}
+        novas, self._novas = self._novas, set()
+        indefinidos, self._indefinidos = self._indefinidos, {}
         reverter, extras = {}, {}
         sem_padrao = not self._atualizado_nativo()
         for fid, muds in mudancas.items():
@@ -143,8 +169,69 @@ class Guardiao(QObject):
                 ex[COLUNA_ATUALIZADO] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
             if ex:
                 extras[fid] = ex
+        if self.svg:
+            # O formulário nativo grava "valor padrão do provedor" (QgsUnsetAttributeValue) no campo
+            # cujo valor é igual ao DEFAULT da coluna (o SIDC padrão, o tamanho 1), ao salvar
+            # qualquer mudança. No buffer, o estilo o lê como vazio (o SIDC padrão acendia o aviso
+            # vermelho até o commit); aqui ele volta a ser o valor, o mesmo que o commit gravaria.
+            for fid, cols in indefinidos.items():
+                if fid in reverter or fid in self._travadas:
+                    continue
+                for col in cols:
+                    i = self.layer.fields().indexOf(col)
+                    if col not in extras.get(fid, {}) and i >= 0:
+                        extras.setdefault(fid, {})[col] = self.layer.dataProvider().defaultValue(i)
+            for fid in (set(mudancas) | novas) - set(reverter):
+                desenhou = fid in novas or bool(self.desenho & (set(mudancas.get(fid, ())) | set(extras.get(fid, ()))))
+                cols = self._desenho(fid, extras.get(fid, {}), manter_bitmap=fid in novas) if desenhou else {}
+                if cols:
+                    extras.setdefault(fid, {}).update(cols)
         if reverter or extras:
             self._aplicar(reverter, extras)
+
+    # ---------- desenho dos símbolos pontuais ----------
+    def _desenho(self, fid, extras, manter_bitmap=False):
+        """
+        As colunas de desenho novas da feição (com as mudanças `extras` por cima), ou {} quando a
+        assinatura gravada já bate. Com `manter_bitmap`, a feição só com o PNG do Web (sem SVG)
+        fica com ele: a que nasceu colada e a que chega ao commit sem mudança vista no desenho.
+        """
+        f = self.layer.getFeature(fid)
+        if not f.isValid():
+            return {}
+        atributos = {n: f[n] for n in f.fields().names()}
+        for i, n in enumerate(f.fields().names()):
+            if regras.nao_definido(atributos[n]):
+                atributos[n] = self.layer.dataProvider().defaultValue(i)
+        atributos.update(extras)
+        sem_svg = _nulo(atributos.get('svg')) or not atributos.get('svg')
+        if not sem_svg and simbolos.assinatura_em_dia(self.tipo, atributos):
+            return {}
+        if sem_svg and manter_bitmap and not _nulo(atributos.get('bitmap_b64')) and atributos.get('bitmap_b64'):
+            return {}
+        try:
+            colunas = simbolos.renderizar(self.tipo, atributos)
+        except Exception as erro:  # o motor rejeitou: o desenho fica e o estilo acusa a divergência
+            self.erros_svg.append((fid, str(erro)))
+            QgsMessageLog.logMessage('Símbolo não redesenhado (fid {}): {}'.format(fid, erro), 'EBGeo',
+                                     Qgis.MessageLevel.Warning)
+            return {}
+        self.regeneradas += 1
+        return colunas
+
+    def _antes_de_gravar(self):
+        """Redesenha, antes do commit, a feição do buffer cujo desenho ficou para trás."""
+        buf = self.layer.editBuffer()
+        if self._aplicando or buf is None:
+            return
+        fids = (set(buf.changedAttributeValues()) | set(buf.addedFeatures())) - set(self._travadas)
+        extras = {}
+        for fid in sorted(fids):
+            cols = self._desenho(fid, {}, manter_bitmap=True)
+            if cols:
+                extras[fid] = cols
+        if extras:
+            self._aplicar({}, extras)
 
     def _atualizado_nativo(self):
         i = self.layer.fields().indexOf(COLUNA_ATUALIZADO)
@@ -161,6 +248,8 @@ class Guardiao(QObject):
                                                  {idx(c): v for c, v in novos.items() if idx(c) >= 0}, True)
                 self.revertidas += 1
             for fid, ex in extras.items():
+                # cor em minúsculas e JSON como objeto (schema.atributos_para_qgis), como as outras gravações
+                ex = schema.atributos_para_qgis(self.tipo, ex)
                 self.layer.changeAttributeValues(fid, {idx(c): v for c, v in ex.items() if idx(c) >= 0})
                 self.aplicadas += 1
             self.layer.endEditCommand()

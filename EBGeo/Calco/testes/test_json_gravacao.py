@@ -119,10 +119,14 @@ class _Cenario:
         self._clique(ft, 740, 500, Qt.MouseButton.RightButton)
         self.ids['boundary'] = criadas[0]
         self._selecionar('boundary', criadas[0])
-        w = self.painel.widgets['symbol_instances']
-        w.setText('25, 50, 80')
-        w.editingFinished.emit()
+        w = self.painel.widgets['symbol_instances']  # o editor de posições do dock (ui/blocos/taticos.py)
+        w.repeticoes.setValue(3)
+        _app.processEvents()
+        for pos, valor in zip(w.posicoes, (25, 50, 80)):
+            pos.setValue(valor)
         self.painel._gravar_pendentes()
+        self.painel.salvar()  # o Limite edita no buffer do dock: grava no Salvar
+        _app.processEvents()
         # Área VAB (170999-01) com dois portões pelo painel
         self.ids['vab'] = self._area([(80, 80), (330, 70), (340, 300), (90, 320)], '170999-01')
         self.painel.widgets['portoes'].acrescentar(0.25)
@@ -133,6 +137,7 @@ class _Cenario:
         cb = self.painel.widgets['minas'].combos[0]
         cb.setCurrentIndex(cb.findData('ac'))
         self.painel._gravar_pendentes()
+        self.painel.salvar()  # a Área de Coordenação edita no buffer do dock: grava no Salvar
         _app.processEvents()
         return self
 

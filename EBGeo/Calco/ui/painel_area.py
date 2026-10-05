@@ -1,13 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Painel da Área de Coordenação, espelho de coordination_area_attributes_panel.js do EBGeo
-Web: as linhas do formulário dependem do tipo (escalão no Ponto Forte, portões no Volume de
-aproximação de base, minas na Área minada, altitudes só no Volume). O PainelCalco chama
-`linhas_area` para montar o formulário e `widget_area` para os campos próprios do tipo.
+Editores ricos do dock para a Área de Coordenação. O dock é montado da especificação
+(formulario/tipos/area.py), a mesma do formulário nativo; aqui ficam só os widgets que o nativo
+não tem, chamados por `widget_area` para os campos com rico 'area_*':
 
-Portões: "Acrescentar portão" põe um na metade da borda e "Marcar portão na borda" espera um
-clique no mapa e o põe no ponto da borda mais próximo (Esc cancela); cada portão tem nome e
-posição na borda em %, como no Web.
+  area_tipo     o tipo da área; grava só o symbol_code (os padrões do tipo são regra do guardião,
+                regras.padroes_da_troca_area), lembra o último tipo para a área nova e remonta o dock
+  area_pct      a posição na borda em % (a coluna guarda de 0 a 1)
+  area_lista    lista com o nulo como opção (a posição do texto: "Padrão do tipo")
+  area_portoes  os portões do VAB: nome e posição na borda em %, remover, "Acrescentar portão" na
+                metade da borda e "Marcar portão na borda", que espera um clique no mapa e o põe
+                no ponto da borda mais próximo (Esc cancela)
+  area_minas    as três posições da Área minada
+
+Tudo grava pelo dock, no buffer de edição da camada (Salvar e Descartar).
 """
 import json
 
@@ -19,49 +25,6 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from .. import estilos_area as ea
-
-ESTILOS_TRACO = [('solid', 'Sólida'), ('dashed', 'Tracejada'), ('dotted', 'Pontilhada'), ('dash-dot', 'Traço-ponto'),
-                 ('long-dash', 'Traço longo'), ('short-dash', 'Traço curto'), ('dot-dot-dash', 'Ponto-ponto-traço')]
-HACHURAS = [('none', 'Nenhuma'), ('diagonal-right', 'Diagonal /'), ('diagonal-left', 'Diagonal \\'),
-            ('horizontal', 'Horizontal'), ('vertical', 'Vertical'), ('cross', 'Cruz +'),
-            ('cross-diagonal', 'Cruz X'), ('dots', 'Pontos')]
-
-
-def linhas_area(feat):
-    """(coluna, rótulo, spec) do formulário para o tipo da área."""
-    cod = feat['symbol_code'] if feat['symbol_code'] in ea.CATALOGO_AREA else ea.SIMBOLO_PADRAO
-    sim = ea.CATALOGO_AREA[cod]
-    out = [('symbol_code', 'Símbolo', ('area_tipo',)),
-           ('symbol_size_km', 'Tamanho do símbolo (m)', ('km_em_m', 10, 50000, 10)),
-           ('zoom_corr', 'Correção de Zoom', ('bool',)),
-           ('created_zoom', 'Zoom de referência', ('num', 0, 22, 0.1, 1)),
-           ('line_color', 'Borda', ('cor',)),
-           ('line_width', 'Espessura da borda (px)', ('num', 1, 10, 1, 0))]
-    if sim['borda'] != 'elos':
-        out.append(('line_style', 'Estilo da borda', ('combo', ESTILOS_TRACO)))
-    out += [('fill_color', 'Preenchimento', ('cor',)),
-            ('opacity', 'Opacidade do preenchimento', ('num', 0, 1, 0.05, 2)),
-            ('hatch_type', 'Hachura', ('area_hachura',)),
-            ('hatch_spacing', 'Espaçamento da hachura (px)', ('num', 2, 40, 1, 0)),
-            ('hatch_line_width', 'Espessura da hachura (px)', ('num', 0.5, 10, 0.5, 1))]
-    if sim.get('escalao'):
-        out.append(('escalao', 'Escalão', ('combo', [('', 'Nenhum')] + [(e, ea.rotulo_escalao(e)) for e in ea.ESCALOES])))
-    if sim.get('portoes'):
-        out += [('portoes', 'Portões', ('area_portoes',)), ('portoes_ocultos', 'Ocultar portões', ('bool',))]
-    if sim.get('minas'):
-        out.append(('minas', 'Minas', ('area_minas',)))
-    out += [('tipo', 'Tipo', ('texto',)), ('identificacao', 'Identificação', ('texto',))]
-    if sim.get('portoes'):
-        out += [('altitude_max', 'Altitude máxima', ('texto',)), ('altitude_min', 'Altitude mínima', ('texto',))]
-    out += [('gdh_ini', 'GDH Início', ('texto',)), ('gdh_fim', 'GDH Fim', ('texto',))]
-    if not sim.get('portoes'):
-        out.append(('outras_info', 'Outras informações', ('texto',)))
-    out += [('text_position', 'Posição do texto', ('combo', ea.POSICOES_TEXTO)),
-            ('text_ratio', 'Posição do escalão na borda (%)' if sim.get('escalao') else 'Posição na borda (%)',
-             ('area_pct',)),
-            ('text_north_facing', 'Texto sempre para o norte', ('bool',)),
-            ('text_size', 'Tamanho do texto (px)', ('num', 8, 40, 1, 0))]
-    return out
 
 
 def _lista_json(valor):
@@ -76,8 +39,20 @@ def _lista_json(valor):
         return []
 
 
+def _atributo(painel, col):
+    if painel.layer is None or painel.fid is None or painel.layer.fields().indexOf(col) < 0:
+        return None
+    v = painel.layer.getFeature(painel.fid)[col]
+    return None if v is None or (hasattr(v, 'isNull') and v.isNull()) else v
+
+
+def razao_padrao(posicao):
+    """text_ratio nulo, como o Web o desenha: 25 % no texto externo, metade da borda nos demais."""
+    return 0.25 if posicao == 'externa' else 0.5
+
+
 def widget_area(painel, col, spec, valor, nulo):
-    """Widget dos campos próprios da área; None para os que o painel comum monta."""
+    """Widget dos campos ricos da área; None para os que o painel comum monta."""
     kind = spec[0]
     if kind == 'area_tipo':
         w = QComboBox()
@@ -87,18 +62,25 @@ def widget_area(painel, col, spec, valor, nulo):
         w.setCurrentIndex(max(i, 0))
         w.currentIndexChanged.connect(lambda _i, w=w: _tipo_mudou(painel, w.currentData()))
         return w
-    if kind == 'area_hachura':
+    if kind == 'area_lista':
         w = QComboBox()
-        for v, rot in HACHURAS:
+        for v, rot in spec[1:]:
             w.addItem(rot, v)
-        w.setCurrentIndex(max(w.findData('none' if nulo else str(valor)), 0))
-        w.currentIndexChanged.connect(lambda _i, w=w: _hachura_mudou(painel, w.currentData()))
+        i = w.findData(None if nulo else str(valor))
+        if i < 0 and not nulo:
+            w.addItem(str(valor), str(valor))
+            i = w.count() - 1
+        w.setCurrentIndex(max(i, 0))
+        w.currentIndexChanged.connect(lambda _i, c=col, w=w: painel._mudou(c, w.currentData()))
         return w
     if kind == 'area_pct':
         w = QSpinBox()
         w.setRange(0, 100)
         w.setSuffix(' %')
-        w.setValue(0 if nulo else int(round(float(valor) * 100)))
+        if nulo:  # mostra a posição que o desenho usa, sem gravá-la
+            posicao = _atributo(painel, 'text_position') or ea.posicao_padrao(str(_atributo(painel, 'symbol_code') or ''))
+            valor = razao_padrao(posicao)
+        w.setValue(int(round(float(valor) * 100)))
         w.valueChanged.connect(lambda v, c=col: painel._mudou(c, v / 100.0))
         return w
     if kind == 'area_minas':
@@ -109,21 +91,13 @@ def widget_area(painel, col, spec, valor, nulo):
 
 
 def _tipo_mudou(painel, codigo):
-    if painel._carregando or painel.fid is None:
+    if painel._carregando or painel.fid is None or not codigo:
         return
-    feat = painel.layer.getFeature(painel.fid)
-    atuais = {f.name(): (None if feat[f.name()] is None or (hasattr(feat[f.name()], 'isNull') and feat[f.name()].isNull())
-                         else feat[f.name()]) for f in painel.layer.fields()}
-    painel._pendentes.update(ea.troca_de_simbolo(atuais, codigo))
-    painel._gravar_pendentes()
+    painel._pendentes['symbol_code'] = codigo
+    painel._gravar_pendentes()  # o guardião da camada aplica os padrões do tipo no mesmo passo
     QgsSettings().setValue(ea.CHAVE_ULTIMO_TIPO, codigo)
     # remontar fora do sinal: apagar o combo dentro do próprio currentIndexChanged derruba o QGIS
     QTimer.singleShot(0, painel._selecao_mudou)
-
-
-def _hachura_mudou(painel, tipo):
-    painel._mudou('hatch_type', tipo)
-    painel._mudou('hatch_enabled', tipo != 'none')
 
 
 class EditorMinas(QWidget):

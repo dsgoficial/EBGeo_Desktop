@@ -33,7 +33,7 @@ from qgis.core import (
     QgsExpressionContextUtils, QgsFeature, QgsFeatureRequest, QgsField, QgsFields, QgsFillSymbol,
     QgsGeometry, QgsLayoutItem, QgsLayoutItemGroup, QgsLayoutItemLabel, QgsLayoutItemMap,
     QgsLayoutItemPicture, QgsLayoutItemShape, QgsLayoutPoint, QgsLayoutSize, QgsLayoutUtils,
-    QgsMapRendererSequentialJob, QgsMapSettings, QgsMemoryProviderUtils, QgsPointXY, QgsProject,
+    QgsMapRendererParallelJob, QgsMapRendererSequentialJob, QgsMapSettings, QgsMemoryProviderUtils, QgsPointXY, QgsProject,
     QgsRectangle, QgsRenderContext, QgsTextFormat, QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QMetaType, QRect, QSize, Qt
@@ -533,6 +533,57 @@ def geometria_amostra(tipo, f):
     return None, extra, None
 
 
+JANELA_COMUM_M = (400.0, 200.0)
+
+# A camada de memória da amostra do dock, reaproveitada por camada de origem enquanto o estilo
+# dela é o mesmo: clonar o renderer da Linha de Coordenação leva 0,25 s, e o dock redesenha a cada
+# mudança. A que está desenhando não é reaproveitada.
+_CAMADAS_AMOSTRA = {}
+_OCUPADAS = set()
+
+
+def _chave_estilo(camada):
+    try:
+        from qgis.PyQt import sip
+    except ImportError:  # pragma: no cover
+        import sip
+    r, lab = camada.renderer(), camada.labeling()
+    return (sip.unwrapinstance(r) if r is not None else 0, sip.unwrapinstance(lab) if lab is not None else 0,
+            camada.labelsEnabled())
+
+
+def _camada_reaproveitada(camada):
+    guardada = _CAMADAS_AMOSTRA.get(camada.id())
+    if guardada is None or guardada[0] != _chave_estilo(camada) or id(guardada[1]) in _OCUPADAS:
+        return None
+    return guardada[1]
+
+
+def geometria_amostra_qualquer(tipo, f):
+    """
+    A amostra de geometria_amostra e, nos tipos que o quadro não lista (os comuns do mapa 2D),
+    uma figura genérica da geometria do tipo: o ponto no centro, uma linha com uma dobra, um
+    retângulo. Sem âncora de zoom, o traço e o marcador saem em mm, qualquer que seja a janela.
+    """
+    g, extra, janela = geometria_amostra(tipo, f)
+    if g is not None:
+        return g, extra, janela
+    W, H = JANELA_COMUM_M
+    janela = QgsRectangle(-W / 2, -H / 2, W / 2, H / 2)
+    from . import schema
+    geo = schema.TIPOS[tipo]['geometria']
+    if geo == 'Point':
+        return QgsGeometry.fromPointXY(QgsPointXY(0, 0)), extra, janela
+    if 'LineString' in geo:
+        pts = [QgsPointXY(-0.4 * W, -0.2 * H), QgsPointXY(0, 0.2 * H), QgsPointXY(0.4 * W, -0.2 * H)]
+        g = QgsGeometry.fromMultiPolylineXY([pts]) if geo.startswith('Multi') else QgsGeometry.fromPolylineXY(pts)
+        return g, extra, janela
+    anel = [QgsPointXY(-0.3 * W, -0.3 * H), QgsPointXY(-0.3 * W, 0.3 * H), QgsPointXY(0.3 * W, 0.3 * H),
+            QgsPointXY(0.3 * W, -0.3 * H), QgsPointXY(-0.3 * W, -0.3 * H)]
+    g = QgsGeometry.fromMultiPolygonXY([[anel]]) if geo.startswith('Multi') else QgsGeometry.fromPolygonXY([anel])
+    return g, extra, janela
+
+
 def _campo_texto(campo):
     """Coluna JSON vira texto na camada de memória (as expressões leem os três formatos)."""
     if campo.type() in (QMetaType.Type.QVariantMap, QMetaType.Type.QVariantList, QMetaType.Type.QStringList):
@@ -555,16 +606,27 @@ def _png_base64(img):
     return base64.b64encode(bytes(buf)).decode('ascii')
 
 
-def amostras_png(camada, tipo, feicoes, largura_mm=FIG_L, altura_mm=FIG_A, dpi=DPI_AMOSTRA):
+def amostras_png(camada, tipo, feicoes, largura_mm=FIG_L, altura_mm=FIG_A, dpi=DPI_AMOSTRA, geometria=None,
+                 pronto=None):
     """
     PNG (base64) da amostra de cada feição, desenhadas com o renderer e os rótulos da própria
     camada, numa camada de memória com o mesmo esquema e os atributos de desenho da feição.
     As amostras ficam empilhadas no plano local, um desenho só, e cada figura é recortada da
     sua janela. Âncora de zoom desligada (created_zoom nulo): traço e texto em mm, glifo nos
     metros da amostra, como o Web sem âncora.
+
+    Com `pronto(lista)`, o desenho roda fora da linha da interface (QgsMapRendererParallelJob) e
+    a função devolve o job, que o chamador guarda até o fim: a amostra do estilo tático leva até
+    2 s (medido no dock, Linha de Coordenação), e travaria o painel a cada mudança.
     """
+    def fim(valor):
+        if pronto is None:
+            return valor
+        pronto(valor)
+        return None
+
     if not feicoes:
-        return []
+        return fim([])
     c = QgsGeometry(feicoes[0].geometry())
     lat, lon = 0.0, 0.0
     if not c.isNull() and not c.isEmpty():
@@ -577,14 +639,17 @@ def amostras_png(camada, tipo, feicoes, largura_mm=FIG_L, altura_mm=FIG_A, dpi=D
     campos = QgsFields()
     for campo in camada.fields():
         campos.append(_campo_texto(campo))
-    vl = QgsMemoryProviderUtils.createMemoryLayer('amostra', campos, camada.wkbType(), camada.crs())
+    vl = _camada_reaproveitada(camada) if pronto is not None else None
+    estilizar = vl is None
+    if vl is None:
+        vl = QgsMemoryProviderUtils.createMemoryLayer('amostra', campos, camada.wkbType(), camada.crs())
     nomes_origem = camada.fields().names()
     px_l = max(8, int(round(largura_mm / 25.4 * dpi)))
     px_a = max(8, int(round(altura_mm / 25.4 * dpi)))
-    amostras = [geometria_amostra(tipo, f) for f in feicoes]
+    amostras = [(geometria or geometria_amostra)(tipo, f) for f in feicoes]
     validas = [a[2] for a in amostras if a[0] is not None]
     if not validas:
-        return [None] * len(feicoes)
+        return fim([None] * len(feicoes))
     # Uma janela só, no formato da célula, para o lote inteiro: traço e texto são mm de papel,
     # então cada figura tem de sair na MESMA escala, recortada já no tamanho da célula (janela
     # menor ampliada no quadro engrossaria o traço).
@@ -623,13 +688,17 @@ def amostras_png(camada, tipo, feicoes, largura_mm=FIG_L, altura_mm=FIG_A, dpi=D
         nova.setGeometry(geom)
         novas.append(nova)
     if not novas:
-        return [None] * len(feicoes)
+        return fim([None] * len(feicoes))
+    vl.dataProvider().truncate()
     vl.dataProvider().addFeatures(novas)
     vl.updateExtents()
-    vl.setRenderer(camada.renderer().clone())
-    if camada.labeling() is not None:
-        vl.setLabeling(camada.labeling().clone())
-        vl.setLabelsEnabled(camada.labelsEnabled())
+    if estilizar:
+        vl.setRenderer(camada.renderer().clone())
+        if camada.labeling() is not None:
+            vl.setLabeling(camada.labeling().clone())
+            vl.setLabelsEnabled(camada.labelsEnabled())
+        if pronto is not None:
+            _CAMADAS_AMOSTRA[camada.id()] = (_chave_estilo(camada), vl)
 
     validas = [j for j in janelas if j is not None]
     mpp = jl / px_l  # metros por pixel, comum ao lote
@@ -648,21 +717,34 @@ def amostras_png(camada, tipo, feicoes, largura_mm=FIG_L, altura_mm=FIG_A, dpi=D
     ctx = QgsExpressionContext(QgsExpressionContextUtils.globalProjectLayerScopes(None))
     ctx.appendScope(QgsExpressionContextUtils.mapSettingsScope(ms))
     ms.setExpressionContext(ctx)
+    def recortar(img):
+        ext = ms.visibleExtent()
+        passo = ext.width() / img.width()
+        saida = []
+        for j in janelas:
+            if j is None:
+                saida.append(None)
+                continue
+            x0 = int(round((j.xMinimum() - ext.xMinimum()) / passo))
+            y0 = int(round((ext.yMaximum() - j.yMaximum()) / passo))
+            saida.append(_png_base64(img.copy(QRect(x0, y0, px_l, px_a))))
+        return saida
+
+    if pronto is not None:
+        job = QgsMapRendererParallelJob(ms)
+        job.camada_amostra = vl  # viva até o fim do desenho
+        _OCUPADAS.add(id(vl))
+
+        def terminou():
+            _OCUPADAS.discard(id(vl))
+            pronto(recortar(job.renderedImage()))
+        job.finished.connect(terminou)
+        job.start()
+        return job
     job = QgsMapRendererSequentialJob(ms)
     job.start()
     job.waitForFinished()
-    img = job.renderedImage()
-    ext = ms.visibleExtent()
-    passo = ext.width() / img.width()
-    saida = []
-    for j in janelas:
-        if j is None:
-            saida.append(None)
-            continue
-        x0 = int(round((j.xMinimum() - ext.xMinimum()) / passo))
-        y0 = int(round((ext.yMaximum() - j.yMaximum()) / passo))
-        saida.append(_png_base64(img.copy(QRect(x0, y0, px_l, px_a))))
-    return saida
+    return recortar(job.renderedImage())
 
 
 # ---------------------------------------------------------------------------------------------

@@ -256,7 +256,7 @@ class ConstrutorSidc(QDialog):
             ed.setPlaceholderText(campo.get('placeholder', ''))
             ed.setToolTip(campo.get('tooltip', ''))
             ed.editingFinished.connect(self._atualizar)
-            self.form_texto.addRow('{} ({})'.format(campo['label'], campo.get('code', '')), ed)
+            self.form_texto.addRow(campo['label'], ed)  # como o Web, sem a letra da norma
             self.textos[campo['id']] = ed
 
     def _filtrar(self, texto):
