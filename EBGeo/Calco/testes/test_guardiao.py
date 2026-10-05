@@ -220,6 +220,34 @@ class TesteGuardiao(unittest.TestCase):
         vl.rollBack()
 
 
+class TesteSemPluginSoValorNovo(unittest.TestCase):
+    """
+    K5 dos defeitos conhecidos: sem o plugin, as regras de troca (a cor padrão do símbolo novo só
+    na linha que ainda veste a do anterior, os padrões da Área, a cor e as escolhas de desenho da
+    Medida) não têm como rodar no formulário nativo, porque dependem do valor ANTERIOR do campo
+    trocado, e o valor padrão por expressão aplicado na atualização, o único mecanismo sem código,
+    só enxerga o valor novo: a expressão roda depois da gravação, na feição já com a troca, e
+    get_feature_by_id na própria camada lê o buffer, também já trocado. Medido pelo formulário
+    nativo, como o operador salva.
+    """
+
+    def test_valor_padrao_na_atualizacao_so_ve_o_valor_novo(self):
+        from qgis.core import QgsDefaultValue
+        vl = camada('k5')
+        idx = vl.fields().indexOf
+        sonda = "coalesce(attribute(get_feature_by_id(@layer, $id), 'symbol_code'), 'nulo') || '|' || coalesce(\"symbol_code\", 'nulo')"
+        vl.setDefaultValueDefinition(idx('descricao'), QgsDefaultValue(sonda, True))
+        fid = next(vl.getFeatures()).id()
+        self.assertEqual(vl.getFeature(fid)['symbol_code'], '290199')
+        vl.startEditing()
+        pelo_formulario(vl, fid, {'symbol_code': '140000'})
+        visto = vl.getFeature(fid)['descricao']
+        vl.rollBack()
+        # a sonda rodou (pior caso: sem o padrão na atualização, a descrição ficaria vazia) e as
+        # duas leituras dão o código novo: o anterior, 290199, não chega à expressão
+        self.assertEqual(visto, '140000|140000')
+
+
 if __name__ == '__main__':
     r = unittest.main(exit=False, verbosity=2).result
     sys.exit(0 if r.wasSuccessful() else 1)

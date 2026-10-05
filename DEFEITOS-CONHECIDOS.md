@@ -8,7 +8,9 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 
 **Onde.** As regras de troca vivem no guardião (`EBGeo/Calco/regras.py`, `EBGeo/Calco/guardiao.py`), que só existe com o plugin; o formulário nativo é 100 % sem código por decisão de 2026-10-05.
 
-**Conserto sugerido.** Não há conserto sem código no formulário; o caminho é aceitar e documentar, ou aplicar os padrões que couberem como valor padrão de campo por expressão.
+**Medido (2026-10-05).** O único mecanismo sem código, o valor padrão por expressão aplicado na atualização, roda depois da gravação, na feição já trocada: pelo formulário nativo, `"symbol_code"` e `get_feature_by_id(@layer, $id)` dão os dois o código novo (`TesteSemPluginSoValorNovo` de `EBGeo/Calco/testes/test_guardiao.py`). A ordem em que o QGIS 4.0.0 avalia vários desses padrões muda de um processo para outro (seis campos em cadeia, cinco processos, cinco ordens), o que descarta guardar o código anterior numa coluna de memória. As regras de troca dependem todas do valor anterior: a cor padrão só na linha que ainda veste a do símbolo anterior, os padrões da Área que ainda estão nos do tipo anterior, a cor e as escolhas de desenho da Medida. Uma versão sem o anterior, aplicada a cada gravação, regravaria a escolha do operador ao salvar só o nome. O escalão da Medida é função só dos valores atuais, mas sem o plugin a medida trocada não é redesenhada (o SVG assado acende o aviso de desenho velho), e o padrão o regravaria em toda gravação. Nada foi aplicado; a hachura que acompanha o tipo na Área segue como o único padrão sem código.
+
+**Conserto.** Não há, sem código, no QGIS 4.0.0; fica documentado. Com o plugin, o guardião aplica as regras em qualquer caminho de edição.
 
 ## K9 Chaves que o Web desenha e o Desktop ignora
 
