@@ -1225,6 +1225,149 @@ class TesteDock(unittest.TestCase):
         self._capturar('dock_polygon_bloqueada.png')
 
 
+def calco_uma_forma(caminho, tipo, attrs):
+    """Calco com uma forma do tipo, com o estilo da camada (o guardião vai à parte)."""
+    from qgis.core import QgsGeometry, QgsPointXY
+    from Calco import calco as C, gpkg
+    gpkg.criar_calco(caminho, [tipo])
+    vl = QgsVectorLayer('{}|layername={}'.format(caminho, schema.TIPOS[tipo]['tabela']), schema.TIPOS[tipo]['nome_pt'], 'ogr')
+    vl.setCustomProperty(PROP_CAMINHO, caminho)
+    vl.setCustomProperty(PROP_TIPO, tipo)
+    a = dict(schema.padroes(tipo), ebgeo_id=str(uuid.uuid4()), nome='forma')
+    a.update(attrs)
+    f = QgsFeature(vl.fields())
+    for k, v in schema.atributos_para_qgis(tipo, a).items():
+        if vl.fields().indexOf(k) >= 0:
+            f.setAttribute(vl.fields().indexOf(k), v)
+    anel = [QgsPointXY(x, y) for x, y in ((-43.08, -22.92), (-43.04, -22.93), (-43.035, -22.90), (-43.075, -22.89), (-43.08, -22.92))]
+    f.setGeometry(QgsGeometry.fromMultiPolygonXY([[anel]]))
+    vl.startEditing()
+    vl.addFeature(f)
+    assert vl.commitChanges(), vl.commitErrors()
+    C.aplicar_estilo(vl, tipo)
+    C.aplicar_formulario(vl, tipo)
+    return vl, next(vl.getFeatures()).id()
+
+
+def tinta(vl):
+    """Pixels escuros da camada desenhada sobre branco (o buffer de edição entra no desenho)."""
+    from qgis.core import QgsMapRendererParallelJob, QgsMapSettings
+    from qgis.PyQt.QtCore import QSize
+    from qgis.PyQt.QtGui import QColor
+    ms = QgsMapSettings()
+    ms.setLayers([vl])
+    ms.setDestinationCrs(vl.crs())
+    ms.setOutputSize(QSize(400, 300))
+    ms.setBackgroundColor(QColor('white'))
+    ms.setExtent(vl.extent().buffered(vl.extent().width() * 0.05))
+    ctx = QgsExpressionContext()
+    ctx.appendScope(QgsExpressionContextUtils.mapSettingsScope(ms))
+    ms.setExpressionContext(ctx)
+    job = QgsMapRendererParallelJob(ms)
+    job.start()
+    job.waitForFinished()
+    img = job.renderedImage()
+    return sum(1 for y in range(0, img.height(), 2) for x in range(0, img.width(), 2)
+               if QColor(img.pixel(x, y)).lightness() < 235)
+
+
+class TesteHachuraVisivelFormas(unittest.TestCase):
+    """
+    As cinco formas têm o mesmo defeito da Área (decisão do chefe, 2026-10-05): a hachura usa a
+    opacidade do preenchimento, e com opacidade 0 a hachura escolhida não aparecia (medido: a mesma
+    tinta que sem hachura). A mesma regra do guardião: na transição sem hachura para com hachura
+    (caixa marcada e um tipo desenhado), a opacidade 0 vai a 1; a forma que já tem hachura não muda.
+    """
+
+    def test_regra(self):
+        from Calco import estilos_formas as EF, regras
+        self.assertEqual(set(EF.FORMAS), {t for t in regras.TIPOS_COM_REGRAS if regras._REGRAS.get(t) is regras._REGRAS['polygon']})
+        ant = {'opacity': 0.0, 'hatch_enabled': False, 'hatch_type': 'none'}
+        for tipo in EF.FORMAS:
+            am = lambda a, m: regras.ao_mudar(tipo, a, m)  # noqa: E731
+            self.assertEqual(am(ant, {'hatch_enabled': True, 'hatch_type': 'cross'}), {'opacity': 1.0}, tipo)
+            self.assertEqual(am(ant, {'hatch_type': 'cross'}), {}, tipo)          # caixa desmarcada: não desenha
+            self.assertEqual(am(ant, {'hatch_enabled': True}), {}, tipo)          # 'Nenhuma': não desenha
+            self.assertEqual(am(dict(ant, hatch_type='dots'), {'hatch_enabled': True}), {'opacity': 1.0}, tipo)
+            self.assertEqual(am(ant, {'hatch_enabled': True, 'hatch_type': 'cross', 'opacity': 0.2}), {}, tipo)
+            self.assertEqual(am(dict(ant, opacity=0.3), {'hatch_enabled': True, 'hatch_type': 'cross'}), {}, tipo)
+            com = dict(ant, hatch_enabled=True, hatch_type='cross')
+            self.assertEqual(am(com, {'hatch_type': 'vertical'}), {}, tipo)       # já tinha: não muda
+
+    def test_hachura_aparece_pelo_formulario_nativo_e_pela_tabela(self):
+        from Calco import estilos_formas as EF, guardiao
+        from test_guardiao import pela_tabela, pelo_formulario
+        vistos = []
+        for tipo in EF.FORMAS:
+            for caminho_ed in ('formulário', 'tabela'):
+                vl, fid = calco_uma_forma(os.path.join(TMP, 'visivel_{}_{}.gpkg'.format(tipo, len(vistos))), tipo,
+                                          {'opacity': 0.0, 'line_width': 0.0})
+                self.assertIsNotNone(guardiao.garantir(vl, tipo))
+                sem = tinta(vl)
+                vl.startEditing()
+                if caminho_ed == 'formulário':
+                    pelo_formulario(vl, fid, {'hatch_enabled': True, 'hatch_type': 'cross'})
+                else:
+                    pela_tabela(vl, fid, 'hatch_type', 'cross')        # caixa desmarcada: não desenha, nada muda
+                    self.assertEqual(vl.getFeature(fid)['opacity'], 0.0, tipo)
+                    pela_tabela(vl, fid, 'hatch_enabled', True)
+                f = vl.getFeature(fid)
+                com = tinta(vl)
+                vistos.append('{} {}: tinta {} -> {}'.format(tipo, 'pelo formulário' if caminho_ed == 'formulário' else 'pela tabela', sem, com))
+                self.assertEqual(f['opacity'], 1.0, (tipo, caminho_ed))
+                self.assertGreater(com, sem + 500, (tipo, caminho_ed))
+                vl.rollBack()
+        MEDIDAS.append('hachura visível nas formas: ' + '; '.join(vistos))
+
+    def test_pior_caso_sem_a_regra_a_hachura_some(self):
+        from Calco import estilos_formas as EF
+        from test_guardiao import pelo_formulario
+        for tipo in EF.FORMAS:
+            vl, fid = calco_uma_forma(os.path.join(TMP, 'sem_regra_{}.gpkg'.format(tipo)), tipo,
+                                      {'opacity': 0.0, 'line_width': 0.0})
+            sem = tinta(vl)
+            vl.startEditing()
+            pelo_formulario(vl, fid, {'hatch_enabled': True, 'hatch_type': 'cross'})
+            self.assertEqual(vl.getFeature(fid)['opacity'], 0.0, tipo)
+            self.assertLessEqual(tinta(vl), sem + 50, tipo)  # a régua reprovaria: a hachura não aparece
+            vl.rollBack()
+
+    def test_dock_do_poligono(self):
+        """No dock: marcar a caixa com 'Nenhuma' não muda; escolher o tipo leva a opacidade a 1, e o widget a mostra."""
+        from qgis.testing.mocked import get_iface
+        from Calco.ui.painel import PainelCalco
+        vl, fid = calco_uma_forma(os.path.join(TMP, 'visivel_dock.gpkg'), 'polygon', {'opacity': 0.0, 'fill_color': '#00897b'})
+        QgsProject.instance().addMapLayer(vl)
+        painel = PainelCalco(get_iface())
+        painel.setParent(None)
+        painel.resize(440, 980)
+        painel.show()
+        try:
+            painel._camada_mudou(vl)
+            vl.selectByIds([fid])
+            painel._selecao_mudou()
+            _app.processEvents()
+            painel.widgets['hatch_enabled'].setChecked(True)
+            painel._gravar_pendentes()
+            _app.processEvents()
+            self.assertEqual(vl.getFeature(fid)['opacity'], 0.0)
+            cb = painel.widgets['hatch_type']
+            cb.setCurrentIndex(cb.findData('cross'))
+            painel._gravar_pendentes()
+            _app.processEvents()
+            self.assertEqual(vl.getFeature(fid)['opacity'], 1.0)
+            self.assertEqual(painel.widgets['opacity'].value(), 1.0)
+            from Calco.ui.blocos.previa import esperar
+            esperar(painel)
+            painel.grab().save(os.path.join(SAIDA, 'dock_poligono_hachura_visivel.png'))
+            self.assertTrue(painel.descartar())
+            _app.processEvents()
+        finally:
+            painel.hide()
+            painel.deleteLater()
+            QgsProject.instance().removeMapLayer(vl.id())
+
+
 def tearDownModule():
     print('\n--- medidas ---')
     for m in MEDIDAS:

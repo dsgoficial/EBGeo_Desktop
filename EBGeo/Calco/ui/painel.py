@@ -23,7 +23,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
-from .. import schema
+from .. import regras, schema
 from ..calco import tipo_da_camada
 from ..formulario import especificacao as esp
 
@@ -42,6 +42,7 @@ class PainelCalco(QDockWidget):
         self.fid = None
         self._carregando = False
         self.widgets = {}
+        self._tipos_widget = {}  # coluna -> o tipo do widget do dock (spec[0] de _widget)
         self._setor = None      # [principal, secundária] do Setor de Tiro, em azimute
         self._abertura = None   # QLabel "Abertura do setor"
         base = QWidget()
@@ -145,6 +146,7 @@ class PainelCalco(QDockWidget):
     def _limpar(self):
         self.fid = None
         self.widgets = {}
+        self._tipos_widget = {}
         self._setor = None
         self._abertura = None
         self._spec = None
@@ -280,6 +282,7 @@ class PainelCalco(QDockWidget):
         else:
             return None
         self.widgets[col] = w
+        self._tipos_widget[col] = kind
         return w
 
     def _seletor_engenharia(self):
@@ -515,12 +518,56 @@ class PainelCalco(QDockWidget):
         fid = self.fid
         idx = self.layer.fields().indexOf
         valores = {idx(c): v for c, v in schema.atributos_para_qgis(self.tipo, mudancas).items() if idx(c) >= 0}
+        mostrados = [c for c in self._tipos_widget if c not in mudancas and idx(c) >= 0]
+        antes = self.layer.getFeature(fid)
+        antes = {c: antes[c] for c in mostrados} if antes.isValid() else {}
 
         def mudar():
             for i, v in valores.items():
                 self.layer.changeAttributeValue(fid, i, v)
         self._no_buffer(mudar)
+        self._mostrar_regras(fid, antes)
         self._aplicar_condicoes()
+
+    def _mostrar_regras(self, fid, antes):
+        """
+        O que o guardião mudou no mesmo passo (as regras de troca: a opacidade que vai a 1 com a
+        hachura, a cor do tipo) aparece nos widgets do dock, sem gravar de novo.
+        """
+        depois = self.layer.getFeature(fid)
+        if not depois.isValid():
+            return
+        self._carregando = True
+        try:
+            for col, v in antes.items():
+                if regras.nao_definido(v) or regras.nao_definido(depois[col]):
+                    continue
+                if not regras.iguais(v, depois[col]):
+                    self._mostrar_valor(col, depois[col])
+        finally:
+            self._carregando = False
+
+    def _mostrar_valor(self, col, valor):
+        """Põe o valor no widget simples do dock (os ricos se remontam por conta própria)."""
+        w, kind = self.widgets.get(col), self._tipos_widget.get(col)
+        nulo = esp._nulo(valor)
+        if kind == 'num':
+            w.setValue(w.minimum() if nulo else float(valor))
+        elif kind == 'km_em_m':
+            w.setValue(w.minimum() if nulo else float(valor) * 1000.0)
+        elif kind == 'bool':
+            w.setChecked(False if nulo else bool(valor))
+        elif kind == 'combo':
+            i = w.findData(None if nulo else str(valor))
+            if i >= 0:
+                w.setCurrentIndex(i)
+        elif kind == 'cor':
+            if nulo:
+                w.setToNull()
+            else:
+                w.setColor(QColor(str(regras.valor(valor))))
+        elif kind == 'texto':
+            w.setText('' if nulo else str(valor))
 
     def _no_buffer(self, acao, texto='Calco: propriedades'):
         """Executa `acao` num comando de edição da camada, abrindo a edição (e a sessão) se preciso."""

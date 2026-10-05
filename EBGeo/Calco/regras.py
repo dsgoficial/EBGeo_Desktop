@@ -272,6 +272,44 @@ def hachura_ligada(tipo_hachura):
     return tipo_hachura is not None and str(tipo_hachura) not in ('', 'none')
 
 
+# ---------------------------------------------------------------------------------------------
+# Hachura visível (decisão do chefe, 2026-10-05): na Área e nas cinco formas comuns, a cor da
+# hachura leva a opacidade do preenchimento, e com opacidade 0 (o padrão da Área genérica) a
+# hachura escolhida sai invisível. Na transição de sem hachura para com hachura, a opacidade 0
+# vai a 1; a feição que já tem hachura não muda, e a opacidade que o operador muda na mesma
+# edição fica. "Com hachura" é o que o estilo desenha: a caixa ligada e um dos tipos das camadas
+# de padrão (COND_HACHURA e HACHURAS_DESENHADAS do estilo).
+# ---------------------------------------------------------------------------------------------
+
+def _real(v):
+    """O número da coluna; o marcador de "não definido" do formulário vale o DEFAULT da coluna."""
+    if nao_definido(v):
+        v = v.defaultValueClause()
+    v = valor(v)
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def hachura_desenhada(atributos, desenhadas):
+    """O estilo desenha a hachura: a caixa ligada e um tipo das camadas de padrão (`desenhadas`)."""
+    ligada, tipo = valor(atributos.get('hatch_enabled')), valor(atributos.get('hatch_type'))
+    return bool(ligada) and not nao_definido(ligada) and tipo is not None and str(tipo) in desenhadas
+
+
+def opacidade_ao_ligar_hachura(anterior, mudadas, extra, desenhadas):
+    """{'opacity': 1.0} quando a edição faz a hachura aparecer na feição de opacidade 0; senão {}."""
+    if mudou(anterior, mudadas, 'opacity') or 'opacity' in extra:
+        return {}
+    depois = dict(anterior)
+    depois.update({c: v for c, v in mudadas.items() if not nao_definido(v)})
+    depois.update(extra)
+    if hachura_desenhada(anterior, desenhadas) or not hachura_desenhada(depois, desenhadas):
+        return {}
+    return {'opacity': 1.0} if _real(depois.get('opacity')) == 0 else {}
+
+
 def _area_coordenacao(anterior, mudadas):
     extra = {}
     if mudou(anterior, mudadas, 'symbol_code'):
@@ -286,6 +324,8 @@ def _area_coordenacao(anterior, mudadas):
         ligada = hachura_ligada(tipo_hachura)
         if valor(anterior.get('hatch_enabled')) != ligada:
             extra['hatch_enabled'] = ligada
+    from .estilos_area import HACHURAS_DESENHADAS
+    extra.update(opacidade_ao_ligar_hachura(anterior, mudadas, extra, HACHURAS_DESENHADAS))
     return extra
 
 
@@ -349,10 +389,21 @@ _REGRAS.update({'military_symbol': _simbolo_militar, 'engineering_symbol': _simb
 
 
 # ---------------------------------------------------------------------------------------------
-# Feições comuns do mapa 2D (formulario/tipos/comuns.py): sem regra de troca, mas no guardião,
-# que reverte a edição da feição bloqueada no EBGeo Web pela tabela de atributos e renova
-# atualizado_em na camada sem o valor padrão.
+# Feições comuns do mapa 2D (formulario/tipos/comuns.py): no guardião, que reverte a edição da
+# feição bloqueada no EBGeo Web pela tabela de atributos e renova atualizado_em na camada sem o
+# valor padrão; as formas têm a regra da hachura visível.
 # ---------------------------------------------------------------------------------------------
-CAMPOS_VIGIADOS.update({t: () for t in ('point', 'line', 'polygon', 'circle', 'ellipse', 'rectangle', 'sector', 'text',
-                                         'image', 'brush', 'los', 'visibility', 'processed_los', 'processed_visibility')})
+CAMPOS_VIGIADOS.update({t: () for t in ('point', 'line', 'text', 'image', 'brush', 'los', 'visibility', 'processed_los',
+                                         'processed_visibility')})
+
+
+# As cinco formas (Polígono, Círculo, Elipse, Retângulo, Setor): a hachura visível, como na Área.
+def _forma(anterior, mudadas):
+    from .estilos_formas import HACHURAS_DESENHADAS
+    return opacidade_ao_ligar_hachura(anterior, mudadas, {}, HACHURAS_DESENHADAS)
+
+
+CAMPOS_VIGIADOS.update({t: ('opacity', 'hatch_enabled', 'hatch_type')
+                        for t in ('polygon', 'circle', 'ellipse', 'rectangle', 'sector')})
+_REGRAS.update({t: _forma for t in ('polygon', 'circle', 'ellipse', 'rectangle', 'sector')})
 TIPOS_COM_REGRAS = frozenset(CAMPOS_VIGIADOS)

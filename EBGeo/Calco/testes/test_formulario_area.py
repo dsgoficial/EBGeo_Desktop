@@ -1043,6 +1043,32 @@ class TestePainelArea(unittest.TestCase):
         self.assertEqual(self.painel.widgets['text_ratio'].value(), 40)
         MEDIDAS.append('posição na borda nula no dock: ' + '; '.join(vistos))
 
+    def test_hachura_visivel_pelo_dock(self):
+        """
+        Escolher a hachura no dock numa área de opacidade 0 leva a opacidade a 1 no buffer (regra do
+        guardião) e o widget da opacidade mostra 1; a área já com hachura não muda, e a opacidade
+        que o operador escolhe depois fica.
+        """
+        eid = self._nova(symbol_code='150000')
+        self.assertEqual(self.painel.widgets['opacity'].value(), 0.0)
+        cb = self.painel.widgets['hatch_type']
+        cb.setCurrentIndex(cb.findData('cross'))
+        self.painel._gravar_pendentes()
+        _app.processEvents()
+        f = self.lyr.getFeature(self.painel.fid)
+        self.assertEqual((f['hatch_type'], f['hatch_enabled'], f['opacity']), ('cross', True, 1.0))
+        self.assertEqual(self.painel.widgets['opacity'].value(), 1.0)
+        self.assertEqual(self._disco(eid)['opacity'], 0.0)  # nada no disco antes de Salvar
+        self._capturar('dock_area_hachura_visivel.png')
+        self.painel.widgets['opacity'].setValue(0.0)  # a escolha do operador fica
+        self.painel._gravar_pendentes()
+        cb = self.painel.widgets['hatch_type']
+        cb.setCurrentIndex(cb.findData('dots'))      # já com hachura: não muda
+        self.painel._gravar_pendentes()
+        self.assertEqual(self.lyr.getFeature(self.painel.fid)['opacity'], 0.0)
+        self.assertTrue(self.painel.descartar())
+        _app.processEvents()
+
     def test_bloqueada_so_leitura(self):
         self._nova(symbol_code='170999-01', bloqueado=True, portoes=PORTOES)
         for col in ('nome', 'symbol_code', 'line_color', 'portoes', 'text_position'):
@@ -1225,6 +1251,103 @@ class TestePosicaoNaBorda(unittest.TestCase):
                 self.assertEqual(rotulo.evaluate(ctx), esperado_, (codigo, v))
                 self.assertEqual(campo.rotulo_para(attrs, rico=True), base)  # o dock mostra o % na caixa
         self.assertEqual(self._desenho(rt, None), 0)
+
+
+def tinta(vl):
+    """Pixels escuros da camada desenhada sobre branco (o buffer de edição entra no desenho)."""
+    ms = QgsMapSettings()
+    ms.setLayers([vl])
+    ms.setDestinationCrs(vl.crs())
+    ms.setOutputSize(QSize(400, 300))
+    ms.setBackgroundColor(QColor('white'))
+    ms.setExtent(vl.extent().buffered(vl.extent().width() * 0.05))
+    ctx = QgsExpressionContext()
+    ctx.appendScope(QgsExpressionContextUtils.mapSettingsScope(ms))
+    ms.setExpressionContext(ctx)
+    job = QgsMapRendererParallelJob(ms)
+    job.start()
+    job.waitForFinished()
+    img = job.renderedImage()
+    return sum(1 for y in range(0, img.height(), 2) for x in range(0, img.width(), 2)
+               if QColor(img.pixel(x, y)).lightness() < 235)
+
+
+class TesteHachuraVisivelArea(unittest.TestCase):
+    """
+    Decisão do chefe (2026-10-05): a cor da hachura leva a opacidade da área, e a hachura escolhida
+    numa área de opacidade 0 (o padrão da 150000) saía invisível. Na transição sem hachura para com
+    hachura, a opacidade 0 vai a 1, pelo guardião, em qualquer caminho de edição; as áreas que já
+    têm hachura não mudam. A régua é o desenho: a hachura tem de pôr tinta além da borda.
+    """
+
+    def _camada(self, nome, guardar=True, **attrs):
+        caminho = os.path.join(TMP, 'visivel_{}.gpkg'.format(nome))
+        vl = calco_uma_area(caminho, dict(dict(symbol_code='150000', minas=None), **attrs))
+        if guardar:
+            self.assertIsNotNone(guardiao.garantir(vl, 'coordination_area'))
+        return vl, next(vl.getFeatures()).id()
+
+    def test_regra(self):
+        ant = {'symbol_code': '150000', 'opacity': 0.0, 'hatch_type': 'none', 'hatch_enabled': False}
+        am = lambda a, m: regras.ao_mudar('coordination_area', a, m)  # noqa: E731
+        self.assertEqual(am(ant, {'hatch_type': 'cross'}), {'hatch_enabled': True, 'opacity': 1.0})
+        self.assertEqual(am(ant, {'hatch_type': 'dots', 'hatch_enabled': True}), {'opacity': 1.0})
+        self.assertEqual(am(ant, {'hatch_type': 'cross', 'opacity': 0.3}), {'hatch_enabled': True})  # o operador escolheu
+        self.assertEqual(am(ant, {'hatch_type': 'cross', 'opacity': 0.0}), {'hatch_enabled': True, 'opacity': 1.0})
+        self.assertEqual(am(dict(ant, opacity=0.4), {'hatch_type': 'cross'}), {'hatch_enabled': True})
+        self.assertEqual(am(ant, {'hatch_type': 'desconhecida'}), {'hatch_enabled': True})  # o estilo não a desenha
+        self.assertEqual(am(ant, {'hatch_type': 'none'}), {})
+        com = dict(ant, hatch_type='cross', hatch_enabled=True)
+        self.assertEqual(am(com, {'hatch_type': 'dots'}), {})   # já tinha hachura: a área existente não muda
+        self.assertEqual(am(com, {'nome': 'x'}), {})
+        # a troca para um tipo com hachura leva os padrões do tipo, opacidade 1 inclusive
+        self.assertEqual(am(ant, {'symbol_code': '151100'})['opacity'], 1.0)
+        # a opacidade no DEFAULT da coluna chega como "não definido" e vale o DEFAULT
+        from qgis.core import QgsUnsetAttributeValue
+        self.assertEqual(am(dict(ant, opacity=QgsUnsetAttributeValue('0.0')), {'hatch_type': 'cross'})['opacity'], 1.0)
+
+    def test_hachura_aparece_pelo_formulario_nativo_e_pela_tabela(self):
+        from test_guardiao import pela_tabela, pelo_formulario
+        vistos = []
+        for caminho_ed in ('formulário', 'tabela'):
+            vl, fid = self._camada('ed_' + ('form' if caminho_ed == 'formulário' else 'tabela'))
+            sem = tinta(vl)
+            vl.startEditing()
+            if caminho_ed == 'formulário':
+                pelo_formulario(vl, fid, {'hatch_type': 'cross'})
+            else:
+                pela_tabela(vl, fid, 'hatch_type', 'cross')
+            f = vl.getFeature(fid)
+            com = tinta(vl)
+            vistos.append('{}: opacidade {} -> {}, tinta {} -> {}'.format(caminho_ed, 0.0, f['opacity'], sem, com))
+            self.assertEqual((f['hatch_enabled'], f['opacity']), (True, 1.0), caminho_ed)
+            self.assertGreater(com, 2 * sem, caminho_ed)
+            vl.undoStack().undo()  # desfaz a regra junto com o resto do passo do guardião
+            self.assertEqual(vl.getFeature(fid)['opacity'], 0.0)
+            vl.rollBack()
+        MEDIDAS.append('hachura visível na área: ' + '; '.join(vistos))
+
+    def test_area_existente_com_hachura_nao_muda(self):
+        from test_guardiao import pela_tabela, pelo_formulario
+        vl, fid = self._camada('existente', hatch_type='cross', hatch_enabled=True, opacity=0.0)
+        vl.startEditing()
+        pelo_formulario(vl, fid, {'nome': 'outro nome'})
+        pela_tabela(vl, fid, 'hatch_type', 'dots')
+        f = vl.getFeature(fid)
+        self.assertEqual((f['nome'], f['hatch_type'], f['opacity']), ('outro nome', 'dots', 0.0))
+        vl.rollBack()
+
+    def test_pior_caso_sem_a_regra_a_hachura_some(self):
+        """Sem o guardião (o código de antes não tinha a regra), a hachura escolhida não põe tinta."""
+        from test_guardiao import pelo_formulario
+        vl, fid = self._camada('sem_regra', guardar=False)
+        sem = tinta(vl)
+        vl.startEditing()
+        pelo_formulario(vl, fid, {'hatch_type': 'cross'})
+        f = vl.getFeature(fid)
+        self.assertEqual((f['hatch_type'], f['opacity']), ('cross', 0.0))
+        self.assertLessEqual(tinta(vl), sem * 1.05)  # a régua reprovaria: a hachura não aparece
+        vl.rollBack()
 
 
 def tearDownModule():
