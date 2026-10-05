@@ -566,6 +566,12 @@ class TestContraGrass(unittest.TestCase):
             self.assertGreater(p, 99.5)
 
 
+def caixas_de_mensagem_soltas():
+    """As caixas de mensagem de topo vivas (sem pai), por identidade."""
+    from qgis.PyQt.QtWidgets import QApplication
+    return {id(w) for w in QApplication.topLevelWidgets() if isinstance(w, QMessageBox)}
+
+
 class TestPlugin(unittest.TestCase):
     def test_acoes_de_visibilidade_abrem(self):
         from qgis.PyQt.QtWidgets import QMenu, QToolBar
@@ -576,11 +582,17 @@ class TestPlugin(unittest.TestCase):
         plugin.initGui()
         acoes = {a.text(): a for a in plugin.ebGeo.actions()}
         IFACE.addDockWidget.reset_mock()
+        caixas_antes = caixas_de_mensagem_soltas()
         acoes['Mapa de visibilidade'].trigger()
         self.assertTrue(plugin.mainVisib.isOpen)
         acoes['Análise de Visibilidade'].trigger()
         self.assertIsNotNone(plugin.visibilityAnalysisToolBox)
         self.assertEqual(IFACE.addDockWidget.call_count, 2)
+        # K7: o Mapa de visibilidade criava um QMessageBox() sem pai que ninguém usava; a janela de
+        # topo viva no fim do processo é destruída pelo sip em ordem que varia de uma execução para
+        # outra, e o processo saía com 139 depois do OK (medido em 2026-10-05: 20 de 30 execuções;
+        # sem a caixa, 0 de 30)
+        self.assertEqual(caixas_de_mensagem_soltas() - caixas_antes, set())
 
 
 if __name__ == '__main__':

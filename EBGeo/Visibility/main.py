@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from qgis.PyQt import QtCore
-from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.core import *
 from qgis.gui import *
 from .UI.interface_window import Interface
@@ -25,7 +24,6 @@ class Main:
         pass
        
     def initVariables(self):
-        self.msgBox = QMessageBox()
         self.canvas = self.iface.mapCanvas()
         self.dockWindow = Interface(self.iface)
 

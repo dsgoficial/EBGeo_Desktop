@@ -26,14 +26,6 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 
 **Conserto sugerido.** Rodar como `QgsTask`, como a cobertura de radar (`EBGeo/Visada/cobertura_radar.py`).
 
-## K7 Teste de visibilidade às vezes cai ao encerrar
-
-**Sintoma.** `EBGeo/Visada/testes/test_visada.py` imprime OK e o processo sai com código 139 de vez em quando.
-
-**Onde.** No encerramento do QGIS dentro do teste; a mesma classe de aborto do `exitQgis` já anotada nas suítes do Calco.
-
-**Conserto sugerido.** Encerrar sem `exitQgis` e sair pelo `sys.exit` do resultado, como as suítes do Calco.
-
 ## K8 Formas com hachura ligada e tipo vazio não desenham a hachura
 
 **Sintoma.** Polígono, círculo, elipse, retângulo ou setor vindo do Web com `hatchEnabled` verdadeiro e `hatchType` ausente ou nulo: o Web desenha hachura diagonal, o Desktop não desenha nenhuma.
