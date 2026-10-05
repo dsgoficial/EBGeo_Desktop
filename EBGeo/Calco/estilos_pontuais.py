@@ -17,8 +17,9 @@ dez vezes o tamanho de criação. Aqui isso vira milímetros por pixel lógico d
   correção ligada: min(10 × 0,2646, size × 78271,517 × cos(lat) / 2^created_zoom × 1000 / escala de terreno)
   (a escala de terreno vem de expressoes/_escala_terreno.exp, independente do SRC do mapa)
   correção desligada (ou created_zoom nulo ou 0): size × 0,2646
-O fator 78271,517 m/px no zoom 0 é a convenção de 512 px do MapLibre (A CONFIRMAR lado a lado
-com o Web: o KMZ do Web usa a de 256 px), e 0,2646 mm por pixel lógico é a tela de 96 dpi. A
+O fator 78271,517 m/px no zoom 0 é a convenção de 512 px do MapLibre, conferida lado a lado com a
+tela do Web em 2026-10-05 (testes/test_zoom.py; o KMZ do Web usa a de 256 px, que daria o dobro),
+e 0,2646 mm por pixel lógico é a tela de 96 dpi. A
 largura do marcador é largura_px × fator, e o deslocamento é (ancora_dx, ancora_dy) × fator,
 girado junto com o símbolo, como o icon-offset do MapLibre.
 """

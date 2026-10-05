@@ -4,7 +4,8 @@ Conversão entre a escala do QGIS e o zoom do EBGeo Web (MapLibre, tiles de 512 
 
 No zoom z, um pixel CSS do MapLibre vale 78271,517 x cos(lat) / 2^z metros.
 O EBGeo Web grava o zoom de criação (createdAtZoom) com uma casa decimal e
-dimensiona os símbolos novos por ele; o plugin reproduz a mesma regra.
+dimensiona os símbolos novos por ele; o plugin reproduz a mesma regra. Conferido lado a
+lado com a tela do Web em 2026-10-05 (testes/test_zoom.py).
 """
 import math
 
