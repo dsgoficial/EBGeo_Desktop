@@ -78,6 +78,15 @@ class GerenciadorCalco:
             ft.feicaoCriada.connect(self._feicao_criada)
             a.triggered.connect(lambda _c=False, ft=ft: self._ativar(ft))
             self.ferramentas[tipo] = ft
+        # as alças do Web (instância e texto do Limite, largura da Seta), no buffer do dock
+        from .alcas import FerramentaAlcas
+        a = self._acao('alcas.svg', 'Alças de edição (Limite e Seta)', None)
+        a.setCheckable(True)
+        grupo.addAction(a)
+        ft = FerramentaAlcas(canvas, self.iface, lambda: (self.mostrar_painel(), self.painel)[1])
+        ft.setAction(a)
+        a.triggered.connect(lambda _c=False, ft=ft: canvas.setMapTool(ft))
+        self.ferramentas['alcas'] = ft
 
         self.toolbar.addSeparator()
         self.menu.addSeparator()

@@ -31,7 +31,8 @@ class TesteGerenciador(unittest.TestCase):
         menu = QMenu('EBGeo')
         g = GerenciadorCalco(iface, menu)
         g.initGui()
-        self.assertEqual(len(g.ferramentas), len(FERRAMENTAS))
+        self.assertEqual(len(g.ferramentas), len(FERRAMENTAS) + 1)   # mais a das alças do Web
+        self.assertIn('alcas', g.ferramentas)
         rotulos = [a.text() for a in g.acoes]
         for _t, _i, rot in FERRAMENTAS:
             self.assertIn(rot, rotulos)
