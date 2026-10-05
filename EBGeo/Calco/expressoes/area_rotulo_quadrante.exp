@@ -1,0 +1,18 @@
+/* Quadrante do bloco: a âncora do Web vira o quadrante do QGIS (0 acima-esq, 1 acima,
+   2 acima-dir, 3 esq, 4 sobre, 5 dir, 6 abaixo-esq, 7 abaixo, 8 abaixo-dir). Externo: o
+   lado para onde a normal aponta (anchorToward); canto interno: abaixo e à direita. */
+@@SEJA@@
+@@AREA@@
+@@AREA_POSICAO@@
+@@EM@@
+CASE
+  WHEN @pos = 'externa' THEN
+    @@SEJA@@
+    dq := @@POS:A=@br * @L@@
+    @@EM@@
+    array_get(array(5, 2, 1, 0, 3, 6, 7, 8), ((floor((180 - degrees(@@ANG:A=@dq@@)) / 45 + 0.5) % 8) + 8) % 8)
+    @@FIM@@
+  WHEN @pos = 'interna' AND @cod <> '151203' THEN 8
+  ELSE 4
+END
+@@FIM@@

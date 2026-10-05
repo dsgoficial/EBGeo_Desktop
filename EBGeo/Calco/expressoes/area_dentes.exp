@@ -1,0 +1,19 @@
+/* 151203 Ponto Forte: um dente por s de borda, 0,6 s para FORA, em toda a volta, menos no
+   arco de 1,1 s de cada lado da caixa do escalão (buildAreaDecorations, border 'dentes'). */
+@@SEJA@@
+@@AREA@@
+@@AREA_POSICAO@@
+n := min(600, max(3, round(@L / @s)))
+ea ::= CASE WHEN @ech <> '' THEN @rt * @L END
+@@EM@@
+transform(collect_geometries(array_filter(array_foreach(generate_series(0, @n - 1),
+  @@SEJA@@
+  at ::= (@element + 0.5) * @L / @n
+  dd := @@POS:A=@at@@
+  @@EM@@
+  CASE WHEN @ea IS NULL OR abs(((@at - @ea) % @L + @L + @L / 2) % @L - @L / 2) >= 1.1 * @s THEN
+    with_variable('p', line_interpolate_point(@an, @dd),
+      make_line(@p, project(@p, 0.6 * @s, @@ANG:A=@dd@@ - pi() / 2)))
+  END
+  @@FIM@@), @element IS NOT NULL)), @crs_loc, @layer_crs)
+@@FIM@@

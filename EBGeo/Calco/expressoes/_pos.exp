@@ -1,0 +1,3 @@
+/* Distância ao primeiro vértice do anel do ponto a @@A@@ metros do início do Web (o vértice
+   mais ao norte), dando a volta no anel (pointAt). */
+((@off + (@@A@@)) % @L + @L) % @L

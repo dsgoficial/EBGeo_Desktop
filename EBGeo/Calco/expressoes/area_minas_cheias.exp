@@ -1,0 +1,17 @@
+/* 270800: as minas antipessoal e anticarro (cheias). */
+@@SEJA@@
+@@AREA@@
+@@AREA_CENTRO@@
+@@AREA_MINAS@@
+@@EM@@
+with_variable('mm', array_filter(array_foreach(generate_series(0, 2),
+    CASE WHEN @mk[@element] IN ('ap', 'ac') THEN
+      @@SEJA@@
+      ce := make_point(x(@ct) + (@element - 1) * 2.6 * @s, y(@ct))
+      az := pi() / 2
+      @@EM@@
+      make_polygon(@@MINA_ELIPSE@@)
+      @@FIM@@
+    END), @element IS NOT NULL),
+  CASE WHEN array_length(@mm) > 0 THEN transform(collect_geometries(@mm), @crs_loc, @layer_crs) END)
+@@FIM@@

@@ -1,0 +1,20 @@
+/* Deslocamento do texto em mm, como 'x,y' na tela (y para baixo): o vão de 0,4 em do Web
+   (TEXT_GAP_EMS) entre a linha e a caixa. Colado à linha, o vão é perpendicular ao texto,
+   para cima no de cima e para baixo no de baixo, e o QGIS não gira o deslocamento com o
+   rótulo, então ele é girado aqui pela rotação; voltado ao norte, aponta para o lado do
+   texto (norte ou sul). @@TAM@@ é o tamanho do texto em mm; @@BAIXO@@ 0 em cima, 1 embaixo. */
+@@SEJA@@
+b := @@RUMO@@
+tam := @@TAM@@
+rot ::= CASE WHEN @b = 0 OR @b >= 180 THEN @b + 90 ELSE @b - 90 END
+gap ::= CASE WHEN @@BAIXO@@ = 1 THEN 0.4 ELSE -0.4 END * @tam
+t0 ::= ((@b - 90) % 360 + 360) % 360
+t1 ::= CASE WHEN cos(radians(@t0)) < 0 THEN (@t0 + 180) % 360 ELSE @t0 END
+tn := CASE WHEN @@BAIXO@@ = 1 THEN (@t1 + 180) % 360 ELSE @t1 END
+@@EM@@
+CASE WHEN @b IS NULL THEN '0,0'
+     WHEN coalesce("text_north_facing", false) THEN
+       to_string(round(0.4 * @tam * sin(radians(@tn)), 4)) || ',' || to_string(round(-0.4 * @tam * cos(radians(@tn)), 4))
+     ELSE to_string(round(-(@gap) * sin(radians(@rot)), 4)) || ',' || to_string(round((@gap) * cos(radians(@rot)), 4))
+END
+@@FIM@@

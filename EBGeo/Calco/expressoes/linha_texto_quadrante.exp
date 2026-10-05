@@ -1,0 +1,30 @@
+/* Âncora do texto como quadrante do QGIS (placeLineText do Web). Quadrantes: 0 acima-esq,
+   1 acima, 2 acima-dir, 3 esq, 4 sobre, 5 dir, 6 abaixo-esq, 7 abaixo, 8 abaixo-dir; com
+   rotação, o QGIS aplica o quadrante no quadro do texto girado, como o MapLibre.
+   Colado à linha: @@LINHA@@ é 0 para o texto de cima e 2 para o de baixo (no sentido de
+   leitura); na ponta inicial a caixa cresce para dentro (à direita do ponto, ou à
+   esquerda quando o texto está virado), na final o contrário, no meio fica centrada.
+   Voltado ao norte: o octante do lado que encara o norte (o de cima) ou o sul (o de
+   baixo) escolhe a borda que encara a linha, e numa ponta a metade horizontal segue a
+   linha para dentro quando ela sai de lado o bastante (|seno| > 0,2).
+   @@ONDE@@: 0 ponta inicial, 1 ponta final, 2 meio. @@BAIXO@@: 0 em cima, 1 embaixo. */
+@@SEJA@@
+b := @@RUMO@@
+rv ::= (@b = 0 OR @b >= 180)
+t0 ::= ((@b - 90) % 360 + 360) % 360
+t1 ::= CASE WHEN cos(radians(@t0)) < 0 THEN (@t0 + 180) % 360 ELSE @t0 END
+tn := CASE WHEN @@BAIXO@@ = 1 THEN (@t1 + 180) % 360 ELSE @t1 END
+q0 := array_get(array(1, 2, 5, 8, 7, 6, 3, 0), round(@tn / 45) % 8)
+e ::= sin(radians(CASE WHEN @@ONDE@@ = 0 THEN @b ELSE @b + 180 END))
+@@EM@@
+CASE WHEN @b IS NULL THEN 4
+     WHEN coalesce("text_north_facing", false) THEN
+       CASE WHEN @@ONDE@@ = 2 OR @q0 IN (3, 5) THEN @q0
+            WHEN @e > 0.2 THEN floor(@q0 / 3) * 3 + 2
+            WHEN @e < -0.2 THEN floor(@q0 / 3) * 3
+            ELSE @q0 END
+     ELSE @@LINHA@@ * 3 + CASE WHEN @@ONDE@@ = 2 THEN 1
+                               WHEN (@@ONDE@@ = 0) = @rv THEN 0
+                               ELSE 2 END
+END
+@@FIM@@

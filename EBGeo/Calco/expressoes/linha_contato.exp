@@ -1,0 +1,69 @@
+/* 140200 Linha de Contato: UM cordão de festões (buildScallopString, scallopLayout,
+   scallopParallel e trimScallopJoints de add_coordination_line_geometry.js do EBGeo Web).
+   O cordão corre pela PARALELA do seu lado, a 1,2 tamanho do eixo, com contagem própria
+   (L da paralela / round(L / tamanho), teto 120): a paralela de fora de uma dobra é mais
+   longa que o eixo e a de dentro mais curta. A paralela é o offset_curve do GEOS com junta
+   em esquadro e teto 4, que já corta o laço da paralela de dentro (o trimLoops do Web).
+   Cada festão é meia circunferência sobre a
+   corda, em 8 passos, bojando PARA o eixo, de modo que os dois cordões se encaram.
+   Dois festões vizinhos que dobram para o lado do bojo se sobrepõem perto da junta: cada
+   par é aparado no cruzamento mais distante da junta, e os dois se encontram ali.
+   Nenhuma ligação seguida de outra etapa pode valer nulo: medido no QGIS 4.0.0 em
+   2026-10-04, map_concat devolve NULO quando um valor do mapa é nulo, e o bloco SEJA
+   perderia todas as etapas seguintes. Por isso a paralela cai no próprio eixo quando o
+   offset falha, e o recorte de cada festão é calculado numa etapa só.
+   O offset_curve do QGIS devolveu a paralela da esquerda INVERTIDA na linha de dobras do
+   teste (e não numa reta com uma dobra): o sentido é conferido pela ponta mais próxima.
+   Marcadores: @@LADO@@ (+1 inimigo, à esquerda do sentido do traçado; -1 amigo, à
+   direita), @@ARCO@@ (os 7 pontos internos do festão, montados pelo compositor a partir
+   de @a, @az, @r, @xm, @ym), @@VAZIO@@ (o que desenhar quando o eixo é curto demais para
+   um festão: o eixo no cordão amigo, nada no inimigo). */
+@@SEJA@@
+@@PROJ@@
+fs := @@FATOR_SOLO@@
+s := min(50, max(0.001, CASE WHEN "symbol_size_km" > 0 THEN "symbol_size_km" ELSE 0.5 END * @fs)) * 1000 * @k
+L := length(@g)
+eps ::= 0.001 * @k
+p0 := coalesce(offset_curve(@g, (@@LADO@@) * 1.2 * @s, 8, 2, 4), @g)
+par := CASE WHEN distance(start_point(@p0), start_point(@g)) > distance(end_point(@p0), start_point(@g)) THEN reverse(@p0) ELSE @p0 END
+Lp := coalesce(length(@par), 0)
+n := CASE WHEN @L > 0 AND @s <= @L AND @Lp > 0 AND @s <= @Lp THEN min(120, max(1, round(@Lp / @s))) ELSE 0 END
+p ::= @Lp / @n
+arcos := CASE WHEN @n > 0 THEN array_foreach(generate_series(0, @n - 1),
+  @@SEJA@@
+  a := line_interpolate_point(@par, @element * @p)
+  b := CASE WHEN @element = @n - 1 THEN end_point(@par) ELSE line_interpolate_point(@par, (@element + 1) * @p) END
+  az := azimuth(@a, @b)
+  r := distance(@a, @b) / 2
+  xm ::= (x(@a) + x(@b)) / 2
+  ym ::= (y(@a) + y(@b)) / 2
+  @@EM@@
+  CASE WHEN @r > @eps / 2 THEN make_line(@a, @@ARCO@@, @b) END
+  @@FIM@@) ELSE array() END
+cruz := CASE WHEN @n > 1 THEN array_foreach(generate_series(1, @n - 1),
+  @@SEJA@@
+  pts := CASE WHEN @arcos[@element - 1] IS NULL OR @arcos[@element] IS NULL THEN array()
+              ELSE geometries_to_array(intersection(@arcos[@element - 1], @arcos[@element])) END
+  jt := start_point(@arcos[@element])
+  ds := array_foreach(@pts, distance(@element, @jt))
+  @@EM@@
+  CASE WHEN array_length(@ds) > 0 AND array_max(@ds) > @eps THEN @pts[array_find(@ds, array_max(@ds))] END
+  @@FIM@@) ELSE array() END
+@@EM@@
+transform(
+  CASE WHEN @n = 0 THEN @@VAZIO@@ ELSE
+    collect_geometries(array_filter(array_foreach(generate_series(0, @n - 1),
+      @@SEJA@@
+      arc := @arcos[@element]
+      u0 := CASE WHEN @element > 0 AND @arcos[@element] IS NOT NULL AND @cruz[@element - 1] IS NOT NULL
+                 THEN line_locate_point(@arcos[@element], @cruz[@element - 1]) ELSE 0 END
+      u1 := CASE WHEN @arcos[@element] IS NULL THEN 0
+                 WHEN @element < @n - 1 AND @cruz[@element] IS NOT NULL THEN line_locate_point(@arcos[@element], @cruz[@element])
+                 ELSE length(@arcos[@element]) END
+      @@EM@@
+      CASE WHEN @arc IS NOT NULL AND @u1 - @u0 > @eps THEN line_substring(@arc, @u0, @u1) END
+      @@FIM@@),
+      @element IS NOT NULL))
+  END,
+  @crs_loc, @layer_crs)
+@@FIM@@

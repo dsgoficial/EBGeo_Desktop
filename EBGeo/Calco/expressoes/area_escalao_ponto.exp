@@ -1,0 +1,7 @@
+/* 151203: a caixa do escalão sobre a borda, na razão rt. */
+@@SEJA@@
+@@AREA@@
+@@AREA_POSICAO@@
+@@EM@@
+CASE WHEN @ech <> '' THEN transform(line_interpolate_point(@an, @@POS:A=@rt * @L@@), @crs_loc, @layer_crs) END
+@@FIM@@

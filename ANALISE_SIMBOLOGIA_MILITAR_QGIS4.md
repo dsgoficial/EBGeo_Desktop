@@ -74,7 +74,7 @@ Defeitos conferidos no código:
 Medido no QGIS 4.0.0:
 
 - Enums QGIS sem escopo (`QgsWkbTypes.Polygon`, `QgsVectorFileWriter.NoError`, `QgsLayerTreeNode.NodeGroup`) **ainda funcionam**.
-- Enums Qt sem escopo **quebram** com `AttributeError`: `QEvent.MouseMove`, `QLineEdit.Normal`, `QFont.Bold`. Ocorrem em `measureTool/measureTool.py:157-184`, `AreaRange/areaRange.py:96,105,121,150`, `AzimuthDistance/azimuthTool.py:63,73`, `Processings/launchNOAA.py:307`, `HideToolbar/hideToolbar.py:64,68` e `Protector/protector.py:9`. Alcance de armamento, Azimute e distância, Medição durante aquisição, Simplificar Interface e o Lançamento Paraquedista NOAA falham ao chegar nessas linhas.
+- Enums Qt sem escopo **quebram** com `AttributeError`: `QEvent.MouseMove`, `QLineEdit.Normal`, `QFont.Bold`. Ocorrem em `measureTool/measureTool.py:157-184`, `AreaRange/areaRange.py:96,105,121,150`, `AzimuthDistance/azimuthTool.py:63,73` (removido em 2026-10-04, substituído pelo Azimute e Distância de `Calco/azimute`), `Processings/launchNOAA.py:307`, `HideToolbar/hideToolbar.py:64,68` e `Protector/protector.py:9`. Alcance de armamento, Azimute e distância, Medição durante aquisição, Simplificar Interface e o Lançamento Paraquedista NOAA falham ao chegar nessas linhas.
 - `qgis.PyQt.QtQml` **não existe** no shim; é preciso `from PyQt6.QtQml import QJSEngine` (com fallback para PyQt5 se o plugin quiser rodar no QGIS 3).
 - Não há `pyrcc6`. O `resources_rc.py` gerado pelo pyrcc5 ainda carrega, mas não se regenera: ícone novo vai por caminho de arquivo.
 - `metadata.txt` usa `version=2.3.1`, a mesma do `master` (QGIS 3); o guia de migração recomenda `qgisMaximumVersion=4.99`, e `supportsQt6` deixou de ser usado.

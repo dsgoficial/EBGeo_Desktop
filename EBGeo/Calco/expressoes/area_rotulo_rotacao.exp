@@ -1,0 +1,15 @@
+/* Texto sobre a borda com "Texto sempre para o norte" desligado: ao longo da borda, de pé
+   (uprightRotation), em graus no sentido horário. */
+@@SEJA@@
+@@AREA@@
+@@AREA_POSICAO@@
+@@EM@@
+CASE WHEN @pos = 'borda' AND "text_north_facing" IS NOT NULL AND NOT "text_north_facing" THEN
+  @@SEJA@@
+  dr := @@POS:A=@br * @L@@
+  @@EM@@
+  with_variable('rr', degrees(@@ANG:A=@dr@@) - 90,
+    CASE WHEN @rr > 90 THEN @rr - 180 WHEN @rr <= -90 THEN @rr + 180 ELSE @rr END)
+  @@FIM@@
+ELSE 0 END
+@@FIM@@

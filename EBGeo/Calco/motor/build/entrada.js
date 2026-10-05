@@ -223,7 +223,9 @@ export function gerarMedida(props) {
     const pointData = g.catalog[pointCode];
     if (!pointData) throw new Error('Point ' + pointCode + ' not found in catalog');
 
-    let svg = pointData.svg;
+    // generateSymbolBlob: o ponto que desenha a partir das propriedades (Setor de Tiro, campo
+    // minado por tipo de mina) monta o SVG por montarSvg; o svg estático é só o padrão dele.
+    let svg = typeof pointData.montarSvg === 'function' ? pointData.montarSvg(props) : pointData.svg;
     svg = g.applyCustomColor(svg, props.fillColor || 'none');
     if (pointData.isNucleo) svg = g.aplicarSituacaoDoNucleo(svg, props.status);
 

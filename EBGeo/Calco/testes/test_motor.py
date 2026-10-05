@@ -133,6 +133,21 @@ def casos_simbolo():
     add('cor com extensão', sidc=sidc(icone='121899', ext=extensao(entidade=1)), fillColor='#3366CC')
     # SIDC que o milsymbol não reconhece (20 dígitos com letra).
     add('SIDC com letra', sidc='1003100016121100000X')
+    # Correções de 2026-10-04 do MD33-C-01 (simbologia-md33-correcoes.test.js do Web).
+    add('rótulo Mil 30/110000', sidc=sidc('30', icone='110000', escalao='00'))
+    add('rótulo RbAM 30/130113', sidc=sidc('30', icone='130113', escalao='00'))
+    add('rótulo Res 20/120801', sidc=sidc('20', icone='120801', escalao='00'))
+    for ident in ('3', '6'):
+        add('20/112202 asterisco SI ' + ident, sidc=sidc('20', identidade=ident, icone='112202', escalao='00'))
+        add('15/209906 SISCOMIS SI ' + ident, sidc=sidc('15', identidade=ident, icone='209906', escalao='00'))
+    add('20/112202 mod1 99 ext 2', sidc=sidc('20', icone='112202', escalao='00', m1='99', ext=extensao(m1=2)))
+    add('20/111999 mod2 99 ext 3', sidc=sidc('20', icone='111999', escalao='00', m2='99', ext=extensao(m2=3)))
+    add('20/111999 ext 4 mod2 02 hostil', sidc=sidc('20', identidade='6', icone='111999', escalao='00', m2='02',
+                                                    ext=extensao(entidade=4)))
+    add('27/110000 militar genérico', sidc=sidc('27', icone='110000', escalao='00'))
+    add('27/120000 civil genérico', sidc=sidc('27', icone='120000', escalao='00'))
+    add('02/110000 mod 01', sidc=sidc('02', icone='110000', escalao='00', m1='01', m2='01'))
+    add('36/110000 mod 01', sidc=sidc('36', icone='110000', escalao='00', m1='01', m2='01'))
     return casos
 
 
@@ -153,6 +168,15 @@ def casos_medida():
                            'identificacao': 'X'}),
         ('290800 cor (máscara)', {'pointCode': '290800', 'fillColor': '#00AA00'}),
         ('texto com escape', {'pointCode': '130100', 'identificacao': 'A&B "C"'}),
+        # Capítulo VII do MD33-C-01 (2026-10-04): a direção é a rotation, fora do desenho.
+        ('152000 girada', {'pointCode': '152000', 'rotation': 120}),
+        ('140500 secundária +70', {'pointCode': '140500', 'anguloSecundario': 70}),
+        ('140500 secundária -170', {'pointCode': '140500', 'anguloSecundario': -170, 'fillColor': '#CC0000'}),
+        ('140500 secundária 0', {'pointCode': '140500', 'anguloSecundario': 0}),
+        ('270701 ac/qualquer/vazia', {'pointCode': '270701', 'mina1': 'ac', 'mina2': 'qualquer', 'mina3': 'vazia'}),
+        ('270701 tudo vazia', {'pointCode': '270701', 'mina1': 'vazia', 'mina2': 'vazia', 'mina3': 'vazia'}),
+        ('270701 mina inválida', {'pointCode': '270701', 'mina1': 'xx', 'mina2': 'ap', 'fillColor': '#00B04E'}),
+        ('271204 verde', {'pointCode': '271204', 'fillColor': '#00B04E'}),
     ]
     return casos
 
@@ -373,14 +397,16 @@ class TestCarga(unittest.TestCase):
         c = Motor.instancia().catalogos()
         conj = c['militar']['porConjunto']
         self.assertEqual(len(conj), 11)
-        self.assertEqual(sum(len(v['icones']) for v in conj.values()), 504)
+        # 504 até 2026-10-04, mais o Terminal do SISCOMIS (15) e os genéricos Militar e Civil (27).
+        self.assertEqual(sum(len(v['icones']) for v in conj.values()), 507)
         self.assertEqual(sum(len(v['mod1']) for v in conj.values()), 225)
         self.assertEqual(sum(len(v['mod2']) for v in conj.values()), 99)
         self.assertEqual(conj['10']['extensoes']['icone']['163499'], list(range(11)))
         self.assertTrue(conj['10']['aplicavel']['comando'])
         self.assertTrue(conj['10']['camposTexto']['fields'])
-        self.assertEqual(len(c['medida']['porCodigo']), 130)
-        self.assertEqual(sum(len(v) for v in c['medida']['categorias'].values()), 130)
+        # 130 até 2026-10-04, mais a Base de fogos (152000) e o Setor de Tiro (140500).
+        self.assertEqual(len(c['medida']['porCodigo']), 132)
+        self.assertEqual(sum(len(v) for v in c['medida']['categorias'].values()), 132)
         self.assertEqual(len(c['militar']['identidades']), 7)
 
     def test_bundle_sem_comentario_nem_mapa(self):
@@ -513,9 +539,9 @@ class TestMedida(unittest.TestCase):
     def setUpClass(cls):
         cls.motor = Motor.instancia()
 
-    def test_130_entradas_validas_no_qsvgrenderer(self):
+    def test_132_entradas_validas_no_qsvgrenderer(self):
         codigos = self.motor.codigos_de_medida()
-        self.assertEqual(len(codigos), 130)
+        self.assertEqual(len(codigos), 132)
         validas = 0
         ruins = []
         for c in codigos:
@@ -876,6 +902,85 @@ class TestDeclinacao(unittest.TestCase):
             linhas = f.read().splitlines()
         self.assertIn('WMM-2025', linhas[0])
         self.assertTrue(linhas[1].split()[:3] == ['1', '0', '-29351.8'])
+
+
+class TestCapituloVII(unittest.TestCase):
+    """
+    O que o bundle tem de trazer do Web de 2026-10-04 (capítulo VII do MD33-C-01 e as correções
+    de símbolo), conferido no próprio desenho, sem depender da paridade com o Chromium.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.motor = Motor.instancia()
+        cls.cat = cls.motor.catalogos()['medida']
+
+    @staticmethod
+    def _textos(svg):
+        import re
+        return re.findall(r'<text[^>]*>([^<]+)</text>', svg)
+
+    def test_base_de_fogos_e_setor_de_tiro(self):
+        base = self.motor.medida({'pointCode': '152000'})
+        self.assertIn('M 100,100 V 58.6', base['svgWeb'])
+        # O ponto é o meio da linha base (anchorSvg 100,100), não o centro do quadro.
+        self.assertNotEqual((base['ancoraX'], base['ancoraY']), (0, 0))
+        padrao = self.motor.medida({'pointCode': '140500'})
+        aberto = self.motor.medida({'pointCode': '140500', 'anguloSecundario': 70})
+        self.assertNotEqual(padrao['svgWeb'], aberto['svgWeb'])
+        # Sem valor, a secundária sai a -45 graus (ANGULO_SECUNDARIO_PADRAO do Web).
+        self.assertEqual(padrao['svgWeb'], self.motor.medida({'pointCode': '140500', 'anguloSecundario': -45})['svgWeb'])
+        self.assertIn('stroke-dasharray="7,4"', aberto['svgWeb'])
+        # A seta tem 100 unidades a 0,75 px cada em qualquer abertura: o tamanho não encolhe.
+        self.assertGreaterEqual(max(aberto['largura'], aberto['altura']), 75)
+        self.assertEqual(self.cat['porCodigo']['152000']['direcao'], {'rotulo': 'Direção dos fogos'})
+        self.assertTrue(self.cat['porCodigo']['140500']['setorDeTiro'])
+
+    def test_campo_minado_por_tipo_de_mina(self):
+        padrao = self.motor.medida({'pointCode': '270701'})['svgWeb']
+        self.assertEqual(padrao.count('<ellipse'), 3)
+        self.assertEqual(padrao.count('<path'), 3)  # as antenas das três antipessoal
+        r = self.motor.medida({'pointCode': '270701', 'mina1': 'ac', 'mina2': 'qualquer', 'mina3': 'vazia'})['svgWeb']
+        self.assertEqual(r.count('<ellipse'), 2)
+        self.assertNotIn('<path', r)
+        self.assertEqual(self.cat['porCodigo']['270701']['campos'], ['mina1', 'mina2', 'mina3'])
+        defs = self.cat['definicoesCampos']['mina1']
+        self.assertEqual(defs['options'], ['ap', 'ac', 'qualquer', 'vazia'])
+        self.assertEqual(defs['defaultValue'], 'ap')
+
+    def test_area_minada_fora_do_seletor_e_destruicoes_verdes(self):
+        lista = [i['code'] for i in self.cat['lista']]
+        self.assertNotIn('270800', lista)
+        self.assertIn('270800', self.cat['porCodigo'])  # a feição antiga continua desenhando
+        self.assertTrue(self.motor.medida({'pointCode': '270800'})['svg'])
+        for codigo in ('152000', '140500'):
+            self.assertIn(codigo, lista)
+        for codigo in ('271201', '271203', '271204'):
+            self.assertEqual(self.cat['porCodigo'][codigo]['corPadrao'], '#00B04E', codigo)
+        self.assertIsNone(self.cat['porCodigo']['130100'].get('corPadrao'))
+
+    def test_correcoes_de_simbolo(self):
+        m = self.motor
+        for conj, icone, de, para in (('30', '110000', 'MIL', 'Mil'), ('30', '130113', 'AT', 'RbAM'),
+                                      ('20', '120801', 'RES', 'Res')):
+            t = self._textos(m.simbolo_militar({'sidc': sidc(conj, icone=icone, escalao='00')})['svgWeb'])
+            self.assertIn(para, t, (conj, icone))
+            self.assertNotIn(de, t, (conj, icone))
+        aster = m.simbolo_militar({'sidc': sidc('20', icone='112202', escalao='00')})['svgWeb']
+        self.assertIn('scale(0.5)', aster)
+        siscomis = m.simbolo_militar({'sidc': sidc('15', icone='209906', escalao='00')})['svgWeb']
+        self.assertNotIn('m 94.8206,78.1372', siscomis)
+        self.assertIn('M 79.5,136.3 Q 100,119.1 120.5,136.3', siscomis)
+        tenda = m.simbolo_militar({'sidc': sidc('20', icone='111999', escalao='00', m2='99', ext=extensao(m2=3))})['svgWeb']
+        self.assertRegex(tenda, r'<text[^>]* y="140"[^>]*>Col</text>')
+        icones27 = {i['codigo']: i['nome'] for i in m.catalogos()['militar']['porConjunto']['27']['icones']}
+        self.assertEqual(icones27.get('110000'), 'Militar genérico')
+        self.assertEqual(icones27.get('120000'), 'Civil genérico')
+        icones15 = {i['codigo']: i['nome'] for i in m.catalogos()['militar']['porConjunto']['15']['icones']}
+        self.assertEqual(icones15.get('209906'), 'Terminal do SISCOMIS')
+        for conj in ('02', '36'):
+            r = m.simbolo_militar({'sidc': sidc(conj, icone='110000', escalao='00', m1='01', m2='01')})
+            self.assertEqual(r['avisos'], [], conj)
 
 
 if __name__ == '__main__':

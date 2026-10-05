@@ -1,0 +1,24 @@
+/* Bloco de texto EXTERNO (outerBlockPoint): do ponto pq da borda, pela normal externa, longe
+   o bastante para todo canto do bloco ficar a 2,5 s além da tangente, e mais meio bloco por
+   vez (até 8) enquanto um polígono côncavo ainda o alcançar. O tamanho do bloco é a
+   estimativa do Web (0,62 em por caractere, linha de 1,2 em, folga de 8 x 4 px), em metros
+   de terreno pelo px do zoom de criação (texto preso ao terreno) ou da escala atual.
+   ks é o setor da normal (0 = leste, sentido anti-horário), que dá a âncora do texto. */
+dq := @@POS:A=@br * @L@@
+lns := @@LINHAS@@
+mppt := CASE WHEN coalesce("zoom_corr", true) AND coalesce("created_zoom", 0) > 0 THEN (@@M_POR_PX_CRIACAO@@) ELSE (@@ESCALA_TERRENO@@) * 0.00026458333 END * @k
+ts ::= CASE WHEN "text_size" > 0 THEN "text_size" ELSE 14 END
+pq := line_interpolate_point(@an, @dq)
+azn := @@ANG:A=@dq@@ - pi() / 2
+w := (coalesce(array_max(array_foreach(@lns, length(@element))), 1) * 0.62 * @ts + 8) * @mppt
+h := (array_length(@lns) * 1.2 * @ts + 4) * @mppt
+nx ::= sin(@azn)
+ny ::= cos(@azn)
+ks ::= ((floor((90 - degrees(@azn)) / 45 + 0.5) % 8) + 8) % 8
+x0 ::= CASE WHEN @ks IN (0, 1, 7) THEN 0 WHEN @ks IN (3, 4, 5) THEN -@w ELSE -@w / 2 END
+y0 ::= CASE WHEN @ks IN (1, 2, 3) THEN 0 WHEN @ks IN (5, 6, 7) THEN -@h ELSE -@h / 2 END
+ld := 2.5 * @s + max(0, -(@x0 * @nx + @y0 * @ny), -((@x0 + @w) * @nx + @y0 * @ny), -((@x0 + @w) * @nx + (@y0 + @h) * @ny), -(@x0 * @nx + (@y0 + @h) * @ny))
+r0 := make_polygon(make_line(make_point(x(@pq) + @x0, y(@pq) + @y0), make_point(x(@pq) + @x0 + @w, y(@pq) + @y0), make_point(x(@pq) + @x0 + @w, y(@pq) + @y0 + @h), make_point(x(@pq) + @x0, y(@pq) + @y0 + @h), make_point(x(@pq) + @x0, y(@pq) + @y0)))
+st ::= max(@w, @h) / 2
+kk := coalesce(array_first(array_filter(generate_series(0, 7), NOT intersects(translate(@r0, @nx * (@ld + @element * @st), @ny * (@ld + @element * @st)), @gp))), 8)
+q ::= make_point(x(@pq) + @nx * (@ld + @kk * @st), y(@pq) + @ny * (@ld + @kk * @st))

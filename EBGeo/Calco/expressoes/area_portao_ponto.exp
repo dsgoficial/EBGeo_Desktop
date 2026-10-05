@@ -1,0 +1,14 @@
+/* Nome do portão @@J@@: a 2 s para fora do ponto do portão na borda. */
+@@SEJA@@
+@@AREA@@
+@@AREA_PORTOES@@
+rg := try(to_real(@gs[@@J@@]['ratio']), NULL)
+@@EM@@
+CASE WHEN @rg IS NOT NULL THEN
+  @@SEJA@@
+  dd := @@POS:A=min(1, max(0, @rg)) * @L@@
+  @@EM@@
+  transform(project(line_interpolate_point(@an, @dd), 2 * @s, @@ANG:A=@dd@@ - pi() / 2), @crs_loc, @layer_crs)
+  @@FIM@@
+END
+@@FIM@@

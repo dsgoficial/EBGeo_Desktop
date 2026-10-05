@@ -126,6 +126,8 @@ def estilizar(layer, tipo, log=None, cache=None):
 def _estilizar(layer, tipo, log):
     if tipo in TIPOS_TATICOS:
         nome = 'estilos_taticos'
+    elif tipo == 'coordination_area':
+        nome = 'estilos_area'
     elif schema.TIPOS[tipo]['desenho'] == 'svg':
         nome = 'estilos_pontuais'
     else:
@@ -146,8 +148,11 @@ def _estilizar(layer, tipo, log):
 def condicao_exibir(grupos_ocultos=None):
     """Expressão que é verdadeira para a feição que o Web desenha."""
     partes = [COND_VISIVEL]
+    # "grupos" é a lista JSON dos ids dos grupos da feição, e chega como LISTA (gravada pelo OGR do
+    # importador) ou como TEXTO (gravada pelo QGIS com uma str); from_json(lista) dá nulo sem erro
+    grupos = 'CASE WHEN try(array_length("grupos"), -1) >= 0 THEN "grupos" ELSE try(from_json("grupos")) END'
     for gid in grupos_ocultos or []:
-        partes.append("strpos(coalesce(to_json(\"grupos\"), ''), '{}') = 0".format(str(gid).replace("'", "''")))
+        partes.append("NOT coalesce(array_contains({}, '{}'), false)".format(grupos, str(gid).replace("'", "''")))
     return ' AND '.join(partes)
 
 

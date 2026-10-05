@@ -1,0 +1,13 @@
+/* Linha de chamada do texto externo: do ponto da borda até a âncora do bloco, pela normal. */
+@@SEJA@@
+@@AREA@@
+@@AREA_POSICAO@@
+@@EM@@
+CASE WHEN @pos = 'externa' AND array_length(@@LINHAS@@) > 0 THEN
+  @@SEJA@@
+  @@AREA_EXTERNA@@
+  @@EM@@
+  transform(make_line(@pq, @q), @crs_loc, @layer_crs)
+  @@FIM@@
+END
+@@FIM@@

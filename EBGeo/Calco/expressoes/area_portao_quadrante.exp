@@ -1,0 +1,14 @@
+/* Quadrante do nome do portão @@J@@: o lado para onde a normal aponta (anchorToward). */
+@@SEJA@@
+@@AREA@@
+@@AREA_PORTOES@@
+rg := try(to_real(@gs[@@J@@]['ratio']), NULL)
+@@EM@@
+CASE WHEN @rg IS NULL THEN 4 ELSE
+  @@SEJA@@
+  dg := @@POS:A=min(1, max(0, @rg)) * @L@@
+  @@EM@@
+  array_get(array(5, 2, 1, 0, 3, 6, 7, 8), ((floor((180 - degrees(@@ANG:A=@dg@@)) / 45 + 0.5) % 8) + 8) % 8)
+  @@FIM@@
+END
+@@FIM@@

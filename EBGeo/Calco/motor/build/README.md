@@ -5,7 +5,7 @@ Gera, a partir de um checkout do EBGeo Web (1cgeo/ebgeo_web), os artefatos que o
 | Arquivo | O que é |
 |---|---|
 | `../ebgeo-simbologia.js` | bundle IIFE minificado (global `EBGeoSimbologia`) com o milsymbol 3.0.4, a extensão brasileira (`brazilian_*`), o mapeamento de amplificadores, a âncora (`military-symbol-anchor.js`) e o gerador e o catálogo das medidas de coordenação, para o `QJSEngine` |
-| `../catalogos.json` | dados da interface: 11 conjuntos com ícones, modificadores 1 e 2 (nomes em português e extensões), listas fixas, campos de texto por conjunto, as 130 medidas por categoria |
+| `../catalogos.json` | dados da interface: 11 conjuntos com ícones, modificadores 1 e 2 (nomes em português e extensões), listas fixas, campos de texto por conjunto, as 132 medidas por categoria (com a cor padrão, a direção da Base de fogos e o par de direções do Setor de Tiro) |
 | `../WMM2025.COF` | coeficientes do World Magnetic Model 2025 (NOAA, domínio público), reescritos do pacote `geomagnetism` que o Web usa |
 
 ## Gerar
@@ -21,7 +21,7 @@ O ebgeo_web é privado e este repositório é público: o bundle sai minificado,
 
 ## O que o bundle faz diferente do Web
 
-- Nada no desenho: o `svgWeb` devolvido é o SVG que o Web rasteriza, byte a byte (prova em `testes/test_motor.py`).
+- Nada no desenho: o `svgWeb` devolvido é o SVG que o Web rasteriza, byte a byte (prova em `testes/test_motor.py`), inclusive nas medidas que montam o desenho pelas propriedades (`montarSvg`: Setor de Tiro e campo minado).
 - O `svg` devolvido é o `svgWeb` com uma correção para o `QSvgRenderer`, que ignora `dominant-baseline`: o atributo sai e o `y` desce pelo deslocamento que o Chromium aplica, medido com Arial (middle 0,2592, central 0,35, hanging 0,728 do font-size).
 - O tamanho lógico é o do canvas do Web sem rasterizar: `fitDrawSize` sobre o tamanho natural do SVG arredondado para inteiro, como o `naturalWidth` do Chromium.
 - Na medida, `ancoraX`/`ancoraY` já somam o `icon-anchor` (`bottom` sobe meia altura) ao `iconOffset`, porque o marcador do QGIS é centrado.

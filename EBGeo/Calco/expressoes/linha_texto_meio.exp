@@ -1,0 +1,6 @@
+/* Ponto do texto do meio da linha (240701): o meio pelo comprimento no plano local. */
+@@SEJA@@
+@@PROJ@@
+@@EM@@
+CASE WHEN length(@g) > 0 THEN transform(line_interpolate_point(@g, length(@g) / 2), @crs_loc, @layer_crs) END
+@@FIM@@

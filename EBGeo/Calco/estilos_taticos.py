@@ -35,6 +35,7 @@ pontuais e de formas):
   - Sem âncora (created_zoom nulo ou 0), como no Web: traço e texto fixos em mm e
     glifos no km gravado.
 """
+import math
 import os
 import re
 
@@ -69,25 +70,53 @@ PROJECAO = 'tmerc'
 
 TIPOS_ESTILO = ('coordination_line', 'boundary', 'arrow', 'occupied_front')
 
-# Catálogo MD33 de coordination_line_catalog.js (LINEAR_SYMBOLS), chaveado pelo id.
+# Catálogo MD33 de coordination_line_catalog.js (LINEAR_SYMBOLS), chaveado pelo id, na ordem
+# do combo do Web (symbolOptionGroups: grupo a grupo; dentro do grupo, a de Object.values, em
+# que as chaves numéricas vêm antes das '290999-0x'). 'cor' é a defaultColor: obstáculo nasce
+# verde (MD33-C-01, 7.4.1), manobra e fogos pretos. 'textos' são as colunas de texto do
+# símbolo (textFields do Web), 'segunda_cor' a coluna da segunda cor (secondColor), 'fixo'
+# o símbolo sem glifo repetido (sem distância entre símbolos).
+COR_OBSTACULO = '#00B04E'
+GRUPOS_LINHA = ('Obstáculos', 'Manobra', 'Fogos')
+_OBST = {'grupo': 'Obstáculos', 'cor': COR_OBSTACULO}
 CATALOGO_LINHA = {
-    '290100': {'nome': 'Linha de obstáculos', 'glifo': 'peak', 'interrompe': True, 'span': 1},
-    '290199': {'nome': 'Linha de barreiras', 'glifo': 'diamond', 'interrompe': True, 'span': 1},
-    '290202': {'nome': 'Fosso anticarro', 'glifo': 'teeth', 'interrompe': True, 'continuo': True,
-               'preenchido': True, 'span': 1, 'prof': 0.82, 'flat': 0},
-    '290302': {'nome': 'Cerca de arame', 'glifo': 'asterisk', 'interrompe': False, 'span': 1},
-    '290303': {'nome': 'Cerca de arame dupla', 'glifo': 'double-asterisk', 'interrompe': False, 'span': 1.6},
-    '290307': {'nome': 'Concertina', 'glifo': 'coil', 'interrompe': False, 'span': 0.8},
-    '290308': {'nome': 'Concertina dupla', 'glifo': 'coil-double', 'interrompe': False, 'span': 1,
-               'trilhos': 1, 'gap': 0.7},
-    '290309': {'nome': 'Concertina tripla', 'glifo': 'coil-triple', 'interrompe': False, 'span': 1,
-               'trilhos': 1, 'gap': 1.35},
-    '290999-01': {'nome': 'Sapa', 'glifo': 'zigzag', 'interrompe': True, 'continuo': True,
-                  'span': 1, 'prof': 0.6, 'flat': 0},
-    '290999-02': {'nome': 'Trincheira', 'glifo': 'zigzag', 'interrompe': True, 'continuo': True,
-                  'span': 1, 'prof': 0.7, 'flat': 0.41},
+    '290100': dict(_OBST, nome='Linha de obstáculos', glifo='peak', interrompe=True, span=1),
+    '290199': dict(_OBST, nome='Linha de barreiras', glifo='diamond', interrompe=True, span=1),
+    '290202': dict(_OBST, nome='Fosso anticarro', glifo='teeth', interrompe=True, continuo=True,
+                   preenchido=True, span=1, prof=0.82, flat=0),
+    '290302': dict(_OBST, nome='Cerca de arame', glifo='asterisk', interrompe=False, span=1),
+    '290303': dict(_OBST, nome='Cerca de arame dupla', glifo='double-asterisk', interrompe=False, span=1.6),
+    '290307': dict(_OBST, nome='Concertina', glifo='coil', interrompe=False, span=0.8),
+    '290308': dict(_OBST, nome='Concertina dupla', glifo='coil-double', interrompe=False, span=1,
+                   trilhos=1, gap=0.7),
+    '290309': dict(_OBST, nome='Concertina tripla', glifo='coil-triple', interrompe=False, span=1,
+                   trilhos=1, gap=1.35),
+    '290500': dict(_OBST, nome='Arame de tração', glifo='tripwire', interrompe=False, span=1),
+    '290999-01': dict(_OBST, nome='Sapa', glifo='zigzag', interrompe=True, continuo=True,
+                      span=1, prof=0.6, flat=0),
+    '290999-02': dict(_OBST, nome='Trincheira', glifo='zigzag', interrompe=True, continuo=True,
+                      span=1, prof=0.7, flat=0.41),
+    '140000': dict(grupo='Manobra', cor='#000000', nome='Linha de manobra genérica', glifo='none',
+                   fixo=True, textos=['tipo', 'identificacao', 'gdh_ini', 'gdh_fim']),
+    '140200': dict(grupo='Manobra', cor='#000000', nome='Linha de Contato', glifo='scallops',
+                   continuo=True, segunda_cor='enemy_color'),
+    '240701': dict(grupo='Fogos', cor='#000000', nome='Concentração de fogos em alvo linear',
+                   glifo='end-ticks', fixo=True, textos=['numero_concentracao']),
 }
 SIMBOLO_PADRAO = '290199'
+COR_INIMIGO_PADRAO = '#ff0000'
+
+# Arame de tração (TRIPWIRE e HOOK_STEPS de add_coordination_line_geometry.js), em unidades de
+# meia barra: medido pelo Web na prancha da p. 193 do MD33-C-01 a 600 dpi.
+ARAME = {'haste_topo': 1.6, 'haste_pe': 1.25, 'barra': 1.15, 'gancho_prof': 1.6, 'gancho_alcance': 0.65,
+         'passos': 6}
+# Passos de um festão da Linha de Contato (SCALLOP_STEPS): meia circunferência.
+FESTAO_PASSOS = 8
+
+
+def designacao_linha(codigo):
+    """A designação do manual: '290308', ou '290999/01' quando há extensão (symbolDesignation)."""
+    return codigo.replace('-', '/')
 
 _MARCADOR_SIMPLES = re.compile(r'@@([A-Z_]+)@@')
 _MARCADOR_INCLUSAO = re.compile(r'@@([A-Z_]+):(.*?)@@', re.S)
@@ -302,6 +331,20 @@ def expr_linha_coordenacao(codigo, projecao=None):
     o eixo cru quando nenhum dente cabe.
     """
     sim = CATALOGO_LINHA.get(codigo, CATALOGO_LINHA[SIMBOLO_PADRAO])
+    if sim['glifo'] == 'none':
+        # 140000: só o eixo; os textos são rótulos (regras_texto_linha).
+        return {'linha': '$geometry', 'preenchimento': None}
+    if sim['glifo'] == 'end-ticks':
+        return {'linha': finalizar(compor('linha_alvo_linear', projecao)), 'preenchimento': None}
+    if sim['glifo'] == 'scallops':
+        # 140200: o cordão amigo (direita, cor da linha) e o inimigo (esquerda, segunda cor).
+        return {
+            'linha': finalizar(compor('linha_contato', projecao, LADO='-1', VAZIO='@g',
+                                      ARCO=_pontos_festao(-1))),
+            'preenchimento': None,
+            'inimigo': finalizar(compor('linha_contato', projecao, LADO='1', VAZIO='NULL',
+                                        ARCO=_pontos_festao(1))),
+        }
     if sim.get('continuo'):
         comum = dict(FLAT=sim['flat'], PROF=sim['prof'])
         if sim.get('preenchido'):
@@ -318,7 +361,10 @@ def expr_linha_coordenacao(codigo, projecao=None):
             'preenchimento': None,
         }
 
-    glifo = compor('glifo_' + sim['glifo'].replace('-', '_'), projecao)
+    if sim['glifo'] == 'tripwire':
+        glifo = compor('glifo_tripwire', projecao, **_pontos_arame())
+    else:
+        glifo = compor('glifo_' + sim['glifo'].replace('-', '_'), projecao)
     eixo = compor('eixo_interrompido', projecao) if sim['interrompe'] else 'array(@g)'
     if sim.get('trilhos'):
         trilhos = compor('trilho', projecao,
@@ -328,6 +374,100 @@ def expr_linha_coordenacao(codigo, projecao=None):
     expr = compor('linha_coordenacao_glifos', projecao, SPAN=sim['span'], EIXO=eixo,
                   TRILHOS=trilhos, GLIFO=glifo)
     return {'linha': finalizar(expr), 'preenchimento': None}
+
+
+def _num(v):
+    return repr(round(v, 12))
+
+
+def _pontos_arame():
+    """
+    Pontos do glifo 290500 (buildTripwire do Web) como make_point sobre o quadro do glifo
+    (@m centro, @h meia barra, @az rumo): 'along' à frente e 'left' à esquerda, em unidades
+    de @h. A haste desce até o pé e o gancho é a quadrática do Web, que sai do pé com o
+    ponto de controle logo abaixo e termina nivelado à frente.
+    """
+    A = ARAME
+
+    def ponto(along, left):
+        return ('make_point(x(@m) + @h * ({a} * sin(@az) - ({l}) * cos(@az)), '
+                'y(@m) + @h * ({a} * cos(@az) + ({l}) * sin(@az)))').format(a=_num(along), l=_num(left))
+    haste = [ponto(0, A['haste_topo']), ponto(0, -A['haste_pe'])]
+    for i in range(1, A['passos'] + 1):
+        t = i / A['passos']
+        along = t * t * A['gancho_alcance']
+        left = -((1 - t) ** 2 * A['haste_pe'] + 2 * (1 - t) * t * A['gancho_prof'] + t * t * A['gancho_prof'])
+        haste.append(ponto(along, left))
+    barra = [ponto(-1, A['barra']), ponto(1, A['barra'])]
+    return {'HASTE': ', '.join(haste), 'BARRA': ', '.join(barra)}
+
+
+def _pontos_festao(lado):
+    """
+    Os 7 pontos internos de um festão (buildScallopString do Web): meia circunferência de
+    raio @r sobre a corda de @a a @b, centro (@xm, @ym), rumo @az. lado=+1 é o cordão
+    inimigo (à esquerda do eixo), que bojeia para a DIREITA da corda, isto é, para o eixo;
+    lado=-1, o amigo, bojeia para a esquerda.
+    """
+    pts = []
+    for k in range(1, FESTAO_PASSOS):
+        th = math.pi * k / FESTAO_PASSOS
+        c, s = _num(math.cos(th)), _num(math.sin(th) * lado)
+        pts.append('make_point(@xm - @r * {c} * sin(@az) + @r * {s} * cos(@az), '
+                   '@ym - @r * {c} * cos(@az) - @r * {s} * sin(@az))'.format(c=c, s=s))
+    return ', '.join(pts)
+
+
+# Rótulos da Linha de Coordenação: (código, onde, lado, texto). onde: 0 ponta inicial,
+# 1 final, 2 meio; lado: 'above' (de cima) ou 'below' (de baixo), como textAt/textSide do Web.
+# manoeuvreTexts do Web: "Tipo  Identificação" (dois espaços) em cima; embaixo os dois GDH em
+# duas linhas, a primeira terminando em " -"; o par pela metade imprime a metade que há.
+_TEXTO_DESIGNACAO = ("array_to_string(array_filter(array(trim(coalesce(\"tipo\", '')), "
+                     "trim(coalesce(\"identificacao\", ''))), @element <> ''), '  ')")
+_TEXTO_GDH = ("CASE WHEN trim(coalesce(\"gdh_ini\", '')) <> '' AND trim(coalesce(\"gdh_fim\", '')) <> '' "
+              "THEN trim(\"gdh_ini\") || ' -' || '\\n' || trim(\"gdh_fim\") "
+              "ELSE trim(coalesce(\"gdh_ini\", '')) || trim(coalesce(\"gdh_fim\", '')) END")
+_TEXTO_CONCENTRACAO = "trim(coalesce(\"numero_concentracao\", ''))"
+_ROTULOS_LINHA = [
+    ('140000', 0, 'above', _TEXTO_DESIGNACAO), ('140000', 0, 'below', _TEXTO_GDH),
+    ('140000', 1, 'above', _TEXTO_DESIGNACAO), ('140000', 1, 'below', _TEXTO_GDH),
+    ('240701', 2, 'above', _TEXTO_CONCENTRACAO),
+]
+_ONDE = {0: ('start', '_rumo_tela_inicio', 'start_point($geometry)'),
+         1: ('end', '_rumo_tela_fim', 'end_point($geometry)'),
+         2: ('center', '_rumo_tela_meio', None)}
+
+
+def tamanho_texto_linha(projecao=None):
+    """Tamanho do texto da Linha de Coordenação em mm, sem compilar (text_size, 14 px, teto 255)."""
+    base = 'CASE WHEN "text_size" > 0 THEN "text_size" ELSE 14 END'
+    return compor(None, projecao, _TEXTO='min(255, {} * (@@FATOR_PIXEL@@)) * {}'.format(base, MM_POR_PX))
+
+
+def regras_texto_linha(projecao=None):
+    """
+    Os rótulos da Linha de Coordenação, um por (símbolo, ponto, lado), como o Web os põe na
+    fonte irmã (buildTexts e placeLineText): o ponto na ponta ou no meio, a rotação que corre
+    com a linha e fica de pé, o quadrante da âncora e o vão de 0,4 em, todos por expressão.
+    """
+    regras = []
+    for codigo, onde, lado, texto in _ROTULOS_LINHA:
+        nome_onde, rumo_exp, ponto = _ONDE[onde]
+        rumo = compor(rumo_exp, projecao)
+        baixo = 1 if lado == 'below' else 0
+        tam = tamanho_texto_linha(projecao)
+        regras.append({
+            'codigo': codigo, 'onde': nome_onde, 'lado': lado,
+            'texto': texto,
+            'filtro': "\"symbol_code\" = '{}' AND ({}) <> ''".format(codigo, texto),
+            'geometria': ponto or finalizar(compor('linha_texto_meio', projecao)),
+            'tamanho': finalizar(tam),
+            'rotacao': finalizar(compor('linha_texto_rotacao', projecao, RUMO=rumo)),
+            'quadrante': finalizar(compor('linha_texto_quadrante', projecao, RUMO=rumo, ONDE=onde,
+                                          BAIXO=baixo, LINHA=2 * baixo)),
+            'deslocamento': finalizar(compor('linha_texto_deslocamento', projecao, RUMO=rumo, BAIXO=baixo, TAM=tam)),
+        })
+    return regras
 
 
 def _limite_subs(projecao):
@@ -448,6 +588,10 @@ def simbolo_linha_coordenacao(codigo, projecao=None):
     if ex['preenchimento']:
         camadas.append(_gerador(ex['preenchimento'], _preenchimento(cor, cor, largura)))
     camadas.append(_gerador(ex['linha'], _linha(largura, cor)))
+    if ex.get('inimigo'):
+        # O cordão inimigo da 140200 na segunda cor, acima do amigo (a fonte irmã do Web).
+        cor2 = expr_cor(CATALOGO_LINHA[codigo]['segunda_cor'], 'opacity', COR_INIMIGO_PADRAO)
+        camadas.append(_gerador(ex['inimigo'], _linha(largura, cor2)))
     return _simbolo_linha(camadas)
 
 
@@ -565,15 +709,70 @@ def rotulagem_limite(projecao=None):
     return QgsRuleBasedLabeling(raiz)
 
 
+def _config_texto_linha(r):
+    """
+    Um rótulo da Linha de Coordenação sobre um ponto (a ponta ou o meio), com rotação,
+    quadrante e deslocamento por expressão: o QGIS aplica o quadrante no quadro do texto
+    girado, como o text-anchor do MapLibre, e o deslocamento na tela (por isso a expressão
+    já o gira). Texto de várias linhas alinhado pela âncora, como o text-justify auto.
+    """
+    s = QgsPalLayerSettings()
+    s.fieldName = r['texto']
+    s.isExpression = True
+    s.geometryGenerator = r['geometria']
+    s.geometryGeneratorEnabled = True
+    s.geometryGeneratorType = Qgis.GeometryType.Point
+    s.placement = Qgis.LabelPlacement.OverPoint
+    s.offsetUnits = Qgis.RenderUnit.Millimeters
+    fmt = QgsTextFormat()
+    fmt.setSizeUnit(Qgis.RenderUnit.Millimeters)
+    fmt.setSize(14 * MM_POR_PX)
+    fmt.setColor(QColor('#000000'))
+    buf = QgsTextBufferSettings()
+    buf.setEnabled(True)
+    buf.setSizeUnit(Qgis.RenderUnit.Millimeters)
+    buf.setSize(2 * MM_POR_PX)  # text-halo-width: 2 px
+    buf.setColor(QColor('#ffffff'))
+    fmt.setBuffer(buf)
+    s.setFormat(fmt)
+    opacidade = '100 * min(1, max(0, coalesce("opacity", 1)))'
+    P = QgsPalLayerSettings.Property
+    props = s.dataDefinedProperties()
+    props.setProperty(P.Size, QgsProperty.fromExpression(r['tamanho']))
+    props.setProperty(P.Color, QgsProperty.fromExpression("coalesce(\"color\", '#000000')"))
+    props.setProperty(P.FontOpacity, QgsProperty.fromExpression(opacidade))
+    props.setProperty(P.BufferOpacity, QgsProperty.fromExpression(opacidade))
+    props.setProperty(P.LabelRotation, QgsProperty.fromExpression(r['rotacao']))
+    props.setProperty(P.OffsetQuad, QgsProperty.fromExpression(r['quadrante']))
+    props.setProperty(P.OffsetXY, QgsProperty.fromExpression(r['deslocamento']))
+    s.setDataDefinedProperties(props)
+    s.placementSettings().setOverlapHandling(Qgis.LabelOverlapHandling.AllowOverlapAtNoCost)
+    s.placementSettings().setAllowDegradedPlacement(True)
+    s.obstacleSettings().setIsObstacle(False)
+    return s
+
+
+def rotulagem_linha_coordenacao(projecao=None):
+    """Os textos da 140000 (nas duas pontas, em cima e embaixo) e o número da 240701 (no meio)."""
+    raiz = QgsRuleBasedLabeling.Rule(None)
+    for r in regras_texto_linha(projecao):
+        regra = QgsRuleBasedLabeling.Rule(_config_texto_linha(r))
+        regra.setFilterExpression(r['filtro'])
+        regra.setDescription('{} {} {}'.format(r['codigo'], r['onde'], r['lado']))
+        raiz.appendChild(regra)
+    return QgsRuleBasedLabeling(raiz)
+
+
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
 
 def aplicar_estilo(layer, tipo, projecao=None):
-    """Aplica à camada o renderer (e a rotulagem, na Linha de Limite) do tipo."""
+    """Aplica à camada o renderer (e a rotulagem, na Linha de Limite e na de Coordenação) do tipo."""
     if tipo == 'coordination_line':
         layer.setRenderer(renderer_linha_coordenacao(projecao))
-        layer.setLabelsEnabled(False)
+        layer.setLabeling(rotulagem_linha_coordenacao(projecao))
+        layer.setLabelsEnabled(True)
     elif tipo == 'boundary':
         layer.setRenderer(renderer_limite(projecao))
         layer.setLabeling(rotulagem_limite(projecao))

@@ -1,0 +1,23 @@
+/* 240701 Concentração de fogos em alvo linear (buildFixedSymbol e endAnchor de
+   add_coordination_line_geometry.js): o eixo inteiro e um traço perpendicular centrado em
+   cada ponta, do comprimento do tamanho do símbolo. O rumo de cada ponta é o do primeiro
+   vértice que não repete a ponta (vértice repetido não tem rumo); sem nenhum, a ponta
+   fica sem traço. O número da concentração é rótulo (linha_texto_*.exp). */
+@@SEJA@@
+@@PROJ@@
+fs := @@FATOR_SOLO@@
+s := min(50, max(0.001, CASE WHEN "symbol_size_km" > 0 THEN "symbol_size_km" ELSE 0.5 END * @fs)) * 1000 * @k
+eps ::= 0.001 * @k
+np ::= num_points(@g)
+i0 := array_first(array_filter(generate_series(2, @np), distance(point_n(@g, @element), start_point(@g)) > @eps))
+i1 := array_last(array_filter(generate_series(1, @np - 1), distance(point_n(@g, @element), end_point(@g)) > @eps))
+az0 ::= azimuth(start_point(@g), point_n(@g, @i0))
+az1 ::= azimuth(point_n(@g, @i1), end_point(@g))
+@@EM@@
+transform(collect_geometries(array_filter(array(
+    @g,
+    CASE WHEN @i0 IS NOT NULL THEN make_line(project(start_point(@g), @s / 2, @az0 - pi() / 2), project(start_point(@g), @s / 2, @az0 + pi() / 2)) END,
+    CASE WHEN @i1 IS NOT NULL THEN make_line(project(end_point(@g), @s / 2, @az1 - pi() / 2), project(end_point(@g), @s / 2, @az1 + pi() / 2)) END),
+  @element IS NOT NULL)),
+  @crs_loc, @layer_crs)
+@@FIM@@

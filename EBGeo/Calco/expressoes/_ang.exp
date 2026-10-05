@@ -1,0 +1,6 @@
+/* Rumo (radianos) da borda no ponto a @@A@@ do primeiro vértice, pelo trecho que SAI do
+   ponto, como pointAt do Web: num vértice vale o segmento seguinte, e não a média dos dois
+   que line_interpolate_angle devolve (o bloco externo na razão 0, sobre o vértice mais ao
+   norte, saía 680 m longe do Web por isso). */
+CASE WHEN (@@A@@) + 0.01 <= @L THEN azimuth(line_interpolate_point(@an, @@A@@), line_interpolate_point(@an, (@@A@@) + 0.01))
+ELSE azimuth(line_interpolate_point(@an, (@@A@@) - 0.01), line_interpolate_point(@an, @@A@@)) END

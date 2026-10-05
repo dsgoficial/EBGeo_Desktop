@@ -1,0 +1,8 @@
+/* 270800: os pontos dos quatro "M" da borda (rótulo por parte). */
+@@SEJA@@
+@@AREA@@
+@@AREA_CENTRO@@
+@@AREA_CRUZAMENTOS@@
+@@EM@@
+CASE WHEN array_length(@cs) > 0 THEN transform(collect_geometries(@cs), @crs_loc, @layer_crs) END
+@@FIM@@

@@ -1,0 +1,15 @@
+/* 151000 Zona fortificada: a borda vira uma corrente de elos ovais encostados, n = L / s
+   elos (3 a 500), semieixos 0,54 e 0,3 do passo, ao longo da tangente (border 'elos'). */
+@@SEJA@@
+@@AREA@@
+n := min(500, max(3, round(@L / @s)))
+@@EM@@
+transform(collect_geometries(array_foreach(generate_series(0, @n - 1),
+  @@SEJA@@
+  dd := @@POS:A=(@element + 0.5) * @L / @n@@
+  ce := line_interpolate_point(@an, @dd)
+  az := @@ANG:A=@dd@@
+  @@EM@@
+  @@ELIPSE:CENTRO=@ce;RL=0.54 * @L / @n;RT=0.3 * @L / @n@@
+  @@FIM@@)), @crs_loc, @layer_crs)
+@@FIM@@

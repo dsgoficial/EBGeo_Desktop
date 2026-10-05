@@ -39,6 +39,11 @@ _ZOOM = [
     ('created_zoom', 'real', None, 'createdAtZoom'),
 ]
 
+# Azimute e Distância (Calco/azimute): a construção polar que o Web grava em
+# properties.azimuthDistanceData das feições de featureType 'azimuth_distance' (ponto, linha ou
+# polígono), para a ferramenta reabrir e editar as pernas.
+_AZIMUTE = [('azimute_distancia', 'json', None, 'azimuthDistanceData')]
+
 # Símbolos pontuais gerados por SVG (assado no campo svg).
 _SIMBOLO = [
     ('size', 'real', 1.0, 'size'),
@@ -122,6 +127,17 @@ TEXTOS_MEDIDA = [
     ('altitude', 'altitude'),
 ]
 
+# Escolhas de desenho de duas medidas (desenhos-parametricos.js do Web): o tipo de mina de cada
+# posição do 270701 ('ap', 'ac', 'qualquer', 'vazia') e a seta secundária do Setor de Tiro
+# (140500), RELATIVA à principal (rotation), em graus no sentido horário. Nulo é o desenho
+# padrão (mina antipessoal; secundária a -45 graus).
+DESENHO_MEDIDA = [
+    ('mina1', 'str', 'mina1'),
+    ('mina2', 'str', 'mina2'),
+    ('mina3', 'str', 'mina3'),
+    ('angulo_secundario', 'real', 'anguloSecundario'),
+]
+
 # tipo -> definição. 'balde' é a chave em maps[nome].features do .ebgeo;
 # 'tabela' é o nome da tabela no GeoPackage; 'geometria' é o tipo QGIS/OGR.
 TIPOS = {
@@ -141,6 +157,7 @@ TIPOS = {
         'campos': [('point_code', 'str', 'ECHELON', 'pointCode'),
                    ('echelon_code', 'str', 'ECHELON_16', 'echelonCode')]
                   + [(c, 'str', None, w) for c, w in TEXTOS_MEDIDA]
+                  + [(c, tp, None, w) for c, tp, w in DESENHO_MEDIDA]
                   + [('anchor', 'str', 'center', 'anchor')]
                   + _SIMBOLO,
     },
@@ -179,8 +196,53 @@ TIPOS = {
         'nome_pt': 'Linha de Coordenação', 'grupo': 'militar', 'desenho': 'estilo',
         'campos': [('symbol_code', 'str', '290199', 'symbol_code'),
                    ('symbol_size_km', 'real', 0.5, 'symbol_size'),
-                   ('symbol_spacing_km', 'real', 1.5, 'symbol_spacing')]
-                  + _LINHA_TATICA,
+                   ('symbol_spacing_km', 'real', 1.5, 'symbol_spacing'),
+                   # Cap. VII do MD33-C-01: os textos da 140000 e da 240701 e o lado inimigo
+                   # da 140200, com as chaves que o Web grava (coordination_line_catalog.js).
+                   ('tipo', 'str', None, 'tipo'),
+                   ('identificacao', 'str', None, 'identificacao'),
+                   ('gdh_ini', 'str', None, 'gdhIni'),
+                   ('gdh_fim', 'str', None, 'gdhFim'),
+                   ('numero_concentracao', 'str', None, 'numeroConcentracao'),
+                   ('text_size', 'real', 14.0, 'text_size'),
+                   ('text_north_facing', 'bool', False, 'text_north_facing'),
+                   ('enemy_color', 'str', '#ff0000', 'enemy_color')]
+                  # o símbolo padrão (290199) é obstáculo, e obstáculo nasce verde (7.4.1)
+                  + [('color', 'str', '#00B04E', 'color') if c[0] == 'color' else c for c in _LINHA_TATICA],
+    },
+    # Área de Coordenação (cap. VII do MD33-C-01): o polígono e os atributos; o desenho de cada
+    # tipo é estilo nativo (estilos_area.py). portoes e minas são JSON como o Web os grava.
+    'coordination_area': {
+        'balde': 'coordination_areas', 'tabela': 'coordination_area', 'geometria': 'MultiPolygon',
+        'nome_pt': 'Área de Coordenação', 'grupo': 'militar', 'desenho': 'estilo',
+        'campos': [('symbol_code', 'str', '150000', 'symbol_code'),
+                   ('symbol_size_km', 'real', 0.3, 'symbol_size'),
+                   ('tipo', 'str', '', 'tipo'),
+                   ('identificacao', 'str', '', 'identificacao'),
+                   ('gdh_ini', 'str', '', 'gdhIni'),
+                   ('gdh_fim', 'str', '', 'gdhFim'),
+                   ('outras_info', 'str', '', 'outrasInfo'),
+                   ('escalao', 'str', '', 'escalao'),
+                   ('text_position', 'str', None, 'text_position'),
+                   ('text_ratio', 'real', None, 'text_ratio'),
+                   ('text_size', 'real', 14.0, 'text_size'),
+                   ('text_north_facing', 'bool', True, 'text_north_facing'),
+                   ('altitude_max', 'str', '', 'altitudeMax'),
+                   ('altitude_min', 'str', '', 'altitudeMin'),
+                   ('portoes', 'json', '[]', 'portoes'),
+                   ('portoes_ocultos', 'bool', False, 'portoes_ocultos'),
+                   ('minas', 'json', '["qualquer", "ap", "ac"]', 'minas'),
+                   ('fill_color', 'str', '#000000', 'fillColor'),
+                   ('line_color', 'str', '#000000', 'lineColor'),
+                   ('line_width', 'real', 3.0, 'lineWidth'),
+                   ('line_style', 'str', 'solid', 'lineStyle'),
+                   ('opacity', 'real', 0.0, 'opacity'),
+                   ('hatch_enabled', 'bool', False, 'hatchEnabled'),
+                   ('hatch_type', 'str', 'none', 'hatchType'),
+                   ('hatch_color', 'str', '#000000', 'hatchColor'),
+                   ('hatch_spacing', 'real', 8.0, 'hatchSpacing'),
+                   ('hatch_line_width', 'real', 1.5, 'hatchLineWidth')]
+                  + _ZOOM,
     },
     'arrow': {
         'balde': 'arrows', 'tabela': 'arrow', 'geometria': 'MultiLineString',
@@ -219,7 +281,7 @@ TIPOS = {
                    ('marker_symbol', 'str', 'circle', 'markerSymbol'),
                    ('zoom_corr', 'bool', True, 'sizeZoomCorrectionEnabled'),  # ausente = ligada no Web
                    ('created_zoom', 'real', None, 'sizeCreatedAtZoom')]
-                  + _ROTULO,
+                  + _ROTULO + _AZIMUTE,
     },
     'line': {
         'balde': 'lines', 'tabela': 'line', 'geometria': 'LineString',
@@ -227,10 +289,10 @@ TIPOS = {
         'campos': [('line_color', 'str', '#3388ff', 'lineColor'),
                    ('line_width', 'real', 3.0, 'lineWidth'),
                    ('opacity', 'real', 1.0, 'opacity'),
-                   ('line_style', 'str', 'solid', 'lineStyle')],
+                   ('line_style', 'str', 'solid', 'lineStyle')] + _AZIMUTE,
     },
     'polygon': {'balde': 'polygons', 'tabela': 'polygon', 'geometria': 'MultiPolygon',
-                'nome_pt': 'Polígono', 'grupo': 'forma', 'desenho': 'estilo', 'campos': list(_FORMA)},
+                'nome_pt': 'Polígono', 'grupo': 'forma', 'desenho': 'estilo', 'campos': list(_FORMA) + _AZIMUTE},
     'circle': {'balde': 'circles', 'tabela': 'circle', 'geometria': 'MultiPolygon',
                'nome_pt': 'Círculo', 'grupo': 'forma', 'desenho': 'estilo', 'campos': list(_FORMA)},
     'ellipse': {'balde': 'ellipses', 'tabela': 'ellipse', 'geometria': 'MultiPolygon',
@@ -295,7 +357,7 @@ TIPOS = {
 
 # Pilha de desenho do EBGeo Web, de baixo para cima (layers/layer_setup.js:702-721).
 PILHA_DESENHO = [
-    'image', 'polygon', 'ellipse', 'circle', 'rectangle', 'sector', 'arrow',
+    'image', 'polygon', 'ellipse', 'circle', 'rectangle', 'sector', 'coordination_area', 'arrow',
     'visibility', 'processed_visibility', 'occupied_front', 'coordination_line',
     'boundary', 'line', 'brush', 'los', 'processed_los', 'point', 'military_symbol',
     'coordination_measure', 'engineering_symbol', 'magnetic_declination', 'text',
@@ -338,3 +400,36 @@ def padroes(tipo):
 def mapa_web(tipo):
     """Dicionário propriedade_web -> coluna, para importar e exportar."""
     return {c[3]: c[0] for c in campos(tipo) if c[3]}
+
+
+def colunas_json(tipo):
+    """As colunas do tipo gravadas como JSON no GeoPackage."""
+    return {c[0] for c in campos(tipo) if c[1] == 'json'}
+
+
+def valor_json_para_qgis(valor):
+    """
+    Valor de coluna JSON para gravar pelo QGIS (provedor ogr): o objeto, não o texto.
+
+    O provedor serializa o que recebe: um dict ou lista vira o JSON de verdade, igual ao que o
+    OGR e o importador gravam; um TEXTO JSON vira uma STRING JSON, com as aspas escapadas
+    (medido no QGIS 4.0.0: '"[{\\"ratio\\": 0.5, ...}]"' no GeoPackage). Texto que não é
+    objeto nem lista JSON passa como veio.
+    """
+    if isinstance(valor, str) and valor.strip()[:1] in ('[', '{'):
+        import json
+        try:
+            objeto = json.loads(valor)
+        except ValueError:
+            return valor
+        if isinstance(objeto, (dict, list)):
+            return objeto
+    return valor
+
+
+def atributos_para_qgis(tipo, atributos):
+    """Cópia de {coluna: valor} com as colunas JSON do tipo prontas para o provedor do QGIS."""
+    if tipo not in TIPOS:
+        return dict(atributos)
+    js = colunas_json(tipo)
+    return {k: (valor_json_para_qgis(v) if k in js else v) for k, v in atributos.items()}

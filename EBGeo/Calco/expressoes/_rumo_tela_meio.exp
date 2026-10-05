@@ -1,0 +1,12 @@
+/* Rumo NA TELA, em graus de 0 a 360, do trecho sob o meio da linha (middleAnchor do Web):
+   o meio é medido no plano local, e o trecho é o último da metade inicial, o que no meio
+   exato de um vértice dá o trecho que chega a ele, como no Web. */
+@@SEJA@@
+@@PROJ@@
+L := length(@g)
+sub := CASE WHEN @L > 0 THEN line_substring(@g, 0, @L / 2) END
+@@EM@@
+CASE WHEN @sub IS NOT NULL AND num_points(@sub) >= 2 THEN
+  (degrees(azimuth(transform(point_n(@sub, -2), @crs_loc, coalesce(@map_crs, 'EPSG:3857')), transform(point_n(@sub, -1), @crs_loc, coalesce(@map_crs, 'EPSG:3857')))) % 360 + 360) % 360
+END
+@@FIM@@

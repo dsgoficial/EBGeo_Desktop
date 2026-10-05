@@ -1,0 +1,4 @@
+/* As três minas (posições 1, 2 e 3 de "minas"; lista inválida vale qualquer, AP, AC), a
+   2,6 s uma da outra no eixo leste-oeste pelo centro; elipse de semieixos s e 0,88 s. */
+mj ::= CASE WHEN try(array_length("minas"), -1) >= 0 THEN "minas" ELSE try(from_json("minas")) END
+mk := CASE WHEN try(array_length(@mj), 0) = 3 THEN @mj ELSE array('qualquer', 'ap', 'ac') END

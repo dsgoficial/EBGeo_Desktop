@@ -39,7 +39,8 @@ class TesteGerenciador(unittest.TestCase):
             self.assertFalse(a.icon().isNull(), a.text())
         # calco novo sem diálogo
         c = g._usar_calco(os.path.join(tempfile.mkdtemp(), 'c.gpkg'))
-        self.assertEqual(len(c.camadas_no_projeto()), 8)
+        from Calco import schema
+        self.assertEqual(len(c.camadas_no_projeto()), len(schema.TIPOS_MILITARES))
         g.mostrar_painel()
         self.assertIsNotNone(g.painel)
         g.unload()

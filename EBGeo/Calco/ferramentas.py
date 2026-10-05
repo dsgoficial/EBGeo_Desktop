@@ -64,6 +64,13 @@ def atributos_iniciais(tipo, canvas):
             attrs['symbol_size_km'] = round(zoom.tamanho_simbolo_limite_km(z), 4)
         elif tipo == 'arrow':
             attrs['width_m'] = round(zoom.largura_seta_m(z), 1)
+        elif tipo == 'coordination_area':
+            # _creationProperties do Web: 18 px na tela no zoom do clique que fecha a área
+            from .estilos_area import tamanho_inicial_km
+            attrs['symbol_size_km'] = tamanho_inicial_km(_lat, z)
+    if tipo == 'coordination_area':
+        from .estilos_area import posicao_padrao
+        attrs['text_position'] = posicao_padrao(attrs.get('symbol_code'))
     return attrs
 
 
@@ -87,7 +94,8 @@ def gravar_feicao(layer, tipo, geometria_wgs84, atributos):
     else:
         g = geometria_wgs84
     f = QgsFeature(layer.fields())
-    for nome, valor in attrs.items():
+    # coluna JSON recebe o objeto: o texto viraria string JSON escapada no GeoPackage
+    for nome, valor in schema.atributos_para_qgis(tipo, attrs).items():
         i = layer.fields().indexOf(nome)
         if i >= 0:
             f.setAttribute(i, valor)
@@ -243,6 +251,67 @@ class FerramentaLinha(_Base):
         if layer is None:
             return
         attrs = atributos_iniciais(self.tipo, self.canvas())
+        eid = gravar_feicao(layer, self.tipo, self.geometria_wgs(verts), attrs)
+        if eid is not None:
+            self.feicaoCriada.emit(layer, self.tipo, eid)
+
+
+class FerramentaPoligono(FerramentaLinha):
+    """
+    Área de Coordenação: o gesto do polígono comum do Web (clique acrescenta vértice, clique
+    direito acrescenta o ponto sob o cursor e fecha, Backspace desfaz, Esc cancela), com a
+    área inteira de pré-visualização. Fecha com 3 vértices ou mais.
+    """
+
+    def __init__(self, canvas, tipo, iface=None, preparar_atributos=None):
+        super().__init__(canvas, tipo, iface)
+        self.preparar_atributos = preparar_atributos  # callable(tipo, attrs) -> attrs
+
+    def _banda(self):
+        if self.banda is None:
+            self.banda = QgsRubberBand(self.canvas(), Qgis.GeometryType.Polygon)
+            self.banda.setColor(QColor(255, 0, 0, 180))
+            self.banda.setFillColor(QColor(255, 0, 0, 40))
+            self.banda.setWidth(2)
+        return self.banda
+
+    def _atualizar(self, cursor=None):
+        pts = list(self.vertices) + ([cursor] if cursor is not None else [])
+        self._banda().reset(Qgis.GeometryType.Polygon)
+        for p in pts:
+            self._banda().addPoint(QgsPointXY(p), False)
+        self._banda().updatePosition()
+        self._banda().setVisible(len(pts) >= 2)
+        self._banda().update()
+
+    def cancelar(self):
+        self.vertices = []
+        if self.banda is not None:
+            self.banda.reset(Qgis.GeometryType.Polygon)
+
+    def geometria_wgs(self, vertices_mapa):
+        pts = [self._wgs(p) for p in vertices_mapa]
+        g = QgsGeometry.fromPolygonXY([pts + [pts[0]]])
+        g.convertToMultiType()
+        return g
+
+    def finalizar(self):
+        verts = list(self.vertices)
+        if len(verts) < 3:
+            # o Web não fecha área com menos de 3 vértices: a captura continua
+            self._atualizar()
+            return
+        self.cancelar()
+        layer = self._camada()
+        if layer is None:
+            return
+        attrs = atributos_iniciais(self.tipo, self.canvas())
+        if attrs.get('created_zoom') is not None:
+            # o Web mede os 18 px na latitude do primeiro vértice
+            from .estilos_area import tamanho_inicial_km
+            attrs['symbol_size_km'] = tamanho_inicial_km(self._wgs(verts[0]).y(), attrs['created_zoom'])
+        if self.preparar_atributos:
+            attrs = self.preparar_atributos(self.tipo, attrs)
         eid = gravar_feicao(layer, self.tipo, self.geometria_wgs(verts), attrs)
         if eid is not None:
             self.feicaoCriada.emit(layer, self.tipo, eid)

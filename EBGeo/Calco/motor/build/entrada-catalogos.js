@@ -123,6 +123,11 @@ export function montarCatalogos() {
             nucleo: p.isNucleo === true,
             forcaTarefa: p.isForcaTarefa === true,
         };
+        // Capítulo VII (2026-10-04): a cor com que o tipo nasce (destruições em verde), a
+        // direção da Base de fogos e o par de direções do Setor de Tiro, que o painel lê.
+        if (p.corPadrao) medidas[codigo].corPadrao = p.corPadrao;
+        if (p.direcao) medidas[codigo].direcao = { rotulo: p.direcao.rotulo };
+        if (p.setorDeTiro) medidas[codigo].setorDeTiro = true;
     }
     const categorias = {};
     for (const [codigo, m] of Object.entries(medidas)) {

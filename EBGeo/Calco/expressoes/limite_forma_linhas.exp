@@ -1,8 +1,19 @@
 /* X: duas retas a +/-45 graus do rumo, meia-largura tamanho/2. I: traço perpendicular de
-   +/- tamanho/1,5. Outros caracteres não têm traço (o 'o' é círculo). */
+   +/- tamanho/1,5. Ø (Equipe/Guarnição): anel VAZADO de raio 0,424 x tamanho e a barra que
+   sobe da esquerda para a direita, de (-20,+10) a (+20,-10) no desenho do milsymbol, meia-barra
+   de 0,632 x tamanho a atan2(0,283; 0,566) do rumo (teamGlyphLines). +: braço ao longo e braço
+   através do rumo, meia-largura 0,354 x tamanho (crossGlyphLines). Outros caracteres não têm
+   traço (o 'o' é círculo cheio). */
 CASE
   WHEN @ch = 'X' THEN collect_geometries(
     make_line(project(@ci, @s / 2, @az + pi() / 4), project(@ci, @s / 2, @az + pi() / 4 + pi())),
     make_line(project(@ci, @s / 2, @az - pi() / 4), project(@ci, @s / 2, @az - pi() / 4 + pi())))
   WHEN @ch = 'I' THEN make_line(project(@ci, @s / 1.5, @az - pi() / 2), project(@ci, @s / 1.5, @az + pi() / 2))
+  WHEN @ch = 'Ø' THEN collect_geometries(
+    exterior_ring(make_circle(@ci, @s * 0.424, 32)),
+    make_line(project(@ci, @s * sqrt(0.566 ^ 2 + 0.283 ^ 2), @az - atan2(0.283, 0.566) + pi()),
+              project(@ci, @s * sqrt(0.566 ^ 2 + 0.283 ^ 2), @az - atan2(0.283, 0.566))))
+  WHEN @ch = '+' THEN collect_geometries(
+    make_line(project(@ci, @s * 0.354, @az + pi()), project(@ci, @s * 0.354, @az)),
+    make_line(project(@ci, @s * 0.354, @az + pi() / 2), project(@ci, @s * 0.354, @az - pi() / 2)))
 END

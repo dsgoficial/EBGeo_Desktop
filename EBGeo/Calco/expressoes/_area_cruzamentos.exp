@@ -1,0 +1,7 @@
+/* Área minada: onde a vertical e a horizontal pelo centro (interiorPoint) cruzam o anel, nos
+   extremos de cada uma (axisCrossings): os quatro "M" e os cortes da borda. ca são os arcos
+   desses pontos medidos do início do Web, em ordem. */
+vc := intersection(@an, make_line(make_point(x(@ct), y_min(@an) - 1), make_point(x(@ct), y_max(@an) + 1)))
+hc := intersection(@an, make_line(make_point(x_min(@an) - 1, y(@ct)), make_point(x_max(@an) + 1, y(@ct))))
+cs ::= array_cat(CASE WHEN num_geometries(@vc) >= 2 THEN array(make_point(x(@ct), y_max(@vc)), make_point(x(@ct), y_min(@vc))) ELSE array() END, CASE WHEN num_geometries(@hc) >= 2 THEN array(make_point(x_min(@hc), y(@ct)), make_point(x_max(@hc), y(@ct))) ELSE array() END)
+ca := array_sort(array_foreach(@cs, ((line_locate_point(@an, @element) - @off) % @L + @L) % @L))

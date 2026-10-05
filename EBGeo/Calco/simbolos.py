@@ -35,6 +35,19 @@ CAMPOS_DESENHO = {
     'magnetic_declination': ['declination', 'convergence', 'fill_color'],
 }
 
+# Campos que desenham e que só entram na assinatura quando algum deles tem valor: assim a feição
+# gravada antes deles existirem (sem minas nem ângulo secundário) assina como assinava, e o
+# calco antigo não acende o aviso de SVG velho. Com valor, entram todos, na ordem, depois dos de
+# CAMPOS_DESENHO.
+CAMPOS_DESENHO_OPCIONAIS = {
+    'coordination_measure': [c for c, _tp, _w in schema.DESENHO_MEDIDA],
+}
+
+
+def campos_que_desenham(tipo):
+    """Todos os campos cuja mudança redesenha o símbolo."""
+    return CAMPOS_DESENHO[tipo] + CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])
+
 # Colunas que o renderizador escreve; mudança nelas nunca dispara regeneração.
 COLUNAS_SAIDA = ('svg', 'svg_assinatura', 'largura_px', 'altura_px', 'ancora_dx', 'ancora_dy')
 
@@ -153,6 +166,9 @@ def texto_assinatura(tipo, atributos):
     partes = [VERSAO_ASSINATURA, tipo]
     for coluna in CAMPOS_DESENHO[tipo]:
         partes.append(_texto_assinatura(_tipo_coluna(tipo, coluna), atributos.get(coluna)))
+    opcionais = [_texto_assinatura(_tipo_coluna(tipo, c), atributos.get(c)) for c in CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])]
+    if any(opcionais):
+        partes += opcionais
     return '|'.join(partes)
 
 
@@ -178,7 +194,11 @@ def expressao_assinatura(tipo):
     termos = ["'{}|{}'".format(VERSAO_ASSINATURA, tipo)]
     for coluna in CAMPOS_DESENHO[tipo]:
         termos.append(_termo_expressao(_tipo_coluna(tipo, coluna), coluna))
-    return 'md5(' + " || '|' || ".join(termos) + ')'
+    texto = " || '|' || ".join(termos)
+    opcionais = [_termo_expressao(_tipo_coluna(tipo, c), c) for c in CAMPOS_DESENHO_OPCIONAIS.get(tipo, [])]
+    if opcionais:
+        texto += " || if({} = '', '', '|' || {})".format(' || '.join(opcionais), " || '|' || ".join(opcionais))
+    return 'md5(' + texto + ')'
 
 
 # ---------------------------------------------------------------------------------------------
@@ -335,7 +355,7 @@ class RegeneradorSvg(QObject):
         self.erros = []
         self.regeneradas = 0
         nomes = layer.fields().names()
-        self._idx_desenho = {layer.fields().indexOf(c) for c in CAMPOS_DESENHO[tipo] if c in nomes}
+        self._idx_desenho = {layer.fields().indexOf(c) for c in campos_que_desenham(tipo) if c in nomes}
         self._idx_saida = {c: layer.fields().indexOf(c) for c in COLUNAS_SAIDA if c in nomes}
         layer.featureAdded.connect(self._ao_adicionar)
         layer.attributeValueChanged.connect(self._ao_mudar_atributo)

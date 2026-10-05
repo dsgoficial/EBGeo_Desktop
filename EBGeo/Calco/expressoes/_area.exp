@@ -1,0 +1,25 @@
+/* Ligações comuns da Área de Coordenação, porte de coordination_area_drawing.js do EBGeo
+   Web (areaRings, walkableRing, decorationUnitKm):
+   - gp: o polígono no plano local, com o anel externo no sentido HORÁRIO (force_polygon_cw),
+     para a normal à esquerda do caminhamento (rumo - 90) apontar sempre para FORA,
+     qualquer que seja o sentido em que a área foi desenhada;
+   - an e L: o anel externo e o seu comprimento;
+   - off: onde o anel começa no Web, o vértice mais ao NORTE (latitude máxima, empate pelo
+     mais a oeste), lido no anel em EPSG:4326 (a4), que tem a mesma ordem de vértices; o
+     desempate pela longitude vai na própria chave (lat - lon x 1e-9), uma etapa a menos.
+     Uma razão r ao longo da borda (texto, portão, escalão) é o ponto a off + r x L do
+     primeiro vértice do anel (@@POS@@ faz a volta);
+   - s: a unidade da decoração (dentes, elos, portões, minas), em metros do plano. Com a
+     Correção de Zoom desligada e âncora válida, @fs = 2^(z0 - z) a prende à tela.
+   - cod: o código, desconhecido vira a Área genérica (resolveAreaSymbol). */
+@@PROJ@@
+fs := @@FATOR_SOLO@@
+a4 := exterior_ring(force_polygon_cw(geometry_n(transform($geometry, @layer_crs, 'EPSG:4326'), 1)))
+ys := array_foreach(generate_series(1, num_points(@a4) - 1), y(point_n(@a4, @element)) - x(point_n(@a4, @element)) * 1e-9)
+s := min(200, max(0.001, min(200, max(0.001, CASE WHEN "symbol_size_km" > 0 THEN "symbol_size_km" ELSE 0.3 END)) * @fs)) * 1000 * @k
+gp := force_polygon_cw(geometry_n(@g, 1))
+an := exterior_ring(force_polygon_cw(geometry_n(@g, 1)))
+L := length(@an)
+i0 ::= array_find(@ys, array_max(@ys))
+off := CASE WHEN @i0 <= 0 THEN 0 ELSE length(make_line(array_foreach(generate_series(1, @i0 + 1), point_n(@an, @element)))) END
+cod ::= CASE WHEN "symbol_code" IN ('150000', '151100', '151199-01', '151203', '151000', '170999-01', '270800') THEN "symbol_code" ELSE '150000' END

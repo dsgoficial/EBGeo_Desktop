@@ -1,0 +1,12 @@
+/* Onde vai o bloco de texto e o escalão (buildAreaDecorations):
+   - pos: a posição gravada, ou a do tipo (externa no 170999-01, interna no 151203, sobre a
+     borda nos demais);
+   - rt: a razão na borda. NULL vale 0, como no Web (Number(null) é 0, finito): a área nova
+     nasce com o texto no vértice mais ao norte;
+   - ech: o escalão, só no Ponto Forte;
+   - br: com escalão e texto sobre a borda, o bloco vai para o lado oposto (rt + 0,5). */
+pos := CASE WHEN "text_position" IN ('borda', 'interna', 'externa') THEN "text_position"
+  WHEN @cod = '170999-01' THEN 'externa' WHEN @cod = '151203' THEN 'interna' ELSE 'borda' END
+rt := min(1, max(0, coalesce("text_ratio", 0)))
+ech ::= CASE WHEN @cod = '151203' THEN trim(coalesce("escalao", '')) ELSE '' END
+br ::= CASE WHEN @ech <> '' AND @pos = 'borda' THEN (@rt + 0.5) % 1 ELSE @rt END

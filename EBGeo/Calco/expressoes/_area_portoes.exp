@@ -1,0 +1,5 @@
+/* Os portões gravados (lista JSON de {ratio, nome}). A coluna JSON chega como TEXTO numa
+   camada aberta à mão e como LISTA na camada da árvore do importador; from_json de uma lista
+   dá nulo sem erro (o try não cai na reserva), então a lista é lida como está. */
+pj ::= CASE WHEN try(array_length("portoes"), -1) >= 0 THEN "portoes" ELSE try(from_json("portoes")) END
+gs := CASE WHEN coalesce("portoes_ocultos", false) THEN array() WHEN try(array_length(@pj), -1) > 0 THEN @pj ELSE array() END

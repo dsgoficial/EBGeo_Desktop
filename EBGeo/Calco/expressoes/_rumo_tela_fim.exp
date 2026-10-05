@@ -1,0 +1,8 @@
+/* Rumo NA TELA, em graus de 0 a 360, da linha chegando à ponta final (endAnchor 'end' do
+   Web), sempre no sentido do traçado: do último vértice que não repete a ponta até ela. */
+@@SEJA@@
+gm := transform($geometry, @layer_crs, coalesce(@map_crs, 'EPSG:3857'))
+i1 := array_last(array_filter(generate_series(1, num_points(@gm) - 1), distance(point_n(@gm, @element), point_n(@gm, -1)) > 0))
+@@EM@@
+CASE WHEN @i1 IS NOT NULL THEN (degrees(azimuth(point_n(@gm, @i1), point_n(@gm, -1))) % 360 + 360) % 360 END
+@@FIM@@

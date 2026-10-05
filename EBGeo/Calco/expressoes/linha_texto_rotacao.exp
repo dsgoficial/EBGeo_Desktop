@@ -1,0 +1,10 @@
+/* Rotação do texto, em graus no sentido horário (placeLineText e computeTextRotation do
+   Web): colado à linha, o texto corre ao longo dela e fica de pé na tela, virando 180 graus
+   quando o rumo na tela é 0 ou passa de 180; voltado ao norte, 0. */
+@@SEJA@@
+b := @@RUMO@@
+@@EM@@
+CASE WHEN coalesce("text_north_facing", false) OR @b IS NULL THEN 0
+     WHEN @b = 0 OR @b >= 180 THEN @b + 90
+     ELSE @b - 90 END
+@@FIM@@

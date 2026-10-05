@@ -4,7 +4,10 @@
 @@PROJ@@
 fs := @@FATOR_SOLO@@
 ech := coalesce("echelon", '')
-ij ::= try(from_json("symbol_instances"), "symbol_instances")
+/* a coluna JSON chega como lista na camada da árvore do importador e como texto na aberta à
+   mão; from_json de uma lista dá nulo SEM erro (o try não cai na reserva), então a lista é
+   lida como está (test_json_lista.py) */
+ij ::= CASE WHEN try(array_length("symbol_instances"), -1) >= 0 THEN "symbol_instances" ELSE try(from_json("symbol_instances")) END
 rs := array_foreach(CASE WHEN coalesce(try(array_length(@ij), 0), 0) > 0 THEN @ij ELSE array(map('ratio', 0.5)) END,
         with_variable('rr', try(to_real(@element['ratio']), NULL), CASE WHEN @rr IS NULL THEN 0.5 ELSE min(0.99, max(0.01, @rr)) END))
 ne ::= CASE WHEN length(@ech) > 0 THEN length(@ech) ELSE 3 END

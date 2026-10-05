@@ -83,6 +83,17 @@ def _sql_str(s):
     return "'" + str(s).replace("'", "''") + "'"
 
 
+def expr_json_mapa(coluna):
+    """
+    A coluna JSON como mapa, venha como mapa ou como texto. Quem grava decide (medido em
+    2026-10-04): o OGR do importador grava o JSON cru e a coluna volta como mapa; o QGIS, ao
+    gravar uma str, guarda um literal de string e ela volta como texto. to_json(texto) não serve
+    (devolve o texto citado) e from_json(mapa) dá nulo sem erro.
+    """
+    return ('CASE WHEN try(map_akeys("{c}")) IS NOT NULL THEN "{c}" ELSE try(from_json("{c}")) END'
+            .format(c=coluna))
+
+
 def _cor_alfa(expr_cor, expr_alfa, padrao='#3388ff'):
     """Expressão de cor com alfa 0..1 aplicado (o Web usa a opacidade só no preenchimento)."""
     return ("set_color_part(coalesce({c}, '{p}'), 'alpha', 255 * coalesce({a}, 1))"
@@ -332,7 +343,7 @@ def _estilo_processed_los(layer):
     sl.setPenCapStyle(_qt_cap('round'))
     sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p("coalesce(\"color\", '#00FF00')"))
     sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeWidth, _p(_mm(
-        "coalesce(to_real(map_get(json_to_map(to_json(\"parametros\")), 'width')), 4)")))
+        "coalesce(to_real(map_get({}, 'width')), 4)".format(expr_json_mapa('parametros')))))
     s.appendSymbolLayer(sl)
     s.setDataDefinedProperty(QgsSymbol.Property.Opacity, _p('100 * coalesce("opacity", 1)'))
     layer.setRenderer(QgsSingleSymbolRenderer(s))
@@ -523,7 +534,7 @@ def _estilo_imagem(layer):
 
 # ---------------------------------------------------------------- reserva dos tipos militares
 
-_LARGURA_PROPS = "to_real(map_get(json_to_map(to_json(\"props\")), 'width'))"
+_LARGURA_PROPS = "to_real(map_get({}, 'width'))".format(expr_json_mapa('props'))
 
 
 def estilo_simples(layer, tipo):

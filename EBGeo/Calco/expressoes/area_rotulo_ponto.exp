@@ -1,0 +1,30 @@
+/* Ponto do bloco de texto: sobre a borda (razão br), externo (âncora q), no centro (Ponto
+   Forte) ou no canto interno, o vértice mais a noroeste puxado 15 % para o centro. */
+@@SEJA@@
+@@AREA@@
+@@AREA_POSICAO@@
+@@EM@@
+transform(CASE
+  WHEN @pos = 'borda' THEN line_interpolate_point(@an, @@POS:A=@br * @L@@)
+  WHEN @pos = 'externa' THEN
+    @@SEJA@@
+    @@AREA_EXTERNA@@
+    @@EM@@
+    @q
+    @@FIM@@
+  WHEN @cod = '151203' THEN
+    @@SEJA@@
+    @@AREA_CENTRO@@
+    @@EM@@
+    @ct
+    @@FIM@@
+  ELSE
+    @@SEJA@@
+    @@AREA_CENTRO@@
+    vv := array_foreach(generate_series(1, num_points(@an) - 1), y(point_n(@an, @element)) - x(point_n(@an, @element)))
+    cn := point_n(@an, array_find(@vv, array_max(@vv)) + 1)
+    @@EM@@
+    make_point(x(@cn) + (x(@ct) - x(@cn)) * 0.15, y(@cn) + (y(@ct) - y(@cn)) * 0.15)
+    @@FIM@@
+END, @crs_loc, @layer_crs)
+@@FIM@@

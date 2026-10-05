@@ -12,7 +12,7 @@ from qgis.PyQt.QtWidgets import QFileDialog, QMenu
 
 from . import schema
 from .calco import Calco, calco_ativo, definir_calco_ativo
-from .ferramentas import FerramentaLinha, FerramentaPonto
+from .ferramentas import FerramentaLinha, FerramentaPoligono, FerramentaPonto
 
 ICONES = os.path.join(os.path.dirname(__file__), 'icones')
 
@@ -23,6 +23,7 @@ FERRAMENTAS = [
     ('engineering_symbol', 'simbolo_engenharia.svg', 'Símbolos de Engenharia'),
     ('boundary', 'linha_limite.svg', 'Linha de Limite'),
     ('coordination_line', 'linha_coordenacao.svg', 'Linha de Coordenação'),
+    ('coordination_area', 'area_coordenacao.svg', 'Área de Coordenação'),  # sem atalho, como no Web
     ('arrow', 'seta.svg', 'Seta (manobra / eixo)'),
     ('occupied_front', 'frente_ocupada.svg', 'Frente Ocupada'),
     ('magnetic_declination', 'declinacao.svg', 'Declinação Magnética'),
@@ -68,6 +69,8 @@ class GerenciadorCalco:
             grupo.addAction(a)
             if schema.TIPOS[tipo]['geometria'] == 'Point':
                 ft = FerramentaPonto(canvas, tipo, self.iface, preparar_atributos=self._preparar_ponto)
+            elif 'Polygon' in schema.TIPOS[tipo]['geometria']:
+                ft = FerramentaPoligono(canvas, tipo, self.iface, preparar_atributos=self._preparar_area)
             else:
                 ft = FerramentaLinha(canvas, tipo, self.iface)
             ft.setAction(a)
@@ -183,6 +186,14 @@ class GerenciadorCalco:
                 attrs.update({m[k]: v for k, v in web.items() if k in m})
             except Exception as e:
                 self.iface.messageBar().pushWarning('EBGeo', 'Declinação não calculada: {}'.format(e))
+        return attrs
+
+    def _preparar_area(self, tipo, attrs):
+        """A área nova nasce no último tipo escolhido no painel, com a aparência dele."""
+        from .estilos_area import CHAVE_ULTIMO_TIPO, troca_de_simbolo
+        ultimo = QgsSettings().value(CHAVE_ULTIMO_TIPO, '')
+        if ultimo and ultimo != attrs.get('symbol_code'):
+            attrs.update(troca_de_simbolo(attrs, ultimo))
         return attrs
 
     def _feicao_criada(self, layer, tipo, ebgeo_id):

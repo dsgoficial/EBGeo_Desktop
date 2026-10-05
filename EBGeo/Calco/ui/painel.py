@@ -5,6 +5,7 @@ selecionada na camada ativa. Cada mudança grava na camada (no buffer de ediçã
 se a camada estiver em edição; senão, direto) e, nos símbolos pontuais, regera o SVG.
 """
 import json
+import math
 
 from qgis.core import QgsFeatureRequest, QgsProject, QgsVectorLayer, QgsGeometry
 from qgis.gui import QgsColorButton
@@ -12,26 +13,25 @@ from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QCheckBox, QComboBox, QDockWidget, QDoubleSpinBox, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from .. import schema
 from ..calco import tipo_da_camada
 
-ESCALOES_LIMITE = ['XXXXXX', 'XXXXX', 'XXXX', 'XXX', 'XX', 'X', 'III', 'II', 'I', 'ooo', 'oo', 'o']
+# Ø (Equipe/Guarnição) e ++ (Valor indeterminado) entraram em 2026-10-04 (MD33-C-01 A.3.5.7);
+# o XXXXX fica por decisão do chefe.
+ESCALOES_LIMITE = ['XXXXXX', 'XXXXX', 'XXXX', 'XXX', 'XX', 'X', 'III', 'II', 'I', 'ooo', 'oo', 'o', 'Ø', '++']
 
-SIMBOLOS_LINHA = [
-    ('290100', 'Linha de obstáculos'),
-    ('290199', 'Linha de barreiras'),
-    ('290202', 'Fosso anticarro'),
-    ('290302', 'Cerca de arame'),
-    ('290303', 'Cerca de arame dupla'),
-    ('290307', 'Concertina'),
-    ('290308', 'Concertina dupla'),
-    ('290309', 'Concertina tripla'),
-    ('290999-01', 'Sapa'),
-    ('290999-02', 'Trincheira'),
-]
+# Escolhas de desenho que valem só para o tipo que as tem (desenhos-parametricos.js do Web).
+CAMPOS_MINA = ('mina1', 'mina2', 'mina3')
+ANGULO_SECUNDARIO_PADRAO = -45.0
+
+# Linha de Coordenação: os campos que só aparecem quando o símbolo os pede (textFields e
+# secondColor do catálogo do Web, CATALOGO_LINHA em estilos_taticos.py).
+CAMPOS_TEXTO_LINHA = ('tipo', 'identificacao', 'gdh_ini', 'gdh_fim', 'numero_concentracao')
+AVISO_LADO_INIMIGO = ('O lado inimigo fica à esquerda do sentido do traçado.\n'
+                      'Use "Inverter sentido" para trocar os lados.')
 
 STATUS_NUCLEO = [('ocupado', 'Ocupado'), ('preparado', 'Preparado'),
                  ('preparado-nao-ocupado', 'Preparado, não ocupado')]
@@ -80,10 +80,20 @@ PAINEIS = {
                  ('text_size', 'Tamanho do texto', ('num', 8, 80, 1, 0)),
                  ('text_distance_ratio', 'Distância do texto', ('num', 0.1, 3.0, 0.1, 1)),
                  ('text_north_facing', 'Texto sempre para o norte', ('bool',))] + _TRACO + _ZOOM,
-    'coordination_line': [('symbol_code', 'Símbolo', ('combo', SIMBOLOS_LINHA)),
+    # A lista completa; linhas_linha_coordenacao tira o que o símbolo não usa.
+    'coordination_line': [('symbol_code', 'Símbolo', ('simbolo_linha',)),
                           ('symbol_size_km', 'Tamanho do símbolo (m)', ('km_em_m', 10, 50000, 5)),
-                          ('symbol_spacing_km', 'Distância entre símbolos (m)', ('km_em_m', 10, 500000, 5))]
-    + _TRACO + _ZOOM,
+                          ('symbol_spacing_km', 'Distância entre símbolos (m)', ('km_em_m', 10, 500000, 5)),
+                          ('tipo', 'Tipo', ('texto',)),
+                          ('identificacao', 'Identificação', ('texto',)),
+                          ('gdh_ini', 'GDH Início', ('texto',)),
+                          ('gdh_fim', 'GDH Fim', ('texto',)),
+                          ('numero_concentracao', 'Nº Concentração', ('texto',)),
+                          ('text_size', 'Tamanho do texto (px)', ('num', 8, 80, 1, 0)),
+                          ('text_north_facing', 'Texto sempre para o norte', ('bool',)),
+                          ('color', 'Cor', ('cor',)),
+                          ('enemy_color', 'Cor do lado inimigo', ('cor',))]
+    + _TRACO[1:] + _ZOOM,
     'arrow': [('width_m', 'Largura (m)', ('num', 10, 10000, 10, 0)),
               ('head_length_ratio', 'Comprimento da ponta', ('num', 0.2, 5, 0.1, 1)),
               ('show_arrow_head', 'Mostrar ponta', ('bool',)),
@@ -96,6 +106,7 @@ PAINEIS = {
               ('line_width', 'Espessura da borda (px)', ('num', 1, 10, 1, 0))],
     'occupied_front': list(_TRACO),
 }
+PAINEIS['coordination_area'] = []  # o formulário depende do tipo: ui/painel_area.linhas_area
 
 
 class PainelCalco(QDockWidget):
@@ -109,6 +120,8 @@ class PainelCalco(QDockWidget):
         self.fid = None
         self._carregando = False
         self.widgets = {}
+        self._setor = None      # [principal, secundária] do Setor de Tiro, em azimute
+        self._abertura = None   # QLabel "Abertura do setor"
         base = QWidget()
         self.vbox = QVBoxLayout(base)
         self.titulo = QLabel('Selecione uma feição do calco.')
@@ -172,6 +185,8 @@ class PainelCalco(QDockWidget):
     def _limpar(self):
         self.fid = None
         self.widgets = {}
+        self._setor = None
+        self._abertura = None
         while self.form.rowCount():
             self.form.removeRow(0)
         while self.acoes.count():
@@ -183,12 +198,29 @@ class PainelCalco(QDockWidget):
     def _montar(self, feat):
         self._carregando = True
         try:
-            for col, rotulo, spec in _COMUNS + PAINEIS[self.tipo]:
+            linhas = PAINEIS[self.tipo]
+            if self.tipo == 'coordination_measure':
+                linhas = linhas_medida(feat['point_code'])
+                if self.layer.fields().indexOf('angulo_secundario') >= 0:
+                    self._setor = list(direcoes_do_setor(feat['rotation'], feat['angulo_secundario']))
+            elif self.tipo == 'coordination_line':
+                linhas = linhas_linha_coordenacao(feat['symbol_code'])
+            elif self.tipo == 'coordination_area':
+                from .painel_area import linhas_area
+                linhas = linhas_area(feat)
+            for col, rotulo, spec in _COMUNS + linhas:
                 if self.layer.fields().indexOf(col) < 0:
                     continue
                 w = self._widget(col, spec, feat[col])
                 if w is not None:
                     self.form.addRow(rotulo, w)
+                    if spec[0] == 'dir_secundaria':
+                        self._abertura = QLabel(texto_abertura(*self._setor))
+                        self.form.addRow('', self._abertura)
+                    if spec[0] == 'simbolo_linha' and segunda_cor_linha(feat['symbol_code']):
+                        aviso = QLabel(AVISO_LADO_INIMIGO)
+                        aviso.setWordWrap(True)
+                        self.form.addRow('', aviso)
             if self.tipo in ('coordination_line', 'boundary', 'arrow'):
                 b = QPushButton('Inverter sentido')
                 b.clicked.connect(self._inverter)
@@ -245,6 +277,25 @@ class PainelCalco(QDockWidget):
                 i = w.count() - 1
             w.setCurrentIndex(max(i, 0))
             w.currentIndexChanged.connect(lambda _i, c=col, w=w: self._mudou(c, w.currentData()))
+        elif kind == 'simbolo_linha':
+            # Combo agrupado como o do Web: um cabeçalho desabilitado por grupo.
+            w = QComboBox()
+            for grupo, opcoes in opcoes_simbolo_linha():
+                w.addItem(grupo, None)
+                cab = w.model().item(w.count() - 1)
+                cab.setEnabled(False)
+                fonte = cab.font()
+                fonte.setBold(True)
+                cab.setFont(fonte)
+                for v, rot in opcoes:
+                    w.addItem(rot, v)
+            alvo = str(valor) if not nulo and str(valor) else None
+            i = w.findData(alvo) if alvo else -1
+            if i < 0 and alvo:
+                w.addItem(alvo, alvo)
+                i = w.count() - 1
+            w.setCurrentIndex(i if i >= 0 else w.findData(SIMBOLO_LINHA_PADRAO))
+            w.currentIndexChanged.connect(lambda _i, w=w: self._simbolo_linha_mudou(w.currentData()))
         elif kind == 'instancias':
             try:
                 inst = json.loads(valor) if isinstance(valor, str) else (valor or [])
@@ -282,10 +333,29 @@ class PainelCalco(QDockWidget):
                 w.addItem(rotulo, codigo)
             i = w.findData(None if nulo else str(valor))
             if i < 0 and not nulo:
-                w.addItem(str(valor), str(valor))
+                # Código fora do seletor (a Área minada pontual, 270800): mostra o nome e segue desenhando.
+                e = entrada_medida(str(valor))
+                w.addItem('{}: {}'.format(e.get('categoria'), e.get('nome')) if e else str(valor), str(valor))
                 i = w.count() - 1
             w.setCurrentIndex(max(i, 0))
             w.currentIndexChanged.connect(lambda _i, w=w: self._medida_mudou(w.currentData()))
+        elif kind == 'azimute':
+            w = _spin_azimute(0 if nulo else valor)
+            w.valueChanged.connect(lambda v, c=col: self._mudou(c, float(v)))
+        elif kind in ('dir_principal', 'dir_secundaria'):
+            i = 0 if kind == 'dir_principal' else 1
+            w = _spin_azimute(self._setor[i])
+            w.valueChanged.connect(lambda v, i=i: self._setor_mudou(i, v))
+        elif kind == 'mina':
+            d = definicao_campo(col)
+            w = QComboBox()
+            rotulos = d.get('optionLabels') or {}
+            for v in d.get('options') or []:
+                w.addItem(rotulos.get(v, v), v)
+            # Sem valor gravado, mostra o desenho padrão (antipessoal) sem gravá-lo.
+            i = w.findData(d.get('defaultValue') if nulo or not str(valor) else str(valor))
+            w.setCurrentIndex(max(i, 0))
+            w.currentIndexChanged.connect(lambda _i, c=col, w=w: self._mudou(c, w.currentData()))
         elif kind == 'escalao_medida':
             feat = self.layer.getFeature(self.fid)
             prefixo = prefixo_familia(feat['point_code'])
@@ -299,6 +369,11 @@ class PainelCalco(QDockWidget):
                 i = w.findData(None if nulo else str(valor))
                 w.setCurrentIndex(max(i, 0))
                 w.currentIndexChanged.connect(lambda _i, c=col, w=w: self._mudou(c, w.currentData()))
+        elif kind.startswith('area_'):
+            from .painel_area import widget_area
+            w = widget_area(self, col, spec, valor, nulo)
+            if w is None:
+                return None
         else:
             return None
         self.widgets[col] = w
@@ -321,6 +396,13 @@ class PainelCalco(QDockWidget):
         feat = self.layer.getFeature(self.fid)
         prefixo = prefixo_familia(codigo)
         mud = {'point_code': codigo}
+        # As escolhas de desenho de um tipo (minas, seta secundária) não valem para outro.
+        for c in CAMPOS_MINA + ('angulo_secundario',):
+            if self.layer.fields().indexOf(c) >= 0:
+                mud[c] = None
+        cor = cor_ao_trocar_medida(feat['point_code'], codigo, feat['fill_color'])
+        if cor is not False:
+            mud['fill_color'] = cor
         if prefixo:
             atual = str(feat['echelon_code'] or '')
             nn = atual.rsplit('_', 1)[-1] if atual[-2:].isdigit() else _escalao_padrao()
@@ -329,6 +411,42 @@ class PainelCalco(QDockWidget):
         self._gravar_pendentes()
         # remontar fora do sinal: apagar o combo dentro do próprio currentIndexChanged derruba o QGIS
         QTimer.singleShot(0, self._selecao_mudou)
+
+    def _simbolo_linha_mudou(self, codigo):
+        """
+        Troca do símbolo da Linha de Coordenação: a linha que ainda veste a cor padrão do
+        símbolo anterior passa à do novo (obstáculo verde, manobra e fogos pretos); cor
+        escolhida não muda. O painel se remonta, porque os campos seguem o símbolo.
+        """
+        if self._carregando or self.fid is None or not codigo:
+            return
+        feat = self.layer.getFeature(self.fid)
+        mud = {'symbol_code': codigo}
+        cor = cor_ao_trocar_simbolo_linha(feat['symbol_code'], codigo, feat['color'])
+        if cor:
+            mud['color'] = cor
+        self._pendentes.update(mud)
+        self._gravar_pendentes()
+        # remontar fora do sinal (ver _medida_mudou)
+        QTimer.singleShot(0, self._selecao_mudou)
+
+    def _setor_mudou(self, indice, valor):
+        """
+        Direções do Setor de Tiro, lidas e escritas como AZIMUTES; grava a principal em rotation e
+        a secundária RELATIVA a ela em angulo_secundario. Girar a principal deixa a secundária no
+        mesmo azimute (decisão do chefe, 2026-10-04): as duas colunas mudam e o relativo compensa.
+        O estado fica no painel e cada gravação sai dele, como no Web.
+        """
+        if self._carregando or self.fid is None or self._setor is None:
+            return
+        self._setor[indice] = normalizar_azimute(valor)
+        principal, secundaria = self._setor
+        self._pendentes['angulo_secundario'] = normalizar_relativo(secundaria - principal)
+        if indice == 0:
+            self._pendentes['rotation'] = principal
+        if self._abertura is not None:
+            self._abertura.setText(texto_abertura(principal, secundaria))
+        self._gravar_timer.start()
 
     def _construtor(self, editor):
         feat = self.layer.getFeature(self.fid)
@@ -411,6 +529,70 @@ class PainelCalco(QDockWidget):
         QTimer.singleShot(0, self._selecao_mudou)
 
 
+# ---------- Linha de Coordenação ----------
+SIMBOLO_LINHA_PADRAO = '290199'
+
+
+def _simbolo_linha(codigo):
+    from .. import estilos_taticos as et
+    return et.CATALOGO_LINHA.get(str(codigo or ''), et.CATALOGO_LINHA[et.SIMBOLO_PADRAO])
+
+
+def opcoes_simbolo_linha():
+    """[(grupo, [(código, 'Nome (designação)')])] na ordem do combo do Web (symbolOptionGroups)."""
+    from .. import estilos_taticos as et
+    return [(g, [(c, '{} ({})'.format(s['nome'], et.designacao_linha(c)))
+                 for c, s in et.CATALOGO_LINHA.items() if s['grupo'] == g])
+            for g in et.GRUPOS_LINHA]
+
+
+def segunda_cor_linha(codigo):
+    """A coluna da segunda cor do símbolo (enemy_color na 140200), ou None."""
+    return _simbolo_linha(codigo).get('segunda_cor')
+
+
+def linhas_linha_coordenacao(codigo):
+    """
+    As linhas do painel da Linha de Coordenação para o símbolo `codigo`, como o painel do Web:
+    os textos só nos símbolos que os têm (e com eles o tamanho e o norte), a cor inimiga só na
+    140200, o tamanho escondido na 140000 (que não tem glifo) e a distância entre símbolos
+    escondida nos contínuos e nos fixos, que não a usam. Na 140200 a cor é a do lado amigo.
+    """
+    sim = _simbolo_linha(codigo)
+    textos = sim.get('textos') or []
+    linhas = []
+    for col, rotulo, spec in PAINEIS['coordination_line']:
+        if col in CAMPOS_TEXTO_LINHA and col not in textos:
+            continue
+        if col in ('text_size', 'text_north_facing') and not textos:
+            continue
+        if col == 'enemy_color' and sim.get('segunda_cor') != 'enemy_color':
+            continue
+        if col == 'symbol_size_km' and sim['glifo'] == 'none':
+            continue
+        if col == 'symbol_spacing_km' and (sim.get('fixo') or sim.get('continuo')):
+            continue
+        if col == 'color' and sim.get('segunda_cor'):
+            rotulo = 'Cor do lado amigo'
+        linhas.append((col, rotulo, spec))
+    return linhas
+
+
+def cor_ao_trocar_simbolo_linha(anterior, novo, atual):
+    """
+    A cor nova ao trocar o símbolo, ou None para manter: só troca a linha que ainda veste a
+    cor padrão do símbolo anterior (código desconhecido conta como a 290199, a do Web).
+    """
+    def igual(a, b):
+        return isinstance(a, str) and isinstance(b, str) and a.lower() == b.lower()
+    vazio = atual is None or (hasattr(atual, 'isNull') and atual.isNull())
+    atual = None if vazio else str(atual)
+    padrao_novo = _simbolo_linha(novo)['cor']
+    if igual(atual, _simbolo_linha(anterior)['cor']) and not igual(atual, padrao_novo):
+        return padrao_novo
+    return None
+
+
 def _rotulo_engenharia(codigo):
     try:
         from .construtor_sidc import catalogos
@@ -445,6 +627,101 @@ def opcoes_medida():
     for item in c['lista']:
         ops.append((item['code'], '{}: {}'.format(item['category'], item['label'])))
     return ops
+
+
+def entrada_medida(codigo):
+    """Entrada do catálogo (porCodigo) da medida, ou None (famílias de escalão, código desconhecido)."""
+    c = _catalogo_medida()
+    return ((c or {}).get('porCodigo') or {}).get(str(codigo or ''))
+
+
+def definicao_campo(campo):
+    c = _catalogo_medida()
+    return ((c or {}).get('definicoesCampos') or {}).get(campo) or {}
+
+
+def linhas_medida(codigo):
+    """
+    As linhas do painel da Medida de Coordenação para o tipo `codigo`. A medida com direção (Base
+    de fogos) troca a Rotação por um azimute de 1 grau com o rótulo do catálogo; o Setor de Tiro
+    troca por Direção principal e Direção secundária; o campo minado (270701) ganha as três minas.
+    As demais ficam como sempre.
+    """
+    e = entrada_medida(codigo) or {}
+    linhas = []
+    for col, rotulo, spec in PAINEIS['coordination_measure']:
+        if col == 'rotation' and e.get('setorDeTiro'):
+            linhas += [('rotation', 'Direção principal', ('dir_principal',)),
+                       ('angulo_secundario', 'Direção secundária', ('dir_secundaria',))]
+            continue
+        if col == 'rotation' and e.get('direcao'):
+            linhas.append(('rotation', e['direcao'].get('rotulo') or 'Direção', ('azimute',)))
+            continue
+        linhas.append((col, rotulo, spec))
+        if col == 'altitude':
+            for m in CAMPOS_MINA:
+                if m in (e.get('campos') or []):
+                    linhas.append((m, definicao_campo(m).get('label') or m, ('mina',)))
+    return linhas
+
+
+def _numero_finito(v):
+    if v is None or (hasattr(v, 'isNull') and v.isNull()):
+        return False
+    try:
+        return math.isfinite(float(v))
+    except (TypeError, ValueError):
+        return False
+
+
+def normalizar_azimute(graus):
+    """Ângulo em [0, 360), como se lê um azimute (normalizarAzimute do Web)."""
+    return float(graus) % 360.0 + 0.0
+
+
+def normalizar_relativo(graus):
+    """Ângulo em [-180, 180) (normalizarRelativo do Web)."""
+    return (float(graus) + 180.0) % 360.0 - 180.0 + 0.0
+
+
+def direcoes_do_setor(rotacao, angulo_secundario):
+    """(principal, secundária) em azimute; sem valor, a secundária fica a -45 graus da principal."""
+    principal = normalizar_azimute(rotacao if _numero_finito(rotacao) else 0.0)
+    relativo = normalizar_relativo(angulo_secundario if _numero_finito(angulo_secundario) else ANGULO_SECUNDARIO_PADRAO)
+    return principal, normalizar_azimute(principal + relativo)
+
+
+def texto_abertura(principal, secundaria):
+    return 'Abertura do setor: {}°'.format(int(math.floor(abs(normalizar_relativo(secundaria - principal)) + 0.5)))
+
+
+def cor_ao_trocar_medida(anterior, novo, atual):
+    """
+    Cor da medida que troca de tipo: o tipo com cor própria (as destruições nascem verdes,
+    MD33-C-01 7.4.1) a impõe, salvo se o operador já escolheu outra; sair dele devolve a cor
+    padrão (nula). Devolve False quando a cor fica como está (_aplicarCorPadraoDoTipo do Web).
+    """
+    def igual(a, b):
+        return (a or '').lower() == (b or '').lower()
+    padrao_anterior = (entrada_medida(anterior) or {}).get('corPadrao')
+    padrao_novo = (entrada_medida(novo) or {}).get('corPadrao')
+    vazio = atual is None or (hasattr(atual, 'isNull') and atual.isNull()) or atual == ''
+    atual = None if vazio else str(atual)
+    if atual is not None and not igual(atual, padrao_anterior):
+        return False
+    if igual(atual, padrao_novo):
+        return False
+    return padrao_novo
+
+
+def _spin_azimute(graus):
+    w = QSpinBox()
+    w.setRange(0, 359)
+    w.setSingleStep(1)
+    w.setWrapping(True)
+    w.setSuffix('°')
+    w.setValue(int(math.floor(normalizar_azimute(graus if _numero_finito(graus) else 0.0) + 0.5)) % 360)
+    return w
 
 
 def prefixo_familia(codigo):
@@ -483,7 +760,8 @@ def gravar_atributos(layer, fid, mudancas):
         layer.startEditing()
     if estava:
         layer.beginEditCommand('Calco: propriedades')
-    for col, val in mudancas.items():
+    # coluna JSON recebe o objeto: o texto viraria string JSON escapada no GeoPackage
+    for col, val in schema.atributos_para_qgis(tipo_da_camada(layer), mudancas).items():
         i = layer.fields().indexOf(col)
         if i >= 0:
             layer.changeAttributeValue(fid, i, val)

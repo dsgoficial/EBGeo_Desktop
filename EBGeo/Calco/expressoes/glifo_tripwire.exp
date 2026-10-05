@@ -1,0 +1,6 @@
+/* 290500 Arame de tração (buildTripwire de add_coordination_line_geometry.js): haste que
+   cruza a linha, barra paralela à esquerda (rumo - 90) e gancho no pé da haste virado
+   para a frente. Em unidades de @h (metade da barra): haste de 1,6 acima a 1,25 abaixo,
+   barra a 1,15 acima, gancho até 0,65 à frente na profundidade 1,6 (medidas do MD33-C-01,
+   p. 193, do Web). @@HASTE@@ e @@BARRA@@ são listas de pontos montadas pelo compositor. */
+collect_geometries(make_line(@@HASTE@@), make_line(@@BARRA@@))

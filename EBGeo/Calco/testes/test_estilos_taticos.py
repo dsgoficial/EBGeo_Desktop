@@ -254,7 +254,10 @@ def comprimento_partes_km(lista):
 
 # Traços fora do eixo por glifo e trilhos, para contar glifos a partir da geometria.
 TRACOS_POR_GLIFO = {'peak': 1, 'diamond': 1, 'asterisk': 2, 'double-asterisk': 4, 'coil': 1,
-                    'coil-double': 1, 'coil-triple': 1, 'teeth': 1, 'zigzag': 1}
+                    'coil-double': 1, 'coil-triple': 1, 'teeth': 1, 'zigzag': 1, 'tripwire': 2}
+# Os símbolos que esta régua conta (glifo repetido ou dente). A 140000, a 140200 e a 240701 do
+# capítulo VII não têm glifo repetido: a prova delas está em test_linha_coordenacao_vii.py.
+CATALOGO_GLIFOS = {c: s for c, s in et.CATALOGO_LINHA.items() if s['glifo'] in TRACOS_POR_GLIFO}
 
 
 def contar_glifos(codigo, g, eixo):
@@ -328,7 +331,7 @@ class TestLinhaCoordenacao(unittest.TestCase):
         return dict(vl=vl, f=f, g=g, eixo=eixo, L=L, esperado=esperado, obtido=obtido, puro=puro, passo=passo)
 
     def test_contagem_tres_casos(self):
-        for codigo, sim in et.CATALOGO_LINHA.items():
+        for codigo, sim in CATALOGO_GLIFOS.items():
             for nome, coords in (('comum', LINHA_COMUM), ('curta', LINHA_CURTA), ('longa', LINHA_LONGA)):
                 with self.subTest(codigo=codigo, caso=nome):
                     r = self._caso(codigo, coords, 0.5, 1.5)
@@ -348,7 +351,7 @@ class TestLinhaCoordenacao(unittest.TestCase):
                         codigo, nome, r['L'], r['esperado'], r['obtido'], r['puro']))
 
     def test_eixo_interrompido_tem_vaos(self):
-        for codigo, sim in et.CATALOGO_LINHA.items():
+        for codigo, sim in CATALOGO_GLIFOS.items():
             if sim.get('continuo'):
                 continue
             with self.subTest(codigo=codigo):
@@ -726,7 +729,7 @@ class TestContraWeb(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.casos, cls.feicoes = [], []
-        for codigo in et.CATALOGO_LINHA:
+        for codigo in CATALOGO_GLIFOS:
             for nome, coords in (('comum', LINHA_COMUM), ('longa', LINHA_LONGA)):
                 props = dict(symbol_code=codigo, symbol_size=0.5, symbol_spacing=1.5)
                 cls.casos.append(dict(tipo='coordination_line', coords=coords, props=props))
@@ -735,7 +738,8 @@ class TestContraWeb(unittest.TestCase):
                                                 symbol_size_km=0.5, symbol_spacing_km=1.5)))
         reta = [(-47.95, -15.80), (-47.85, -15.82), (-47.76, -15.80)]
         for ech, inst in (('XX', [{'ratio': 0.3, 'showLabels': True}, {'ratio': 0.7}]), ('oII', [{'ratio': 0.5}]),
-                          ('XXXX', [{'ratio': 0.4}])):
+                          ('XXXX', [{'ratio': 0.4}]), ('Ø', [{'ratio': 0.5}, {'ratio': 0.8}]),
+                          ('++', [{'ratio': 0.35}])):
             props = dict(echelon=ech, symbol_size=1.0, symbol_instances=inst, text_top='A', text_bottom='B')
             cls.casos.append(dict(tipo='boundary', coords=reta, props=props))
             cls.feicoes.append(('boundary', 'limite ' + ech, nova_feicao(

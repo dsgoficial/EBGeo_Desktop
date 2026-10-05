@@ -1,0 +1,11 @@
+/* Rumo NA TELA, em graus de 0 a 360, da linha saindo da ponta inicial (endAnchor 'start'
+   do Web): do primeiro vértice ao primeiro que não o repete, medido no SRC do mapa, que é
+   o plano da tela (o Web mede no terreno e desenha em Mercator, que conserva o ângulo).
+   Nulo quando todos os vértices repetem o primeiro. Sem @map_crs (um QgsMapSettings montado
+   sem o escopo do mapa; o canvas e o layout o trazem), mede em EPSG:3857. */
+@@SEJA@@
+gm := transform($geometry, @layer_crs, coalesce(@map_crs, 'EPSG:3857'))
+i0 := array_first(array_filter(generate_series(2, num_points(@gm)), distance(point_n(@gm, @element), point_n(@gm, 1)) > 0))
+@@EM@@
+CASE WHEN @i0 IS NOT NULL THEN (degrees(azimuth(point_n(@gm, 1), point_n(@gm, @i0))) % 360 + 360) % 360 END
+@@FIM@@

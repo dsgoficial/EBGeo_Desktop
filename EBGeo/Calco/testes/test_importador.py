@@ -360,7 +360,8 @@ class TestCampoACampo(unittest.TestCase):
                     cls.primeira[tipo] = (nome, lst[0])
 
     def test_uma_feicao_por_tipo(self):
-        presentes = [t for t in schema.TIPOS if t != 'engineering_symbol']
+        # a fixture 03 (esquema 2.4) é anterior à Engenharia e à Área de Coordenação
+        presentes = [t for t in schema.TIPOS if t not in ('engineering_symbol', 'coordination_area')]
         self.assertEqual(sorted(self.primeira), sorted(presentes))
         for tipo, (mapa, ft) in self.primeira.items():
             with self.subTest(tipo=tipo):

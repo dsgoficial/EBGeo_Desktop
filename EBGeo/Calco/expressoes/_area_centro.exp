@@ -1,0 +1,8 @@
+/* Ponto bem dentro da área (interiorPoint): o meio do trecho interno da vertical que passa
+   pelo meio da caixa envolvente, se estiver dentro e a pelo menos metade da folga do polo
+   de inacessibilidade; senão o próprio polo. É onde vão as minas e o nome do Ponto Forte. */
+pl := pole_of_inaccessibility(@gp, (x_max(@an) - x_min(@an) + y_max(@an) - y_min(@an)) / 8000)
+xm ::= (x_min(@an) + x_max(@an)) / 2
+vi := intersection(make_line(make_point(@xm, y_min(@an) - 1), make_point(@xm, y_max(@an) + 1)), @gp)
+md ::= make_point(@xm, (y_min(@vi) + y_max(@vi)) / 2)
+ct := CASE WHEN NOT is_empty_or_null(@vi) AND within(@md, @gp) AND distance(@md, boundary(@gp)) >= 0.5 * distance(@pl, boundary(@gp)) THEN @md ELSE @pl END

@@ -1,0 +1,23 @@
+/* 170999-01 Volume de aproximação de base: cada portão é um par de traços de 1,6 s para fora,
+   a 0,9 s de cada lado do ponto do portão na borda. */
+@@SEJA@@
+@@AREA@@
+@@AREA_PORTOES@@
+@@EM@@
+CASE WHEN array_length(@gs) > 0 THEN
+  transform(collect_geometries(array_filter(array_foreach(@gs,
+    @@SEJA@@
+    rg := try(to_real(@element['ratio']), NULL)
+    @@EM@@
+    CASE WHEN @rg IS NOT NULL THEN
+      collect_geometries(array_foreach(array(-1, 1),
+        @@SEJA@@
+        dd := @@POS:A=min(1, max(0, @rg)) * @L + @element * 0.9 * @s@@
+        @@EM@@
+        with_variable('p', line_interpolate_point(@an, @dd),
+          make_line(@p, project(@p, 1.6 * @s, @@ANG:A=@dd@@ - pi() / 2)))
+        @@FIM@@))
+    END
+    @@FIM@@), @element IS NOT NULL)), @crs_loc, @layer_crs)
+END
+@@FIM@@
