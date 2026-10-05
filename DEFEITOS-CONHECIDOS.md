@@ -58,6 +58,24 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 
 **Conserto sugerido.** Encerrar sem `exitQgis` e sair pelo `sys.exit` do resultado, como as suítes do Calco.
 
+## K8 Formas com hachura ligada e tipo vazio não desenham a hachura
+
+**Sintoma.** Polígono, círculo, elipse, retângulo ou setor vindo do Web com `hatchEnabled` verdadeiro e `hatchType` ausente ou nulo: o Web desenha hachura diagonal, o Desktop não desenha nenhuma.
+
+**Onde.** `EBGeo/Calco/estilos_formas.py` (as camadas de padrão só ligam com um tipo desenhado) e as condições dos campos de hachura em `EBGeo/Calco/formulario/tipos/comuns.py`. A auditoria `EBGeo/Calco/testes/test_chaves_ausentes.py` mantém o caso na lista `PENDENTES`.
+
+**Decisão do chefe (2026-10-05).** O Desktop passa a desenhar como o Web: tipo vazio com hachura ligada desenha diagonal, e os campos de espaçamento e espessura aparecem nesse caso.
+
+**Conserto sugerido.** Tratar o tipo nulo como diagonal na expressão das camadas de padrão e na condição do formulário e do dock; tirar o caso de `PENDENTES` e conferir pela auditoria.
+
+## K9 Chaves que o Web desenha e o Desktop ignora
+
+**Sintoma.** Mudar o valor de 34 chaves muda o desenho no Web e não muda no Desktop. Exemplos: opacidade da Linha de Coordenação, da Frente Ocupada, da imagem e do ponto; textos da Linha de Coordenação; os campos de zoom do rótulo; `lineOpacity` da Seta. No sentido oposto, 3 chaves só mudam o Desktop: `width` da imagem e `visivel` das entradas de linha de visada e de visibilidade.
+
+**Onde.** Medido pela auditoria `EBGeo/Calco/testes/test_chaves_ausentes.py` (com `web_assinatura.mjs`), que imprime a lista completa por tipo.
+
+**Conserto sugerido.** Levar cada chave ao estilo nativo do tipo, uma família por vez, com a auditoria como régua.
+
 ## Menores
 
 - **Fator de 512 px do zoom:** o tamanho com correção de zoom usa a convenção do MapLibre (78271,517 m/px no zoom 0, tiles de 512 px) e ainda não foi medido lado a lado com a tela do Web.
@@ -66,4 +84,6 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 - **Âncora do Naval (modificador 1, código 46):** vem do milsymbol pelo motor do Web; as pontas saem em seta cheia e o desenho fica cerca de 21 % mais largo que o recorte do MD33-C-01.
 - **Rótulos de 1 ou 2 letras no setor 1 de Unidades:** cerca de 6 % menores que no manual, pelo leiaute do milsymbol, igual no Web.
 - **Texto externo da Área num polígono côncavo:** a linha de chamada pode cruzar o braço do U (`EBGeo/Calco/expressoes/_area_externa.exp`), mesmo algoritmo do Web.
+- **Auditoria de chaves em paralelo:** `EBGeo/Calco/testes/test_chaves_ausentes.py` parou em silêncio logo depois de carregar quando rodou junto com outras suítes; sozinho passa (cerca de 10 min). Causa não achada.
+- **Ponto com zoom de referência vazio:** o Web o desenha no teto de 500 px (defeito do Web, a corrigir lá por decisão do chefe); o Desktop não escala, como o rótulo.
 - **`icons/dsg.png`:** o ícone antigo segue listado no `resources.qrc` compilado; sair exige recompilar os recursos.
