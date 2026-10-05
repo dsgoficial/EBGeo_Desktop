@@ -24,6 +24,7 @@ from qgis.core import (QgsProcessing,
                         )
 import math
 import processing
+from ..Visada.refracao import K_OPTICO, queda
 
 class LineOfSight(QgsProcessingAlgorithm):
     DEM_RASTER = "DemRaster"
@@ -167,7 +168,7 @@ class LineOfSight(QgsProcessingAlgorithm):
             if z_obs is None or z_tgt is None:
                 if feedback:
                     feedback.pushWarning(
-                        "Vértice sem valor de elevação (NoData) — segmento ignorado."
+                        "Vértice sem valor de elevação (NoData): segmento ignorado."
                     )
                 continue
 
@@ -242,11 +243,8 @@ class LineOfSight(QgsProcessingAlgorithm):
             return None
 
     def curvature_refraction_correction(self, distance):
-        refraction_coeff = 0.13
-        earth_radius = 6371000
-        R_prime = earth_radius / (1 - refraction_coeff)
-        delta_h = R_prime * (1 - math.cos(distance / R_prime))
-        return delta_h
+        """Queda aparente do terreno à distância: curvatura da Terra e refração óptica (Visada/refracao.py)."""
+        return queda(distance, K_OPTICO)
 
     def calculate_visibility(self, obs_xyz, tgt_xyz, dem_raster, context=None, feedback=None):
         x0, y0, z0 = obs_xyz

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from qgis.PyQt import QtCore
 from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.core import *
 from qgis.gui import *
@@ -19,7 +20,6 @@ class Main:
         self.initVariables()
         self.initSignals()
         self.openWindow()
-        self.isOpen = False
         
     def unload(self):
         pass

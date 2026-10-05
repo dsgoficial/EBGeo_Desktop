@@ -354,6 +354,15 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.mt_action)
 
+		self.radar_action = self.add_action(
+			os.path.join(os.path.dirname(__file__), 'icons', 'radar.svg'),
+			text=u'Cobertura de radar ou sensor',
+			callback=self.loadCoberturaRadar,
+			parent=self.ebGeo,
+			add_to_menu=False,
+			add_to_toolbar=False)
+		self.ebGeo.addAction(self.radar_action)
+
 		# self.geo_action = self.add_action(
 		#  	os.path.join(os.path.dirname(__file__), 'icons', 'geocoder.png'),
 		#  	text=u'Geocodificação',
@@ -533,6 +542,13 @@ class EBGeo(QObject):
 		"""
 		from qgis import processing
 		processing.execAlgorithmDialog('EBGeoProvider:lineofsight')
+
+	def loadCoberturaRadar(self):
+		"""
+		Abre o algoritmo de cobertura de radar ou sensor para alvo em altitude fixa (roda em segundo plano)
+		"""
+		from qgis import processing
+		processing.execAlgorithmDialog('EBGeoProvider:coberturaradar')
 
 	def loadShaderTool(self):
 		"""

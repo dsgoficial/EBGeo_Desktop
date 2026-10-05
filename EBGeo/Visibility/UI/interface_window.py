@@ -5,6 +5,10 @@ from qgis.PyQt import QtGui, uic, QtCore, QtWidgets
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.core import QgsCoordinateTransform, QgsProject, QgsRasterLayer, QgsColorRampShader, QgsRasterShader, QgsSingleBandPseudoColorRenderer
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QApplication
+from ...Visada import nucleo
+from ...Visada.refracao import K_OPTICO
 from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker
 from .interface_dialog import InterfaceDialog
 
@@ -56,7 +60,7 @@ class Interface(QtWidgets.QDockWidget, GUI):
 
     def setRasterStyle(self, raster_layer):
         shaderType = QgsColorRampShader()
-        shaderType.setColorRampType(QgsColorRampShader.Discrete)
+        shaderType.setColorRampType(QgsColorRampShader.Type.Discrete)
         item_list = []
         item_list.append(QgsColorRampShader.ColorRampItem(0, QColor(0, 0, 0), lbl = "Sem visada"))
         item_list.append(QgsColorRampShader.ColorRampItem(1, QColor(0, 255, 0), lbl = "Visível"))
@@ -81,19 +85,30 @@ class Interface(QtWidgets.QDockWidget, GUI):
         if not outputpath.endswith(".tif"):
             outputpath = outputpath + '.tif'
 
+        if workingLayer.providerType() != 'gdal':
+            QMessageBox.critical(self, u"Erro", u"O MDT precisa ser um raster em arquivo lido pelo GDAL.")
+            return
+
         transformer = QgsCoordinateTransform(pointCrs, workingLayer.crs(), QgsProject.instance())
         workPoint = transformer.transform(inputPoint)
 
-        processing.run("grass7:r.viewshed", {'input': workingLayer.dataProvider().dataSourceUri(),
-        'coordinates': (str(workPoint.x()) + ',' + str(workPoint.y())),
-        'observer_elevation': self.heightSpinBox.value(),
-        'target_elevation': 0,
-        'max_distance': self.rangeSpinBox.value(),
-        'refraction_coeff': 0.14286,
-        '-c': True,
-        '-r': True,
-        '-b': True,
-        'output': outputpath})
+        # Visada pelo GDAL (sem GRASS): recorte ao alcance, SRC métrico se o MDT estiver em graus,
+        # curvatura da Terra e refração óptica (k de Visada/refracao.py). Saída 0/1 como a do
+        # r.viewshed -b que esta ferramenta usava.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            resultado = nucleo.mapa_visibilidade(
+                workingLayer.source(), workPoint.x(), workPoint.y(), self.heightSpinBox.value(),
+                self.rangeSpinBox.value(), k=K_OPTICO)
+            from osgeo import gdal
+            nucleo.salvar_geotiff(resultado.grade, resultado.matriz, outputpath, gdal.GDT_Byte, nucleo.SEM_DADO_MAPA)
+        except nucleo.ErroVisada as e:
+            QMessageBox.warning(self, u"Mapa de visibilidade", str(e))
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        for aviso in resultado.avisos:
+            self.iface.messageBar().pushWarning(u"Mapa de visibilidade", aviso)
 
         visibLayer = QgsRasterLayer(outputpath, "Mapa de visibilidade")
         QgsProject.instance().addMapLayer(visibLayer)

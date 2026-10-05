@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import random
 from uuid import uuid4
-import processing
 from EBGeo.VisibilityAnalysis.viewshedTool import ViewshedTool
 from qgis.PyQt.QtCore import QObject, pyqtSlot, QMetaType
 from qgis.PyQt.QtGui import *
@@ -31,8 +29,9 @@ from qgis.core import (
     QgsSymbol
 )
 from typing import Optional
-from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QDockWidget,
     QMessageBox,
 )
@@ -40,6 +39,8 @@ from qgis.gui import QgisInterface
 from EBGeo.VisibilityAnalysis.visibilityAnalysis_ui import (
     Ui_VisibilityAnalysisDockWidget,
 )
+from EBGeo.Visada import nucleo
+from EBGeo.Visada.refracao import K_OPTICO
 import os
 
 class VisibilityAnalysis(
@@ -165,7 +166,7 @@ class VisibilityAnalysis(
     def doWork(self, state):
         """
         Ativa ou desativa a ferramenta de visibilidade (ViewshedTool) quando o botão 'Ativar' é clicado.
-        Inclui validação de EPSG entre setor, MDE e projeto.
+        Inclui a validação de SRC entre setor e projeto (o MDE pode estar em qualquer SRC).
         """
         # Obtém a camada de visada selecionada
         viewshedLyr = self.targetSectorMapLayerComboBox.currentLayer()
@@ -211,24 +212,25 @@ class VisibilityAnalysis(
             )
             return
 
-        # --- VALIDAÇÃO DE EPSG ---
+        # --- VALIDAÇÃO DE SRC ---
+        # A ferramenta desenha o setor nas coordenadas do mapa e grava na camada sem transformar:
+        # setor e projeto têm de ter o mesmo SRC. O MDE pode estar em qualquer SRC (o motor de
+        # visada reprojeta para um SRC métrico quando ele está em graus).
         setor_epsg = viewshedLyr.crs().authid()
-        mde_epsg = mde_layer.crs().authid()
         projeto_epsg = self.canvas.mapSettings().destinationCrs().authid()
 
-        if setor_epsg != mde_epsg or setor_epsg != projeto_epsg:
+        if viewshedLyr.crs() != self.canvas.mapSettings().destinationCrs():
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 "Erro de Projeção",
                 f"Combinação de projeções inválida!\n"
                 f"Setor: {setor_epsg}\n"
-                f"MDE: {mde_epsg}\n"
                 f"Projeto: {projeto_epsg}\n\n"
-                "Todas as camadas devem ter o mesmo EPSG."
+                "A camada de setores deve ter o mesmo SRC do projeto."
             )
             self.resetAtivarButton()
             return
-        # --- FIM VALIDAÇÃO EPSG ---
+        # --- FIM VALIDAÇÃO DE SRC ---
 
         # Aplica estilo de visada
         caminho_atual = os.path.dirname(os.path.realpath(__file__))
@@ -292,9 +294,13 @@ class VisibilityAnalysis(
         self.viewshedOfFeatTargetSector(viewshedLyr, mds)
     
     def viewshedOfFeatTargetSector(self, layer, mds):
+        """
+        Soma dos observadores por setor, pelo GDAL (sem GRASS): cada setor tem o observador no
+        primeiro vértice e alcance até o vértice mais distante; a célula vale quantos observadores
+        a veem dentro do próprio setor. Saída: polígonos com o campo "value", como a do r.to.vect.
+        """
         self.iface.setActiveLayer(layer)
-        rasterList = []
-        
+
         if mds.bandCount() != 1:
             QMessageBox.warning(
                 self.iface.mainWindow(),
@@ -302,172 +308,55 @@ class VisibilityAnalysis(
                 self.tr("Verifique o raster colocado como Modelo Digital de Superfície, pois esse possui apenas 1 banda.")
             )
             return
-
-        temp_mask_layer = processing.run(
-                "native:polygonfromlayerextent",
-                {
-                    'INPUT':layer,
-                    'ROUND_TO':0,
-                    'OUTPUT':'TEMPORARY_OUTPUT'
-                },
-            )["OUTPUT"]
-
-        for feat in temp_mask_layer.getFeatures():
-            geom = feat.geometry()
-            bbox = geom.boundingBox()
-            width = bbox.width()
-            height = bbox.height()
-            if width > height:
-                dist_max = width
-            else:
-                dist_max = height
-
-        for feat in layer.getFeatures():
-            altura_obs = feat["altura_obs"]
-            central_point = self.getCentralPointTargetSector(feat)
-            max_distance = self.getMaxDistance(feat)
-
-            featGeom = feat.geometry()
-            transform = QgsCoordinateTransform(
-                layer.crs(), mds.crs(), QgsProject.instance()
-            )
-            featGeom.transform(transform)
-            extentRaster = mds.extent()
-            geomExtentRaster = QgsGeometry.fromRect(extentRaster)
-            if not featGeom.within(geomExtentRaster):
-                QMessageBox.warning(
-                    self.iface.mainWindow(),
-                    self.tr("Erro!"),
-                    self.tr("Há setores de visada fora do Modelo Digital de Superfície")
-                )
-                return
-            
-            clip_result_path = processing.run("gdal:cliprasterbymasklayer",
-                {
-                    'INPUT': mds,
-                    'MASK': temp_mask_layer,
-                    'SOURCE_CRS': None,
-                    'TARGET_CRS': None,
-                    'NODATA': None,
-                    'ALPHA_BAND': False,
-                    'CROP_TO_CUTLINE': True,
-                    'KEEP_RESOLUTION': False,
-                    'SET_RESOLUTION': False,
-                    'X_RESOLUTION': None,
-                    'Y_RESOLUTION': None,
-                    'MULTITHREADING': False,
-                    'OPTIONS': '',
-                    'DATA_TYPE': 0,
-                    'EXTRA': '',
-                    'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-                },
-            )['OUTPUT']
-
-            try:
-                viewshed_result = processing.run(
-                    "gdal:viewshed",
-                    {
-                        'INPUT': clip_result_path,
-                        'BAND' : 1,
-                        'EXTRA' : '',
-                        'MAX_DISTANCE' : dist_max,
-                        'OBSERVER': f"{central_point.x()},{central_point.y()} [{layer.crs().authid()}]",
-                        'OBSERVER_HEIGHT': altura_obs,
-                        'TARGET_HEIGHT': 0.0,
-                        'OPTIONS' : None,
-                        'OUTPUT': 'TEMPORARY_OUTPUT',
-                    },
-                )['OUTPUT']
-
-            except:
-                QMessageBox.warning(
-                    self.iface.mainWindow(),
-                    self.tr("Erro!"),
-                    self.tr("Verifique o Modelo Digital de Elevação se está correto.")
-                )
-                return
-            viewshed_result = QgsRasterLayer(viewshed_result)
-
-            layer.selectByIds([feat.id()])
-            clip_result_path = processing.run("gdal:cliprasterbymasklayer",
-                {
-                    'INPUT': viewshed_result,
-                    'MASK': QgsProcessingFeatureSourceDefinition(layer.source(), selectedFeaturesOnly=True),
-                    'SOURCE_CRS': mds.crs(),
-                    'TARGET_CRS': layer.crs(),
-                    'NODATA': None,
-                    'ALPHA_BAND': False,
-                    'CROP_TO_CUTLINE': False,
-                    'KEEP_RESOLUTION': False,
-                    'SET_RESOLUTION': False,
-                    'X_RESOLUTION': None,
-                    'Y_RESOLUTION': None,
-                    'MULTITHREADING': False,
-                    'OPTIONS': '',
-                    'DATA_TYPE': 0,
-                    'EXTRA': '',
-                    'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-                },
-            )['OUTPUT']
-            clip_result = QgsRasterLayer(clip_result_path)
-            rasterList.append(clip_result)
-            layer.removeSelection()
-        
-        if len(rasterList) == 0:
+        if mds.providerType() != 'gdal':
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 self.tr("Erro!"),
-                self.tr(
-                    "Não há nenhum setor de visada adquirido."
-                ),
+                self.tr("O Modelo Digital de Elevação precisa ser um raster em arquivo lido pelo GDAL.")
             )
             return
 
-        finalRasterLayer = self.sumRasters(rasterList)
+        transform = QgsCoordinateTransform(layer.crs(), mds.crs(), QgsProject.instance())
+        setores = []
+        for feat in layer.getFeatures():
+            try:
+                altura_obs = float(feat["altura_obs"])
+            except (TypeError, ValueError):
+                altura_obs = float("nan")
+            if altura_obs != altura_obs:
+                QMessageBox.warning(
+                    self.iface.mainWindow(),
+                    self.tr("Erro!"),
+                    self.tr("Há setor de visada sem altura do observador (altura_obs).")
+                )
+                return
+            featGeom = QgsGeometry(feat.geometry())
+            featGeom.transform(transform)
+            setores.append((bytes(featGeom.asWkb()), altura_obs))
 
-        clip_result_path = processing.run("gdal:cliprasterbymasklayer",
-            {
-                'INPUT': finalRasterLayer,
-                'MASK': layer,
-                'SOURCE_CRS': finalRasterLayer.crs(),
-                'TARGET_CRS': layer.crs(),
-                'NODATA': None,
-                'ALPHA_BAND': False,
-                'CROP_TO_CUTLINE': False,
-                'KEEP_RESOLUTION': False,
-                'SET_RESOLUTION': False,
-                'X_RESOLUTION': None,
-                'Y_RESOLUTION': None,
-                'MULTITHREADING': False,
-                'OPTIONS': '',
-                'DATA_TYPE': 0,
-                'EXTRA': '',
-                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-            },
-        )['OUTPUT']
-        clip_result = QgsRasterLayer(clip_result_path)
-            
-        coloredFinalRasterLayer = self.colorSummedRaster(clip_result, rasterList)
+        if len(setores) == 0:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                self.tr("Erro!"),
+                self.tr("Não há nenhum setor de visada adquirido."),
+            )
+            return
 
-        vectorColoredFinalRasterLayer = processing.run("grass:r.to.vect", 
-            {
-                'input':coloredFinalRasterLayer,
-                'type':2,
-                'column':'value',
-                '-s':False,
-                '-v':False,
-                '-z':False,
-                '-b':False,
-                '-t':False,
-                'output':'TEMPORARY_OUTPUT','GRASS_REGION_PARAMETER':None,
-                'GRASS_REGION_CELLSIZE_PARAMETER':0,
-                'GRASS_OUTPUT_TYPE_PARAMETER':0,
-                'GRASS_VECTOR_DSCO':'',
-                'GRASS_VECTOR_LCO':'',
-                'GRASS_VECTOR_EXPORT_NOCAT':False
-            }
-        )['output']
-        vectorColoredFinalRasterLayer = QgsVectorLayer(vectorColoredFinalRasterLayer, "Vetor Resultante da Linha de Visada")
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            resultado = nucleo.soma_por_setor(mds.source(), setores, k=K_OPTICO)
+            caminho = QgsProcessingUtils.generateTempFilename(f"visada_setores_{uuid4().hex}.gpkg")
+            nucleo.poligonizar(resultado.grade, resultado.matriz, caminho, "value", "visada_setores")
+        except nucleo.ErroVisada as e:
+            QMessageBox.warning(self.iface.mainWindow(), self.tr("Erro!"), str(e))
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        for aviso in resultado.avisos:
+            self.iface.messageBar().pushWarning(self.tr("Análise de Visibilidade"), aviso)
+
+        vectorColoredFinalRasterLayer = QgsVectorLayer(
+            f"{caminho}|layername=visada_setores", "Vetor Resultante da Linha de Visada", "ogr")
         QgsProject.instance().addMapLayer(vectorColoredFinalRasterLayer)
 
         self.apply_red_to_green_gradient_style(vectorColoredFinalRasterLayer, "value")
@@ -600,83 +489,6 @@ class VisibilityAnalysis(
 
         return True
         
-    def sumRasters(self, rasterList):
-        # Criar expressões e entradas para o QgsRasterCalculator
-        entries = []
-        expression = ""
-        for i, raster in enumerate(rasterList):
-            entry = QgsRasterCalculatorEntry()
-            entry.ref = f"layer{i}@1"
-            entry.raster = raster
-            entry.bandNumber = 1
-            entries.append(entry)
-
-            expression += f"{entry.ref}"
-            if i < len(rasterList) - 1:
-                expression += " + "
-
-        # Modificação: Normalizar a soma dividindo por 255
-        # Isso transformará valores como 0, 255, 510 em 0, 1, 2...
-        expression = f"({expression}) / 255"
-
-        # Criar raster temporário
-        temp_output = QgsProcessingUtils.generateTempFilename(
-                    f"normalized_sum_{str(uuid4().hex)}.tif"
-                )
-
-        # Usar QgsRasterCalculator para somar os rasters e normalizar
-        calc = QgsRasterCalculator(
-            expression,
-            temp_output,
-            "GTiff",
-            rasterList[0].extent(),
-            rasterList[0].width(),
-            rasterList[0].height(),
-            entries
-        )
-
-        result = calc.processCalculation()
-        if result == 0:
-            # Adiciona o raster normalizado ao QGIS como camada temporária
-            crs = rasterList[0].crs()
-            summed_layer = QgsRasterLayer(temp_output, "Soma Normalizada", "gdal")
-            summed_layer.setCrs(crs)
-            return summed_layer
-        else:
-            return
-
-    def colorSummedRaster(self, finalRasterLayer, rasterList):
-        # Criação do shader
-        shader = QgsRasterShader()
-        color_ramp = QgsColorRampShader()
-        color_ramp.setColorRampType(QgsColorRampShader.Exact)
-
-        # Lista de valores de pixel possíveis (ex: 0 a 5)
-        max_value = len(rasterList)  # ajuste conforme o número máximo de interseções possíveis
-        entries = []
-
-        # Valor 0 = vermelho
-        entries.append(QgsColorRampShader.ColorRampItem(0, QColor('red'), "Nenhuma"))
-
-        # Demais valores = cores aleatórias
-        for i in range(1, max_value + 1):
-            color = QColor.fromRgb(
-                random.randint(0, 255),
-                random.randint(0, 255),
-                random.randint(0, 255)
-            )
-            entries.append(QgsColorRampShader.ColorRampItem(float(i), color, f"{i}"))
-
-        # Aplicar entradas ao shader
-        color_ramp.setColorRampItemList(entries)
-        shader.setRasterShaderFunction(color_ramp)
-
-        # Aplicar renderer ao raster
-        renderer = QgsSingleBandPseudoColorRenderer(finalRasterLayer.dataProvider(), 1, shader)
-        finalRasterLayer.setRenderer(renderer)
-        finalRasterLayer.triggerRepaint()
-        return finalRasterLayer
-
     def getCentralPointTargetSector(self, feat):
         geom = feat.geometry()
         polygon = geom.asPolygon()

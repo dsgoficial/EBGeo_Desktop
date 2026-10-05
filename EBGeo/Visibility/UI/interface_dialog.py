@@ -72,7 +72,8 @@ class InterfaceDialog(QtWidgets.QDialog, GUI):
         newCrs = self.projectionCombo.crs()
         transformer = QgsCoordinateTransform(newCrs, self.coords[2], QgsProject.instance())
         newPoint = transformer.transform(point)
-        self.finished.emit(newPoint, newCrs)
+        # o ponto vai no SRC do mapa: emitir o SRC digitado junto o faria ser transformado duas vezes
+        self.finished.emit(newPoint, self.coords[2])
         
     def cancelButton(self):
         self.close()

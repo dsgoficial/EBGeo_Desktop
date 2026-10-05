@@ -13,6 +13,7 @@ from .launchNOAA import LaunchNOAA
 from .lineOfSight import LineOfSight
 from .generateMgrsAttribute import GenerateMgrsAttribute
 from ..Calco.importador.algoritmo import ImportarEbgeo
+from ..Visada.cobertura_radar import CoberturaRadar
 class Provider(QgsProcessingProvider):
 
     def __init__(self):
@@ -30,6 +31,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(LineOfSight())
         self.addAlgorithm(GenerateMgrsAttribute())
         self.addAlgorithm(ImportarEbgeo())
+        self.addAlgorithm(CoberturaRadar())
 
     def load(self):
         ProcessingConfig.settingIcons[self.name()] = self.icon()
