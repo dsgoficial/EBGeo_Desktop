@@ -103,6 +103,9 @@ class TestePainel(unittest.TestCase):
         self.assertIsInstance(sp, QDoubleSpinBox)
         sp.setValue(250)  # metros na tela, km no disco
         self.painel._gravar_pendentes()
+        # a Linha de Coordenação edita no buffer: o disco só muda no Salvar
+        self.assertEqual(self._reler(lyr, eid)['symbol_code'], '290199')
+        self.assertTrue(self.painel.salvar())
         f = self._reler(lyr, eid)
         self.assertEqual(f['symbol_code'], '290307')
         self.assertAlmostEqual(f['symbol_size_km'], 0.25, places=6)

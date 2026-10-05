@@ -35,7 +35,19 @@ def aplicar_estilo(layer, tipo):
         # como nos pontuais: feição com "visivel" falso não é desenhada (o Web filtra igual)
         from .importador.arvore import condicao_exibir, esconder_por_regra
         esconder_por_regra(layer, condicao_exibir())
+    aplicar_formulario(layer, tipo)
     return True
+
+
+def aplicar_formulario(layer, tipo):
+    """O formulário nativo do tipo (formulario/nativo.py), quando ele já tem especificação."""
+    try:
+        from .formulario.nativo import aplicar_formulario as aplicar
+        return aplicar(layer, tipo)
+    except Exception as e:  # formulário com defeito não impede a camada de desenhar
+        from qgis.core import QgsMessageLog, Qgis
+        QgsMessageLog.logMessage('Formulário de {} indisponível: {}'.format(tipo, e), 'EBGeo', Qgis.MessageLevel.Warning)
+        return False
 
 
 def salvar_estilo_padrao(layer, descricao=None):
@@ -74,15 +86,22 @@ DATA_DO_QGIS = r'^[A-Z][a-z]{2} [A-Z][a-z]{2} +\d{1,2} \d{2}:\d{2}:\d{2} \d{4}$'
 
 
 def impressao_estilo(layer):
-    """md5 curto da simbologia e dos rótulos da camada, sem as chaves aleatórias de regra e camada."""
+    """
+    md5 curto da simbologia, dos rótulos e do formulário da camada (campos, formulário, tabela de
+    atributos e ações), sem as chaves aleatórias de regra e camada. O formulário entra para que
+    formulário mudado no código também regrave o estilo do calco antigo ao abrir.
+    """
     import hashlib
     import re
     from qgis.core import QgsMapLayer, QgsReadWriteContext
     from qgis.PyQt.QtXml import QDomDocument
     doc = QDomDocument()
     C = QgsMapLayer.StyleCategory
-    layer.exportNamedStyle(doc, QgsReadWriteContext(), C.Symbology | C.Labeling)
-    texto = re.sub(r' (?:key|id)="\{[0-9a-fA-F-]{36}\}"', '', doc.toString())
+    layer.exportNamedStyle(doc, QgsReadWriteContext(),
+                           C.Symbology | C.Labeling | C.Fields | C.Forms | C.AttributeTable | C.Actions)
+    # também o id escapado do símbolo que o rótulo guarda como texto (lineSymbol do callout), que
+    # mudava a cada montagem e impedia o "em dia" da Linha de Coordenação (medido em 2026-10-05)
+    texto = re.sub(r' (?:key|id)=(?:"|&quot;)\{[0-9a-fA-F-]{36}\}(?:"|&quot;)', '', doc.toString())
     return hashlib.md5(texto.encode('utf-8')).hexdigest()[:12]
 
 

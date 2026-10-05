@@ -884,6 +884,8 @@ class TestPainel(unittest.TestCase):
         cb.setCurrentIndex(cb.findData(codigo))
         self.painel._gravar_pendentes()
         QGS.processEvents()  # o painel se remonta no ciclo seguinte
+        self.assertTrue(self.painel.salvar())  # o painel edita no buffer; o disco muda no Salvar
+        QGS.processEvents()
 
     def test_combo_agrupado_com_14(self):
         self._nova()
@@ -926,6 +928,7 @@ class TestPainel(unittest.TestCase):
         ed.setText('AB0101')
         ed.editingFinished.emit()
         self.painel._gravar_pendentes()
+        self.assertTrue(self.painel.salvar())
         self.assertEqual(self._reler(eid)['numero_concentracao'], 'AB0101')
 
     def test_cor_so_troca_se_estava_na_padrao(self):

@@ -1,23 +1,36 @@
 # -*- coding: utf-8 -*-
 """
 Painel de propriedades do calco: espelha os painéis do EBGeo Web para a feição
-selecionada na camada ativa. Cada mudança grava na camada (no buffer de edição,
-se a camada estiver em edição; senão, direto) e, nos símbolos pontuais, regera o SVG.
+selecionada na camada ativa.
+
+Tipos com especificação de formulário (formulario/especificacao.py; no piloto, a Linha de
+Coordenação): o painel é montado da especificação, a mesma do formulário nativo assado no estilo,
+e cada mudança entra no BUFFER de edição da camada como um comando (Ctrl+Z desfaz), aberto pelo
+painel se preciso; nada vai ao disco até "Salvar", e "Descartar" volta ao estado de antes. As
+regras de troca (cor padrão ao trocar o símbolo) são do guardião da camada (guardiao.py).
+
+Demais tipos, até a escala: cada mudança grava na camada (no buffer de edição, se a camada
+estiver em edição; senão, direto) e, nos símbolos pontuais, regera o SVG.
 """
 import json
 import math
 
-from qgis.core import QgsFeatureRequest, QgsProject, QgsVectorLayer, QgsGeometry
-from qgis.gui import QgsColorButton
+from qgis.core import (
+    QgsExpression, QgsExpressionContext, QgsExpressionContextUtils, QgsFeatureRequest, QgsProject,
+    QgsVectorLayer, QgsGeometry,
+)
+from qgis.gui import QgsCollapsibleGroupBoxBasic, QgsColorButton
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QCheckBox, QComboBox, QDockWidget, QDoubleSpinBox, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from .. import schema
 from ..calco import tipo_da_camada
+from ..formulario import especificacao as esp
+from ..regras import cor_ao_trocar_simbolo_linha  # noqa: F401 (as regras saíram do painel para regras.py)
 
 # Ø (Equipe/Guarnição) e ++ (Valor indeterminado) entraram em 2026-10-04 (MD33-C-01 A.3.5.7);
 # o XXXXX fica por decisão do chefe.
@@ -27,17 +40,11 @@ ESCALOES_LIMITE = ['XXXXXX', 'XXXXX', 'XXXX', 'XXX', 'XX', 'X', 'III', 'II', 'I'
 CAMPOS_MINA = ('mina1', 'mina2', 'mina3')
 ANGULO_SECUNDARIO_PADRAO = -45.0
 
-# Linha de Coordenação: os campos que só aparecem quando o símbolo os pede (textFields e
-# secondColor do catálogo do Web, CATALOGO_LINHA em estilos_taticos.py).
-CAMPOS_TEXTO_LINHA = ('tipo', 'identificacao', 'gdh_ini', 'gdh_fim', 'numero_concentracao')
-AVISO_LADO_INIMIGO = ('O lado inimigo fica à esquerda do sentido do traçado.\n'
-                      'Use "Inverter sentido" para trocar os lados.')
-
 STATUS_NUCLEO = [('ocupado', 'Ocupado'), ('preparado', 'Preparado'),
                  ('preparado-nao-ocupado', 'Preparado, não ocupado')]
 
 # Widgets: ('texto'), ('cor'), ('num', min, max, passo, casas), ('bool'),
-# ('combo', [(valor, rótulo)]), ('km_em_m', min_m, max_m, passo_m)
+# ('combo', [(valor, rótulo)]), ('km_em_m', min_m, max_m, passo_m), ('texto_multilinha')
 _COMUNS = [('nome', 'Nome', ('texto',)), ('descricao', 'Descrição', ('texto',))]
 _ZOOM = [('zoom_corr', 'Correção de zoom (preso ao terreno)', ('bool',)),
          ('created_zoom', 'Zoom de referência', ('num', 0, 22, 0.1, 1))]
@@ -80,20 +87,6 @@ PAINEIS = {
                  ('text_size', 'Tamanho do texto', ('num', 8, 80, 1, 0)),
                  ('text_distance_ratio', 'Distância do texto', ('num', 0.1, 3.0, 0.1, 1)),
                  ('text_north_facing', 'Texto sempre para o norte', ('bool',))] + _TRACO + _ZOOM,
-    # A lista completa; linhas_linha_coordenacao tira o que o símbolo não usa.
-    'coordination_line': [('symbol_code', 'Símbolo', ('simbolo_linha',)),
-                          ('symbol_size_km', 'Tamanho do símbolo (m)', ('km_em_m', 10, 50000, 5)),
-                          ('symbol_spacing_km', 'Distância entre símbolos (m)', ('km_em_m', 10, 500000, 5)),
-                          ('tipo', 'Tipo', ('texto',)),
-                          ('identificacao', 'Identificação', ('texto',)),
-                          ('gdh_ini', 'GDH Início', ('texto',)),
-                          ('gdh_fim', 'GDH Fim', ('texto',)),
-                          ('numero_concentracao', 'Nº Concentração', ('texto',)),
-                          ('text_size', 'Tamanho do texto (px)', ('num', 8, 80, 1, 0)),
-                          ('text_north_facing', 'Texto sempre para o norte', ('bool',)),
-                          ('color', 'Cor', ('cor',)),
-                          ('enemy_color', 'Cor do lado inimigo', ('cor',))]
-    + _TRACO[1:] + _ZOOM,
     'arrow': [('width_m', 'Largura (m)', ('num', 10, 10000, 10, 0)),
               ('head_length_ratio', 'Comprimento da ponta', ('num', 0.2, 5, 0.1, 1)),
               ('show_arrow_head', 'Mostrar ponta', ('bool',)),
@@ -107,6 +100,10 @@ PAINEIS = {
     'occupied_front': list(_TRACO),
 }
 PAINEIS['coordination_area'] = []  # o formulário depende do tipo: ui/painel_area.linhas_area
+
+
+def tem_painel(tipo):
+    return tipo in PAINEIS or tipo in esp.TIPOS_COM_FORMULARIO
 
 
 class PainelCalco(QDockWidget):
@@ -133,10 +130,35 @@ class PainelCalco(QDockWidget):
         self.acoes = QHBoxLayout()
         self.vbox.addLayout(self.acoes)
         self.vbox.addStretch(1)
+        # Salvar e Descartar, como no Web: só nos tipos montados da especificação
+        self.barra_edicao = QWidget()
+        h = QHBoxLayout(self.barra_edicao)
+        h.setContentsMargins(4, 4, 4, 4)
+        self.estado_edicao = QLabel('')
+        h.addWidget(self.estado_edicao, 1)
+        self.botao_descartar = QPushButton('Descartar')
+        self.botao_descartar.setToolTip('Volta a camada ao estado de antes das mudanças feitas no painel.')
+        self.botao_descartar.clicked.connect(self.descartar)
+        self.botao_salvar = QPushButton('Salvar')
+        self.botao_salvar.setToolTip('Grava no calco as mudanças da camada.')
+        self.botao_salvar.clicked.connect(self.salvar)
+        h.addWidget(self.botao_descartar)
+        h.addWidget(self.botao_salvar)
+        self.barra_edicao.hide()
         sc = QScrollArea()
         sc.setWidgetResizable(True)
         sc.setWidget(base)
-        self.setWidget(sc)
+        corpo = QWidget()
+        v = QVBoxLayout(corpo)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.addWidget(sc, 1)
+        v.addWidget(self.barra_edicao)
+        self.setWidget(corpo)
+        self._sessoes = {}      # id da camada -> {'indice': da pilha de desfazer, 'abriu': a edição}
+        self._spec = None       # especificação do tipo montado (None nos tipos de antes)
+        self._linhas = []       # (elemento, condições, layout, widget, rótulo) do painel da especificação
+        self._secoes = []       # (caixa, condições, layout pai)
+        self._expressoes = {}
         self._gravar_timer = QTimer(self)
         self._gravar_timer.setSingleShot(True)
         self._gravar_timer.setInterval(350)
@@ -148,14 +170,20 @@ class PainelCalco(QDockWidget):
     # ---------- seleção ----------
     def _camada_mudou(self, layer):
         if self.layer is not None:
-            try:
-                self.layer.selectionChanged.disconnect(self._selecao_mudou)
-            except (TypeError, RuntimeError):
-                pass
+            for sinal, slot in ((self.layer.selectionChanged, self._selecao_mudou),
+                                (self.layer.editingStopped, self._edicao_parou)):
+                try:
+                    sinal.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
         self.layer = layer if isinstance(layer, QgsVectorLayer) else None
         self.tipo = tipo_da_camada(self.layer)
-        if self.layer is not None and self.tipo in PAINEIS:
+        if self.layer is not None and tem_painel(self.tipo):
             self.layer.selectionChanged.connect(self._selecao_mudou)
+            self.layer.editingStopped.connect(self._edicao_parou)
+            if self.tipo in esp.TIPOS_COM_FORMULARIO:
+                from .. import guardiao
+                guardiao.garantir(self.layer, self.tipo)
         self._selecao_mudou()
 
     def mostrar_feicao(self, layer, ebgeo_id):
@@ -169,7 +197,8 @@ class PainelCalco(QDockWidget):
     def _selecao_mudou(self, *args):
         self._gravar_pendentes()
         self._limpar()
-        if self.layer is None or self.tipo not in PAINEIS:
+        self._atualizar_barra()
+        if self.layer is None or not tem_painel(self.tipo):
             self.titulo.setText('Selecione uma feição do calco.')
             return
         sel = self.layer.selectedFeatureIds()
@@ -180,18 +209,26 @@ class PainelCalco(QDockWidget):
         self.fid = sel[0]
         feat = self.layer.getFeature(self.fid)
         self.titulo.setText('<b>{}</b>'.format(schema.TIPOS[self.tipo]['nome_pt']))
-        self._montar(feat)
+        if self.tipo in esp.TIPOS_COM_FORMULARIO:
+            self._montar_spec(feat)
+        else:
+            self._montar(feat)
 
     def _limpar(self):
         self.fid = None
         self.widgets = {}
         self._setor = None
         self._abertura = None
+        self._spec = None
+        self._linhas = []
+        self._secoes = []
         while self.form.rowCount():
             self.form.removeRow(0)
         while self.acoes.count():
             w = self.acoes.takeAt(0).widget()
             if w:
+                w.hide()  # o deleteLater só apaga na volta ao laço de eventos
+                w.setParent(None)
                 w.deleteLater()
 
     # ---------- formulário ----------
@@ -203,8 +240,6 @@ class PainelCalco(QDockWidget):
                 linhas = linhas_medida(feat['point_code'])
                 if self.layer.fields().indexOf('angulo_secundario') >= 0:
                     self._setor = list(direcoes_do_setor(feat['rotation'], feat['angulo_secundario']))
-            elif self.tipo == 'coordination_line':
-                linhas = linhas_linha_coordenacao(feat['symbol_code'])
             elif self.tipo == 'coordination_area':
                 from .painel_area import linhas_area
                 linhas = linhas_area(feat)
@@ -217,11 +252,7 @@ class PainelCalco(QDockWidget):
                     if spec[0] == 'dir_secundaria':
                         self._abertura = QLabel(texto_abertura(*self._setor))
                         self.form.addRow('', self._abertura)
-                    if spec[0] == 'simbolo_linha' and segunda_cor_linha(feat['symbol_code']):
-                        aviso = QLabel(AVISO_LADO_INIMIGO)
-                        aviso.setWordWrap(True)
-                        self.form.addRow('', aviso)
-            if self.tipo in ('coordination_line', 'boundary', 'arrow'):
+            if self.tipo in ('boundary', 'arrow'):
                 b = QPushButton('Inverter sentido')
                 b.clicked.connect(self._inverter)
                 self.acoes.addWidget(b)
@@ -238,8 +269,13 @@ class PainelCalco(QDockWidget):
         if kind == 'texto':
             w = QLineEdit('' if nulo else str(valor))
             w.editingFinished.connect(lambda c=col, w=w: self._mudou(c, w.text() or None))
+        elif kind == 'texto_multilinha':
+            w = QPlainTextEdit('' if nulo else str(valor))
+            w.setFixedHeight(64)
+            w.textChanged.connect(lambda c=col, w=w: self._mudou(c, w.toPlainText() or None))
         elif kind == 'leitura':
-            w = QLabel('' if nulo else (('%.4f' % valor) if isinstance(valor, float) else str(valor)))
+            w = QLabel('' if nulo else _texto_leitura(valor))
+            w.setWordWrap(True)
         elif kind == 'cor':
             w = QgsColorButton()
             w.setAllowOpacity(False)
@@ -254,6 +290,8 @@ class PainelCalco(QDockWidget):
             w.setRange(spec[1], spec[2])
             w.setSingleStep(spec[3])
             w.setDecimals(spec[4])
+            if len(spec) > 5 and spec[5]:
+                w.setSuffix(spec[5])
             w.setValue(spec[1] if nulo else float(valor))
             w.valueChanged.connect(lambda v, c=col: self._mudou(c, v))
         elif kind == 'km_em_m':
@@ -414,18 +452,13 @@ class PainelCalco(QDockWidget):
 
     def _simbolo_linha_mudou(self, codigo):
         """
-        Troca do símbolo da Linha de Coordenação: a linha que ainda veste a cor padrão do
-        símbolo anterior passa à do novo (obstáculo verde, manobra e fogos pretos); cor
-        escolhida não muda. O painel se remonta, porque os campos seguem o símbolo.
+        Troca do símbolo da Linha de Coordenação. A cor padrão do símbolo novo (obstáculo verde,
+        manobra e fogos pretos) é regra do guardião da camada, que vale também para o formulário
+        nativo e a tabela de atributos. O painel se remonta, porque os campos seguem o símbolo.
         """
         if self._carregando or self.fid is None or not codigo:
             return
-        feat = self.layer.getFeature(self.fid)
-        mud = {'symbol_code': codigo}
-        cor = cor_ao_trocar_simbolo_linha(feat['symbol_code'], codigo, feat['color'])
-        if cor:
-            mud['color'] = cor
-        self._pendentes.update(mud)
+        self._pendentes['symbol_code'] = codigo
         self._gravar_pendentes()
         # remontar fora do sinal (ver _medida_mudou)
         QTimer.singleShot(0, self._selecao_mudou)
@@ -476,6 +509,9 @@ class PainelCalco(QDockWidget):
             self._pendentes = {}
             return
         mudancas, self._pendentes = self._pendentes, {}
+        if self.tipo in esp.TIPOS_COM_FORMULARIO:
+            self._gravar_no_buffer(mudancas)
+            return
         feat = self.layer.getFeature(self.fid)
         if schema.TIPOS[self.tipo]['desenho'] == 'svg':
             attrs = {f.name(): feat[f.name()] for f in self.layer.fields()}
@@ -504,6 +540,10 @@ class PainelCalco(QDockWidget):
             nova = QgsGeometry(ml)
         else:
             nova = QgsGeometry(QgsLineString(partes[0]))
+        if self.tipo in esp.TIPOS_COM_FORMULARIO:
+            fid = self.fid
+            self._no_buffer(lambda: self.layer.changeGeometry(fid, nova), 'Calco: inverter sentido')
+            return
         gravar_geometria(self.layer, self.fid, nova)
 
     def _recalcular_declinacao(self):
@@ -528,14 +568,233 @@ class PainelCalco(QDockWidget):
         gravar_atributos(self.layer, self.fid, valores)
         QTimer.singleShot(0, self._selecao_mudou)
 
+    # ---------- painel montado da especificação ----------
+    def _montar_spec(self, feat):
+        """
+        Cabeçalho, uma seção por aba e os campos da especificação do tipo, com os widgets ricos
+        onde ela os indica. Campo que não vale para o símbolo some (linha oculta), pela mesma
+        expressão que o formulário nativo avalia.
+        """
+        self._carregando = True
+        try:
+            self._spec = esp.formulario(self.tipo)
+            nomes = self.layer.fields().names()
+            attrs = {n: feat[n] for n in nomes}
+            travada = esp.Bloqueada().avaliar(attrs)
+            for el in self._spec.cabecalho:
+                self._elemento(self.form, el, [], attrs, travada)
+            for aba in self._spec.abas:
+                filhos = aba.filhos
+                if aba.prefixo:
+                    filhos = [esp.Campo(n, self.layer.attributeAlias(self.layer.fields().indexOf(n)) or n, esp.texto())
+                              for n in nomes if n.startswith(aba.prefixo)]
+                if not filhos:
+                    continue
+                conds = [aba.condicao] if aba.condicao is not None else []
+                caixa, fl = self._secao(self.form, aba.nome, aba.nome == 'Avançado', conds)
+                for el in filhos:
+                    self._elemento(fl, el, conds, attrs, travada)
+            if self.tipo == 'coordination_line':
+                b = QPushButton('Inverter sentido')
+                b.clicked.connect(self._inverter)
+                b.setEnabled(not travada)
+                self.acoes.addWidget(b)
+            self._aplicar_condicoes()
+        finally:
+            self._carregando = False
+
+    def _secao(self, fl_pai, titulo, recolhida, conds):
+        caixa = QgsCollapsibleGroupBoxBasic(titulo)  # o não-Basic relê o recolhido salvo nas configurações
+        fl = QFormLayout(caixa)
+        fl_pai.addRow(caixa)
+        if recolhida:
+            # o grupo só recolhe visível (setCollapsed volta cedo antes de ele aparecer)
+            QTimer.singleShot(0, lambda c=caixa: _recolher(c))
+        self._secoes.append((caixa, conds, fl_pai))
+        return caixa, fl
+
+    def _elemento(self, fl, el, conds, attrs, travada):
+        if isinstance(el, esp.Grupo):
+            proprias = conds + ([el.condicao] if el.condicao is not None else [])
+            if el.titulo:
+                _caixa, fl = self._secao(fl, el.nome, el.recolhido, proprias)
+            for filho in el.filhos:
+                self._elemento(fl, filho, proprias, attrs, travada)
+            return
+        if isinstance(el, esp.Texto):
+            lb = QLabel(el.texto)
+            lb.setWordWrap(True)
+            fl.addRow(lb)
+            self._linhas.append((el, conds, fl, lb, None))
+            return
+        if el.coluna not in attrs:
+            return
+        w = self._widget(el.coluna, _spec_do_campo(el), attrs[el.coluna])
+        if w is None:
+            return
+        if el.coluna == 'visivel' and esp._nulo(attrs[el.coluna]):
+            w.setChecked(True)  # nulo vale "mostrar", como no estilo e no Web
+        rotulo = QLabel(el.rotulo_para(attrs, rico=bool(el.rico)))
+        fl.addRow(rotulo, w)
+        if travada:
+            w.setEnabled(False)
+        self._linhas.append((el, conds + ([el.condicao] if el.condicao is not None else []), fl, w, rotulo))
+
+    def _expressao(self, texto):
+        e = self._expressoes.get(texto)
+        if e is None:
+            e = self._expressoes[texto] = QgsExpression(texto)
+        return e
+
+    def _aplicar_condicoes(self):
+        if self._spec is None or self.fid is None:
+            return
+        feat = self.layer.getFeature(self.fid)
+        ctx = QgsExpressionContext(QgsExpressionContextUtils.globalProjectLayerScopes(self.layer))
+        ctx.setFeature(feat)
+
+        def vale(cond):
+            return bool(self._expressao(cond.expressao()).evaluate(ctx))
+        self._visiveis = set()
+        for el, conds, fl, w, rotulo in self._linhas:
+            vis = all(vale(c) for c in conds)
+            fl.setRowVisible(w, vis)
+            if isinstance(el, esp.Campo):
+                if vis:
+                    self._visiveis.add(el.coluna)
+                if rotulo is not None and el.expressao_rotulo():
+                    rotulo.setText(str(self._expressao(el.expressao_rotulo()).evaluate(ctx)))
+        for caixa, conds, fl in self._secoes:
+            fl.setRowVisible(caixa, all(vale(c) for c in conds))
+
+    def campos_visiveis(self):
+        """As colunas que o painel da especificação mostra para a feição atual."""
+        return set(getattr(self, '_visiveis', set())) if self._spec is not None else set()
+
+    # ---------- buffer de edição, Salvar e Descartar ----------
+    def _gravar_no_buffer(self, mudancas):
+        fid = self.fid
+        idx = self.layer.fields().indexOf
+        valores = {idx(c): v for c, v in schema.atributos_para_qgis(self.tipo, mudancas).items() if idx(c) >= 0}
+
+        def mudar():
+            for i, v in valores.items():
+                self.layer.changeAttributeValue(fid, i, v)
+        self._no_buffer(mudar)
+        self._aplicar_condicoes()
+
+    def _no_buffer(self, acao, texto='Calco: propriedades'):
+        """Executa `acao` num comando de edição da camada, abrindo a edição (e a sessão) se preciso."""
+        lyr = self.layer
+        s = self._sessoes.get(lyr.id())
+        if s is None or not lyr.isEditable():
+            abriu = not lyr.isEditable()
+            if abriu and not lyr.startEditing():
+                self.iface.messageBar().pushWarning('EBGeo', 'A camada {} não pode ser editada.'.format(lyr.name()))
+                return False
+            s = self._sessoes[lyr.id()] = {'indice': lyr.undoStack().index(), 'abriu': abriu}
+        lyr.beginEditCommand(texto)
+        try:
+            acao()
+        except Exception:
+            lyr.destroyEditCommand()
+            raise
+        lyr.endEditCommand()  # o guardião da camada aplica as regras de troca aqui
+        lyr.triggerRepaint()
+        self._atualizar_barra()
+        return True
+
+    def salvar(self):
+        """Grava no calco as mudanças da camada; fecha a edição se foi o painel que a abriu."""
+        self._gravar_timer.stop()
+        self._gravar_pendentes()
+        lyr = self.layer
+        s = self._sessoes.get(lyr.id()) if lyr is not None else None
+        if s is None or not lyr.isEditable():
+            self._atualizar_barra()
+            return False
+        if not lyr.commitChanges(s['abriu']):
+            self.iface.messageBar().pushCritical('EBGeo', 'O calco não foi salvo: {}'.format('; '.join(lyr.commitErrors())))
+            return False
+        self._sessoes.pop(lyr.id(), None)
+        self._atualizar_barra()
+        QTimer.singleShot(0, self._selecao_mudou)
+        return True
+
+    def descartar(self):
+        """Volta a camada ao estado de antes da primeira mudança feita pelo painel."""
+        self._gravar_timer.stop()
+        self._pendentes = {}
+        lyr = self.layer
+        s = self._sessoes.pop(lyr.id(), None) if lyr is not None else None
+        if s is None:
+            self._atualizar_barra()
+            return False
+        if lyr.isEditable():
+            lyr.undoStack().setIndex(s['indice'])
+            if s['abriu']:
+                lyr.rollBack()
+        lyr.triggerRepaint()
+        self._atualizar_barra()
+        QTimer.singleShot(0, self._selecao_mudou)
+        return True
+
+    def _edicao_parou(self):
+        if self.layer is not None:
+            self._sessoes.pop(self.layer.id(), None)
+        self._atualizar_barra()
+        QTimer.singleShot(0, self._selecao_mudou)
+
+    def _atualizar_barra(self):
+        com_barra = self.layer is not None and self.tipo in esp.TIPOS_COM_FORMULARIO
+        self.barra_edicao.setVisible(com_barra)
+        pendente = com_barra and self.layer.id() in self._sessoes and self.layer.isEditable()
+        self.botao_salvar.setEnabled(pendente)
+        self.botao_descartar.setEnabled(pendente)
+        self.estado_edicao.setText('Mudanças não salvas.' if pendente else ('Nada a salvar.' if com_barra else ''))
+
+
+def _recolher(caixa):
+    try:
+        caixa.setCollapsed(True)
+    except RuntimeError:  # o painel já foi remontado
+        pass
+
+
+def _spec_do_campo(campo):
+    """O widget do painel para o campo da especificação: o rico, quando há, ou o par do nativo."""
+    if campo.somente_leitura:
+        return ('leitura',)
+    if campo.rico == 'simbolo_linha':
+        return ('simbolo_linha',)
+    if campo.rico == 'km_em_m':
+        return ('km_em_m',) + tuple(campo.rico_config)
+    w, c = campo.widget, campo.widget.config
+    if w.tipo == 'TextEdit':
+        return ('texto_multilinha',) if c.get('IsMultiline') else ('texto',)
+    if w.tipo == 'Color':
+        return ('cor',)
+    if w.tipo == 'Range':
+        return ('num', c['Min'], c['Max'], c['Step'], c['Precision'], c.get('Suffix', ''))
+    if w.tipo == 'CheckBox':
+        return ('bool',)
+    if w.tipo == 'ValueMap':
+        return ('combo', [(v, k) for par in c['map'] for k, v in par.items()])
+    return ('leitura',)
+
+
+def _texto_leitura(valor):
+    if hasattr(valor, 'toString') and hasattr(valor, 'isValid'):
+        return valor.toString('dd/MM/yyyy HH:mm:ss')
+    if isinstance(valor, bool):
+        return 'Sim' if valor else 'Não'
+    if isinstance(valor, float):
+        return '%.4f' % valor
+    return str(valor)
+
 
 # ---------- Linha de Coordenação ----------
 SIMBOLO_LINHA_PADRAO = '290199'
-
-
-def _simbolo_linha(codigo):
-    from .. import estilos_taticos as et
-    return et.CATALOGO_LINHA.get(str(codigo or ''), et.CATALOGO_LINHA[et.SIMBOLO_PADRAO])
 
 
 def opcoes_simbolo_linha():
@@ -544,53 +803,6 @@ def opcoes_simbolo_linha():
     return [(g, [(c, '{} ({})'.format(s['nome'], et.designacao_linha(c)))
                  for c, s in et.CATALOGO_LINHA.items() if s['grupo'] == g])
             for g in et.GRUPOS_LINHA]
-
-
-def segunda_cor_linha(codigo):
-    """A coluna da segunda cor do símbolo (enemy_color na 140200), ou None."""
-    return _simbolo_linha(codigo).get('segunda_cor')
-
-
-def linhas_linha_coordenacao(codigo):
-    """
-    As linhas do painel da Linha de Coordenação para o símbolo `codigo`, como o painel do Web:
-    os textos só nos símbolos que os têm (e com eles o tamanho e o norte), a cor inimiga só na
-    140200, o tamanho escondido na 140000 (que não tem glifo) e a distância entre símbolos
-    escondida nos contínuos e nos fixos, que não a usam. Na 140200 a cor é a do lado amigo.
-    """
-    sim = _simbolo_linha(codigo)
-    textos = sim.get('textos') or []
-    linhas = []
-    for col, rotulo, spec in PAINEIS['coordination_line']:
-        if col in CAMPOS_TEXTO_LINHA and col not in textos:
-            continue
-        if col in ('text_size', 'text_north_facing') and not textos:
-            continue
-        if col == 'enemy_color' and sim.get('segunda_cor') != 'enemy_color':
-            continue
-        if col == 'symbol_size_km' and sim['glifo'] == 'none':
-            continue
-        if col == 'symbol_spacing_km' and (sim.get('fixo') or sim.get('continuo')):
-            continue
-        if col == 'color' and sim.get('segunda_cor'):
-            rotulo = 'Cor do lado amigo'
-        linhas.append((col, rotulo, spec))
-    return linhas
-
-
-def cor_ao_trocar_simbolo_linha(anterior, novo, atual):
-    """
-    A cor nova ao trocar o símbolo, ou None para manter: só troca a linha que ainda veste a
-    cor padrão do símbolo anterior (código desconhecido conta como a 290199, a do Web).
-    """
-    def igual(a, b):
-        return isinstance(a, str) and isinstance(b, str) and a.lower() == b.lower()
-    vazio = atual is None or (hasattr(atual, 'isNull') and atual.isNull())
-    atual = None if vazio else str(atual)
-    padrao_novo = _simbolo_linha(novo)['cor']
-    if igual(atual, _simbolo_linha(anterior)['cor']) and not igual(atual, padrao_novo):
-        return padrao_novo
-    return None
 
 
 def _rotulo_engenharia(codigo):

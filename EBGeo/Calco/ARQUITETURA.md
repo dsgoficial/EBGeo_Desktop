@@ -132,3 +132,21 @@ Cada `testes/test_*.py` roda sozinho, e o cabeçalho diz o que prova. A conferê
 | `EBGEO_TESTE_SAIDA` | pasta dos PNG de conferência (padrão: temporária) |
 
 Sem as variáveis do Web, os testes de paridade são pulados e os demais rodam.
+
+## 11. Formulário da feição
+
+Uma especificação, três consumidores. `formulario/especificacao.py` (sem QGIS) diz, por tipo, o cabeçalho, as abas, os grupos e os campos, com rótulo, widget nativo, condição gerada do catálogo e o widget rico do dock. `formulario/nativo.py` assa o formulário no estilo (categorias Fields, Forms e AttributeTable, que entram na impressão digital da seção 7, e o calco antigo ganha o formulário ao abrir); `ui/painel.py` monta o dock da mesma especificação; `guardiao.py` aplica as regras de troca (`regras.py`) em qualquer caminho de edição. No piloto (2026-10-05) só a Linha de Coordenação tem especificação; os demais tipos seguem com o formulário autogerado e o dock de antes.
+
+Decisões do chefe (2026-10-05): o formulário assado é 100 % sem código (nenhuma ação Python, função de inicialização ou widget do plugin; os editores ricos ficam só no dock); o dock edita no buffer, com Salvar e Descartar; as `attr_*` só se editam no valor.
+
+Medido no QGIS 4.0.0:
+
+- Widget registrado por plugin no estilo DERRUBA o QGIS que abre o arquivo sem o plugin (violação de acesso ao montar o formulário); função de inicialização prende o formulário no diálogo de confiança do projeto. A régua `testes/test_formulario_sem_plugin.py` reprova os dois.
+- Só contêiner tem expressão de visibilidade: o campo condicional vai num contêiner `Row` sem título (o `GroupBox` sem título ainda desenha moldura e seta). Aba com expressão some da barra de abas.
+- Rótulo e "editável" por dados persistem no estilo e funcionam sem o plugin: "Cor do lado amigo" na 140200; a feição bloqueada fica só para leitura no formulário. A tabela de atributos NÃO respeita o "editável" por dados: quem reverte a edição da bloqueada ali é o guardião.
+- `setUiForm('')` volta o layout para o autogerado: chame-o antes de `setLayout`.
+- Valor padrão `now()` com "aplicar na atualização" renova `atualizado_em` em qualquer caminho, com ou sem o plugin, e o GeoPackage o guarda em ISO UTC.
+- Ao gravar uma mudança, o formulário nativo regrava a cor como QColor mesmo sem o operador tocá-la, e o GeoPackage a guarda em minúsculas; por isso as regras comparam valor, não presença da coluna. Salvar sem mudar nada não grava nada.
+- `QgsAttributeTableModel.setData` não grava: quem grava é o `setModelData` do delegado da tabela, num comando de edição. Formulário, tabela e calculadora de campo editam dentro de `beginEditCommand`; desfazer e refazer, fora: é assim que o guardião separa edição de desfazer.
+- O grupo recolhível só recolhe visível (`setCollapsed` volta cedo), e o `QgsCollapsibleGroupBox` não-Basic relê o estado salvo nas configurações.
+- Texto multilinha no cabeçalho toma toda a altura que sobra e empurra as abas para baixo; o esticamento vertical do elemento persiste no estilo, mas não o encolhe. A Descrição vai no fim da primeira aba, com o rótulo em cima. Aba de linhas `Row` espalha as linhas pela altura: um espaçador nativo com esticamento no fim da aba fica com a sobra.

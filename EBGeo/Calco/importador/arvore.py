@@ -26,7 +26,7 @@ from osgeo import ogr
 from qgis.core import (
     QgsProject, QgsVectorLayer, QgsLayerTreeGroup, QgsLayerTreeLayer, QgsRuleBasedRenderer,
     QgsNullSymbolRenderer, QgsVectorLayerSimpleLabeling, QgsRuleBasedLabeling, QgsPalLayerSettings,
-    QgsProperty,
+    QgsProperty, QgsMapLayer,
 )
 
 from .. import schema, gpkg
@@ -107,20 +107,30 @@ def estilizar(layer, tipo, log=None, cache=None):
     Estilo do tipo: estilos_taticos, estilos_pontuais (outros módulos, opcionais)
     ou estilos_formas. Sem o módulo próprio, cai no estilo simples. Devolve o nome do usado.
     Com `cache` (dict), o estilo de um tipo é montado uma vez e copiado como QML para as
-    demais camadas do mesmo tipo (o estilo tático leva segundos para montar).
+    demais camadas do mesmo tipo (o estilo tático leva segundos para montar). A cópia vai sem
+    as propriedades personalizadas: com elas, toda camada do tipo herdava o mapa, a camada do
+    EBGeo e as ordens da primeira (medido em 2026-10-05 na fixture 06, 80 de 103 camadas).
     """
     if cache is not None and tipo in cache:
-        from qgis.PyQt.QtXml import QDomDocument
         doc_xml, nome = cache[tipo]
-        layer.importNamedStyle(doc_xml)
+        layer.importNamedStyle(doc_xml, _CATEGORIAS_COPIA)
         return nome
     nome = _estilizar(layer, tipo, log or _log)
+    from ..calco import aplicar_formulario  # formulário nativo do tipo, quando ele já o tem
+    aplicar_formulario(layer, tipo)
     if cache is not None:
+        from qgis.core import QgsReadWriteContext
         from qgis.PyQt.QtXml import QDomDocument
         doc_xml = QDomDocument()
-        layer.exportNamedStyle(doc_xml)
+        layer.exportNamedStyle(doc_xml, QgsReadWriteContext(), _CATEGORIAS_COPIA)
         cache[tipo] = (doc_xml, nome)
     return nome
+
+
+# Todas as categorias de estilo menos as propriedades personalizadas (no QGIS 4 a combinação é
+# um StyleCategory; o `&` com `~` dá int, que o exportNamedStyle recusa).
+_CATEGORIAS_COPIA = QgsMapLayer.StyleCategory(
+    QgsMapLayer.StyleCategory.AllStyleCategories.value & ~QgsMapLayer.StyleCategory.CustomProperties.value)
 
 
 def _estilizar(layer, tipo, log):
