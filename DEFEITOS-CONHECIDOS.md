@@ -18,14 +18,6 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 
 **Conserto sugerido.** Não há conserto sem código no formulário; o caminho é aceitar e documentar, ou aplicar os padrões que couberem como valor padrão de campo por expressão.
 
-## K6 Mapa de visibilidade e soma por setor travam a interface
-
-**Sintoma.** Durante o cálculo, o QGIS fica sem resposta (só com o cursor de espera).
-
-**Onde.** `EBGeo/Visibility/UI/interface_window.py` e `EBGeo/VisibilityAnalysis/visibilityAnalysis.py`, que chamam o motor de `EBGeo/Visada/nucleo.py` na linha da interface.
-
-**Conserto sugerido.** Rodar como `QgsTask`, como a cobertura de radar (`EBGeo/Visada/cobertura_radar.py`).
-
 ## K8 Formas com hachura ligada e tipo vazio não desenham a hachura
 
 **Sintoma.** Polígono, círculo, elipse, retângulo ou setor vindo do Web com `hatchEnabled` verdadeiro e `hatchType` ausente ou nulo: o Web desenha hachura diagonal, o Desktop não desenha nenhuma.

@@ -37,6 +37,27 @@ class ErroVisada(Exception):
     """Erro de entrada com mensagem para o operador (em português)."""
 
 
+class Cancelado(Exception):
+    """O cálculo foi cancelado pelo operador (a tarefa em segundo plano)."""
+
+
+def _parar_se_cancelado(cancelado):
+    if cancelado is not None and cancelado():
+        raise Cancelado()
+
+
+def _avanco(progresso, cancelado, inicio, fim):
+    """Callback de progresso do GDAL que leva 0..1 a inicio..fim e devolve 0 (para) se cancelado."""
+    if progresso is None and cancelado is None:
+        return None
+
+    def cb(completo, _mensagem=None, _dados=None):
+        if progresso is not None:
+            progresso(inicio + (fim - inicio) * float(completo))
+        return 0 if (cancelado is not None and cancelado()) else 1
+    return cb
+
+
 class _Excecoes:
     """Liga as exceções do GDAL, OGR e OSR só durante o cálculo, sem mexer no resto do QGIS."""
 
@@ -318,20 +339,29 @@ def _preparar_grade(fonte, pontos, raios, banda, geometrias, resolucao, rotulo, 
     return Grade(out, srs_t, valido, reprojetar or out.GetProjection() != ds.GetProjection(), pts_t, srs_mde)
 
 
-def visada(grade, x, y, altura_obs, raio, k=K_OPTICO, altura_alvo=0.0, modo='normal'):
+def visada(grade, x, y, altura_obs, raio, k=K_OPTICO, altura_alvo=0.0, modo='normal', progresso=None,
+           cancelado=None):
     """
     Visada de um observador em (x, y), no SRC da grade.
 
     modo 'normal': matriz booleana (visível); 'chao': altura mínima do alvo acima do terreno para
     ser visto (m), infinita fora do alcance ou sem dado; 'mde': a mesma altura somada à cota.
+    progresso(p) recebe de 0 a 100 durante o GDAL; cancelado() verdadeiro levanta Cancelado.
     """
+    _parar_se_cancelado(cancelado)
+    cb = _avanco(progresso, cancelado, 0.0, 100.0)
     with _Excecoes():
         modos = {'normal': gdal.GVOT_NORMAL, 'chao': gdal.GVOT_MIN_TARGET_HEIGHT_FROM_GROUND,
                  'mde': gdal.GVOT_MIN_TARGET_HEIGHT_FROM_DEM}
         passo = max(grade.resolucao)
-        v = gdal.ViewshedGenerate(grade.banda, 'MEM', '', [], float(x), float(y), float(altura_obs),
-                                  float(altura_alvo), 1, 0, 0, 0, coeficiente_curvatura(k), gdal.GVM_Edge,
-                                  float(raio) + 2 * passo, heightMode=modos[modo])
+        try:
+            v = gdal.ViewshedGenerate(grade.banda, 'MEM', '', [], float(x), float(y), float(altura_obs),
+                                      float(altura_alvo), 1, 0, 0, 0, coeficiente_curvatura(k), gdal.GVM_Edge,
+                                      float(raio) + 2 * passo, callback=cb, heightMode=modos[modo])
+        except RuntimeError:
+            _parar_se_cancelado(cancelado)
+            raise
+        _parar_se_cancelado(cancelado)
         a = v.GetRasterBand(1).ReadAsArray()
         gv = v.GetGeoTransform()
     gt = grade.gt
@@ -379,10 +409,11 @@ class Resultado:
         self.avisos = avisos
 
 
-def mapa_visibilidade(fonte, x, y, altura_obs, raio, banda=1, k=K_OPTICO):
+def mapa_visibilidade(fonte, x, y, altura_obs, raio, banda=1, k=K_OPTICO, progresso=None, cancelado=None):
     """
     Mapa 0/1 de um observador (x, y no SRC do MDE); célula sem dado do MDE = SEM_DADO_MAPA.
     Raio zero ou negativo é alcance ilimitado (o -1 do r.viewshed): o MDE inteiro.
+    progresso(p) recebe de 0 a 100; cancelado() verdadeiro levanta Cancelado.
     """
     avisos = []
     ilimitado = not raio or raio <= 0
@@ -392,7 +423,10 @@ def mapa_visibilidade(fonte, x, y, altura_obs, raio, banda=1, k=K_OPTICO):
     if ilimitado:
         avisos.clear()
     ox, oy = grade.pontos[0]
-    vis = visada(grade, ox, oy, altura_obs, raio, k)
+    if progresso is not None:
+        progresso(5.0)
+    vis = visada(grade, ox, oy, altura_obs, raio, k, cancelado=cancelado,
+                 progresso=None if progresso is None else (lambda p: progresso(5.0 + 0.9 * p)))
     m = vis.astype(np.uint8)
     m[~grade.valido] = SEM_DADO_MAPA
     return Resultado(grade, m, avisos)
@@ -406,12 +440,13 @@ def _primeiro_vertice(g):
     return anel.GetX(0), anel.GetY(0), anel
 
 
-def soma_por_setor(fonte, setores, banda=1, k=K_OPTICO):
+def soma_por_setor(fonte, setores, banda=1, k=K_OPTICO, progresso=None, cancelado=None):
     """
     A Análise de Visibilidade por setor: cada setor (WKB no SRC do MDE, altura do observador)
     tem o observador no primeiro vértice e alcance até o vértice mais distante. A célula vale o
     número de observadores que a veem DENTRO do próprio setor; fora de todos os setores, ou sem
-    dado no MDE, vale SEM_DADO_CONTAGEM.
+    dado no MDE, vale SEM_DADO_CONTAGEM. progresso(p) recebe de 0 a 100; cancelado() verdadeiro
+    levanta Cancelado.
     """
     if not setores:
         raise ErroVisada('Não há nenhum setor de visada adquirido.')
@@ -425,12 +460,15 @@ def soma_por_setor(fonte, setores, banda=1, k=K_OPTICO):
                            avisos=avisos)
     contagem = np.zeros((grade.altura, grade.largura), dtype=np.int16)
     uniao = np.zeros_like(grade.valido)
-    for wkb, altura in setores:
+    n = len(setores)
+    for i, (wkb, altura) in enumerate(setores):
+        _parar_se_cancelado(cancelado)
         g = grade.geometria(wkb)
         cx, cy, anel = _primeiro_vertice(g)
-        raio = max(math.hypot(anel.GetX(i) - cx, anel.GetY(i) - cy) for i in range(anel.GetPointCount()))
+        raio = max(math.hypot(anel.GetX(j) - cx, anel.GetY(j) - cy) for j in range(anel.GetPointCount()))
         dentro = mascara(grade, g)
-        vis = visada(grade, cx, cy, altura, raio, k)
+        vis = visada(grade, cx, cy, altura, raio, k, cancelado=cancelado,
+                     progresso=None if progresso is None else (lambda p, i=i: progresso(5.0 + 90.0 * (i + p / 100.0) / n)))
         contagem += (vis & dentro).astype(np.int16)
         uniao |= dentro
     contagem[~(uniao & grade.valido)] = SEM_DADO_CONTAGEM

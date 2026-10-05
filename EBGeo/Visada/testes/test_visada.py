@@ -17,6 +17,9 @@ O que cada classe prova:
                        fora do MDE e coordenada digitada noutro SRC;
     TestAnaliseSetores a soma de observadores por setor, sem GRASS, contra a referência, com o MDE
                        em graus, e a saída no formato de antes (campo "value", estilo vermelho-verde);
+    TestSemTravar      o Mapa de visibilidade e a soma por setor rodam numa QgsTask: a maior pausa da
+                       linha da interface é uma fração pequena do cálculo, o progresso anda, e o
+                       cancelamento chega ao GDAL e não deixa camada (K6);
     TestContraGrass    o r.viewshed do GRASS contra o motor novo (só roda com o GRASS configurado,
                        como no QGIS aberto pelo atalho, que define GISBASE);
     TestPlugin         as ações do menu abrem as ferramentas.
@@ -27,6 +30,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -248,8 +252,21 @@ def mapa_visibilidade(caminho_mde, x, y, crs_ponto, saida, h=H_OBS, alcance=ALCA
     avisos = []
     with mock.patch.object(QMessageBox, 'warning', side_effect=lambda *a: avisos.append(a[-1])), \
             mock.patch.object(QMessageBox, 'critical', side_effect=lambda *a: avisos.append(a[-1])):
-        w.doWork(QgsPointXY(x, y), QgsCoordinateReferenceSystem(crs_ponto))
+        esperar(w.doWork(QgsPointXY(x, y), QgsCoordinateReferenceSystem(crs_ponto)))
     return avisos
+
+
+def esperar(tarefa, limite=300.0):
+    """Roda o laço de eventos até a tarefa de visibilidade terminar (o concluir já rodou)."""
+    if tarefa is None:
+        return
+    from qgis.PyQt.QtCore import QCoreApplication
+    t0 = time.perf_counter()
+    while not tarefa.terminou:
+        QCoreApplication.processEvents()
+        if time.perf_counter() - t0 > limite:
+            raise AssertionError('a tarefa de visibilidade não terminou em {:.0f} s'.format(limite))
+        time.sleep(0.002)
 
 
 def analise_setores(caminho_mde, setores_lyr):
@@ -259,7 +276,7 @@ def analise_setores(caminho_mde, setores_lyr):
     va = VisibilityAnalysis(IFACE)
     avisos = []
     with mock.patch.object(QMessageBox, 'warning', side_effect=lambda *a: avisos.append(a[-1])):
-        va.viewshedOfFeatTargetSector(setores_lyr, mde)
+        esperar(va.viewshedOfFeatTargetSector(setores_lyr, mde))
     saidas = QgsProject.instance().mapLayersByName('Vetor Resultante da Linha de Visada')
     return (saidas[-1] if saidas else None), avisos, mde
 
@@ -564,6 +581,177 @@ class TestContraGrass(unittest.TestCase):
             MEDIDAS.append('GRASS r.viewshed contra o GDAL ({}): {:.2f} % de {} células iguais'.format(
                 nome, p, int(alcance.sum())))
             self.assertGreater(p, 99.5)
+
+
+#: MDE grande (30 km de lado, célula de 10 m, 9 milhões de células) para o cálculo durar segundos
+N_GRANDE, RES_GRANDE = 3001, 10.0
+C_GRANDE = (S.X0 + (N_GRANDE / 2) * RES_GRANDE, S.Y0 - (N_GRANDE / 2) * RES_GRANDE)
+_MDE_GRANDE = []
+
+
+def mde_grande():
+    if not _MDE_GRANDE:
+        morros = [S.gaussiana(C_GRANDE[0] + dx, C_GRANDE[1] + dy, h, sg, base=0.0)
+                  for dx, dy, h, sg in ((3000, 1000, 150, 900), (-5000, 4000, 220, 1500), (2000, -6000, 90, 600),
+                                        (-7000, -3000, 300, 2500), (9000, 8000, 180, 1200))]
+        fun = lambda x, y: 100.0 + sum(m(x, y) for m in morros)  # noqa: E731
+        cx, cy = S.centros(N_GRANDE, N_GRANDE, RES_GRANDE)
+        _MDE_GRANDE.append(S.gravar_mde(os.path.join(TMP, 'grande.tif'), fun(cx, cy), RES_GRANDE))
+    return _MDE_GRANDE[0]
+
+
+class Relogio:
+    """Mede a maior pausa da linha da interface: um QTimer de 10 ms anota o intervalo entre os
+    disparos, a contar do início (o primeiro disparo só sai quando a linha volta ao laço)."""
+
+    def __init__(self):
+        from qgis.PyQt.QtCore import QTimer
+        self.timer = QTimer()
+        self.timer.setInterval(10)
+        self.timer.timeout.connect(self._tique)
+        self.tarefa = None
+        self.progressos = []
+
+    def _tique(self):
+        agora = time.perf_counter()
+        self.maior = max(self.maior, agora - self.ultimo)
+        self.ultimo = agora
+        if self.tarefa is not None:
+            self.progressos.append(self.tarefa.avanco)
+
+    def medir(self, acionar, cancelar_em=None):
+        from qgis.PyQt.QtCore import QCoreApplication
+        self.maior = 0.0
+        self.inicio = self.ultimo = time.perf_counter()
+        self.timer.start()
+        self.tarefa = acionar()
+        if cancelar_em is not None and self.tarefa is not None:
+            while not self.tarefa.terminou and self.tarefa.avanco < cancelar_em:
+                QCoreApplication.processEvents()
+                time.sleep(0.002)
+            if not self.tarefa.terminou:
+                self.tarefa.cancel()
+        esperar(self.tarefa)
+        QCoreApplication.processEvents()
+        self.timer.stop()
+        self._tique()
+        self.total = time.perf_counter() - self.inicio
+        return self
+
+
+#: seis setores de 12 a 13 km sobre o MDE grande (centro, raio, ângulos, altura do observador)
+SETORES_GRANDES = [((0, 0), 13000.0, (-170, 170), 10.0), ((-2000, 1000), 12000.0, (0, 300), 5.0),
+                   ((1500, -1500), 12500.0, (40, 220), 8.0), ((-1000, -2000), 12000.0, (90, 350), 3.0),
+                   ((2500, 2000), 12000.0, (180, 400), 12.0), ((0, 2500), 13000.0, (-90, 150), 6.0)]
+
+
+class TestSemTravar(unittest.TestCase):
+    """K6: o Mapa de visibilidade e a soma por setor rodam numa QgsTask, com progresso e cancelamento,
+    e a linha da interface não para durante o cálculo (o código de antes parava o tempo todo)."""
+
+    PAUSA_MAXIMA = 0.25   # s
+
+    def setUp(self):
+        QgsProject.instance().removeAllMapLayers()
+        IFACE.messageBar().reset_mock()
+
+    def _painel_mapa(self, saida):
+        from EBGeo.Visibility.UI.interface_window import Interface
+        mde = QgsRasterLayer(mde_grande(), 'MDT')
+        QgsProject.instance().addMapLayer(mde)
+        w = Interface(IFACE)
+        w.layerCombo.setLayer(mde)
+        w.outputFile.setFilePath(os.path.join(TMP, saida))
+        w.heightSpinBox.setValue(10.0)
+        w.rangeSpinBox.setValue(14000.0)
+        return w
+
+    def _camada_setores_grandes(self):
+        lyr = QgsVectorLayer('Polygon?crs={}'.format(EPSG), 'Setor de Visada', 'memory')
+        lyr.dataProvider().addAttributes([QgsField('altura_obs', QMetaType.Type.Double)])
+        lyr.updateFields()
+        feats = []
+        for (dx, dy), r, (a0, a1), h in SETORES_GRANDES:
+            f = QgsFeature(lyr.fields())
+            f.setGeometry(setor(C_GRANDE[0] + dx, C_GRANDE[1] + dy, r, a0, a1, segmentos=90))
+            f['altura_obs'] = h
+            feats.append(f)
+        lyr.dataProvider().addFeatures(feats)
+        QgsProject.instance().addMapLayer(lyr)
+        return lyr
+
+    def _conferir_sem_pausa(self, m, rotulo):
+        MEDIDAS.append('{}: maior pausa da interface {:.3f} s em {:.2f} s de cálculo; progresso visto {}'.format(
+            rotulo, m.maior, m.total, sorted(set(int(p) for p in m.progressos))[:12]))
+        # a pausa tem de ser uma fração pequena do cálculo: no código de antes ela É o cálculo
+        self.assertGreater(m.total, 0.1, 'o caso precisa durar para a medida valer')
+        self.assertLess(m.maior, min(self.PAUSA_MAXIMA, m.total / 4))
+        intermediarios = {int(p) for p in m.progressos if 0 < p < 100}
+        self.assertGreaterEqual(len(intermediarios), 3, 'o progresso não andou durante o cálculo')
+
+    def test_mapa_roda_em_segundo_plano(self):
+        w = self._painel_mapa('grande_vis.tif')
+        p = QgsPointXY(*C_GRANDE)
+        m = Relogio().medir(lambda: w.doWork(p, QgsCoordinateReferenceSystem(EPSG)))
+        self._conferir_sem_pausa(m, 'Mapa de visibilidade (9 milhões de células, alcance 14 km)')
+        lyr = QgsProject.instance().mapLayersByName('Mapa de visibilidade')
+        self.assertEqual(len(lyr), 1)
+        a, _, _ = ler_grade_de(lyr[0].source())
+        self.assertGreater(int((a == 1).sum()), 100000)
+        render([lyr[0], relevo(mde_grande())], 'visada_tarefa_mapa.png')
+
+    def test_setores_rodam_em_segundo_plano(self):
+        from EBGeo.VisibilityAnalysis.visibilityAnalysis import VisibilityAnalysis
+        mde = QgsRasterLayer(mde_grande(), 'MDE')
+        QgsProject.instance().addMapLayer(mde)
+        lyr = self._camada_setores_grandes()
+        va = VisibilityAnalysis(IFACE)
+        m = Relogio().medir(lambda: va.viewshedOfFeatTargetSector(lyr, mde))
+        self._conferir_sem_pausa(m, 'Análise por setor (seis setores de 12 a 13 km)')
+        saidas = QgsProject.instance().mapLayersByName('Vetor Resultante da Linha de Visada')
+        self.assertEqual(len(saidas), 1)
+        valores = sorted(saidas[0].uniqueValues(saidas[0].fields().indexOf('value')))
+        self.assertEqual(valores[0], 0)
+        self.assertGreaterEqual(valores[-1], 3)
+        render([saidas[0], relevo(mde_grande())], 'visada_tarefa_setores.png')
+
+    def _conferir_cancelado(self, m, nome_camada, rotulo):
+        MEDIDAS.append('{} cancelado em {:.0f} %: terminou em {:.2f} s'.format(
+            rotulo, max(m.progressos or [0]), m.total))
+        self.assertIsNotNone(m.tarefa, 'sem tarefa não há o que cancelar')
+        self.assertEqual(QgsProject.instance().mapLayersByName(nome_camada), [])
+        infos = [c.args for c in IFACE.messageBar().pushInfo.call_args_list]
+        self.assertTrue(any('cancelado' in str(a[-1]) for a in infos), infos)
+        self.assertLess(max(m.progressos), 100)
+
+    def test_motor_para_no_meio_do_gdal(self):
+        """O cancelamento chega ao GDAL: o viewshed para logo depois do aviso de progresso."""
+        chamadas = []
+        nucleo.mapa_visibilidade(mde_grande(), C_GRANDE[0], C_GRANDE[1], 10.0, 14000.0,
+                                 progresso=chamadas.append, cancelado=lambda: False)
+        parcial = []
+        with self.assertRaises(nucleo.Cancelado):
+            nucleo.mapa_visibilidade(mde_grande(), C_GRANDE[0], C_GRANDE[1], 10.0, 14000.0,
+                                     progresso=parcial.append, cancelado=lambda: len(parcial) > 3)
+        MEDIDAS.append('viewshed do GDAL: {} avisos de progresso no cálculo inteiro, {} até parar'.format(
+            len(chamadas), len(parcial)))
+        self.assertGreater(len(chamadas), 50)
+        self.assertLess(len(parcial), 10)
+
+    def test_cancelar_o_mapa(self):
+        w = self._painel_mapa('grande_cancelado.tif')
+        p = QgsPointXY(*C_GRANDE)
+        m = Relogio().medir(lambda: w.doWork(p, QgsCoordinateReferenceSystem(EPSG)), cancelar_em=20)
+        self._conferir_cancelado(m, 'Mapa de visibilidade', 'Mapa de visibilidade')
+
+    def test_cancelar_os_setores(self):
+        from EBGeo.VisibilityAnalysis.visibilityAnalysis import VisibilityAnalysis
+        mde = QgsRasterLayer(mde_grande(), 'MDE')
+        QgsProject.instance().addMapLayer(mde)
+        lyr = self._camada_setores_grandes()
+        va = VisibilityAnalysis(IFACE)
+        m = Relogio().medir(lambda: va.viewshedOfFeatTargetSector(lyr, mde), cancelar_em=20)
+        self._conferir_cancelado(m, 'Vetor Resultante da Linha de Visada', 'Análise por setor')
 
 
 def caixas_de_mensagem_soltas():

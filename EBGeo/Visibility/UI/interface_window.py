@@ -9,6 +9,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QApplication
 from ...Visada import nucleo
 from ...Visada.refracao import K_OPTICO
+from ...Visada.tarefa import TarefaVisada
 from qgis.gui import QgsMapToolEmitPoint, QgsVertexMarker
 from .interface_dialog import InterfaceDialog
 
@@ -92,25 +93,40 @@ class Interface(QtWidgets.QDockWidget, GUI):
         transformer = QgsCoordinateTransform(pointCrs, workingLayer.crs(), QgsProject.instance())
         workPoint = transformer.transform(inputPoint)
 
-        # Visada pelo GDAL (sem GRASS): recorte ao alcance, SRC métrico se o MDT estiver em graus,
+        # Visada pelo GDAL (sem GRASS): recorte ao alcance, SRC métrico se o MDE estiver em graus,
         # curvatura da Terra e refração óptica (k de Visada/refracao.py). Saída 0/1 como a do
-        # r.viewshed -b que esta ferramenta usava.
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            resultado = nucleo.mapa_visibilidade(
-                workingLayer.source(), workPoint.x(), workPoint.y(), self.heightSpinBox.value(),
-                self.rangeSpinBox.value(), k=K_OPTICO)
+        # r.viewshed -b que esta ferramenta usava. O cálculo roda numa QgsTask (progresso e
+        # cancelamento no gerenciador de tarefas); a camada entra no fim, na linha da interface.
+        fonte = workingLayer.source()
+        x, y = workPoint.x(), workPoint.y()
+        altura, alcance = self.heightSpinBox.value(), self.rangeSpinBox.value()
+
+        def calcular(progresso, cancelado):
             from osgeo import gdal
-            nucleo.salvar_geotiff(resultado.grade, resultado.matriz, outputpath, gdal.GDT_Byte, nucleo.SEM_DADO_MAPA)
-        except nucleo.ErroVisada as e:
-            QMessageBox.warning(self, u"Mapa de visibilidade", str(e))
+            resultado = nucleo.mapa_visibilidade(fonte, x, y, altura, alcance, k=K_OPTICO,
+                                                 progresso=progresso, cancelado=cancelado)
+            if cancelado():
+                raise nucleo.Cancelado()
+            nucleo.salvar_geotiff(resultado.grade, resultado.matriz, outputpath, gdal.GDT_Byte,
+                                  nucleo.SEM_DADO_MAPA)
+            progresso(100.0)
+            return resultado
+
+        self.tarefa = TarefaVisada.iniciar(u"Mapa de visibilidade", calcular,
+                                           lambda resultado, erro: self.concluir(resultado, erro, outputpath))
+        return self.tarefa
+
+    def concluir(self, resultado, erro, outputpath):
+        """Fim da tarefa, na linha da interface: a camada e o estilo, ou o aviso."""
+        if erro == 'cancelado':
+            self.iface.messageBar().pushInfo(u"Mapa de visibilidade", u"Cálculo cancelado.")
             return
-        finally:
-            QApplication.restoreOverrideCursor()
+        if erro is not None:
+            QMessageBox.warning(self, u"Mapa de visibilidade", erro)
+            return
         for aviso in resultado.avisos:
             self.iface.messageBar().pushWarning(u"Mapa de visibilidade", aviso)
 
         visibLayer = QgsRasterLayer(outputpath, "Mapa de visibilidade")
         QgsProject.instance().addMapLayer(visibLayer)
         self.setRasterStyle(visibLayer)
-        return

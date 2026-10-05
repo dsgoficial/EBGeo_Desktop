@@ -41,6 +41,7 @@ from EBGeo.VisibilityAnalysis.visibilityAnalysis_ui import (
 )
 from EBGeo.Visada import nucleo
 from EBGeo.Visada.refracao import K_OPTICO
+from EBGeo.Visada.tarefa import TarefaVisada
 import os
 
 class VisibilityAnalysis(
@@ -342,16 +343,33 @@ class VisibilityAnalysis(
             )
             return
 
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            resultado = nucleo.soma_por_setor(mds.source(), setores, k=K_OPTICO)
-            caminho = QgsProcessingUtils.generateTempFilename(f"visada_setores_{uuid4().hex}.gpkg")
+        # O cálculo roda numa QgsTask (progresso e cancelamento no gerenciador de tarefas); a
+        # camada, o estilo e a ordem das camadas entram no fim, na linha da interface.
+        fonte = mds.source()
+        caminho = QgsProcessingUtils.generateTempFilename(f"visada_setores_{uuid4().hex}.gpkg")
+
+        def calcular(progresso, cancelado):
+            resultado = nucleo.soma_por_setor(fonte, setores, k=K_OPTICO, progresso=progresso,
+                                              cancelado=cancelado)
+            if cancelado():
+                raise nucleo.Cancelado()
             nucleo.poligonizar(resultado.grade, resultado.matriz, caminho, "value", "visada_setores")
-        except nucleo.ErroVisada as e:
-            QMessageBox.warning(self.iface.mainWindow(), self.tr("Erro!"), str(e))
+            progresso(100.0)
+            return resultado
+
+        self.tarefa = TarefaVisada.iniciar(
+            self.tr("Análise de Visibilidade"), calcular,
+            lambda resultado, erro: self.concluirSetores(resultado, erro, caminho, layer))
+        return self.tarefa
+
+    def concluirSetores(self, resultado, erro, caminho, layer):
+        """Fim da tarefa, na linha da interface: a camada, o estilo e a ordem, ou o aviso."""
+        if erro == 'cancelado':
+            self.iface.messageBar().pushInfo(self.tr("Análise de Visibilidade"), self.tr("Cálculo cancelado."))
             return
-        finally:
-            QApplication.restoreOverrideCursor()
+        if erro is not None:
+            QMessageBox.warning(self.iface.mainWindow(), self.tr("Erro!"), erro)
+            return
         for aviso in resultado.avisos:
             self.iface.messageBar().pushWarning(self.tr("Análise de Visibilidade"), aviso)
 
