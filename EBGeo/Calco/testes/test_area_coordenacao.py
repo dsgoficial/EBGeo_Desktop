@@ -22,6 +22,9 @@ O que cada classe prova:
                       textos, escalão, "M", nomes de portão) contra o Web rodado em node, em
                       polígono convexo e côncavo, nos dois sentidos de traçado, com a régua
                       provada antes contra a saída real degradada (contagem, posição, lado);
+    TestChamadaNoU    o texto externo em 199 razões num U e num convexo, contra o Web: a linha
+                      de chamada nunca cruza o polígono (o Web cruza no U, D3 dele), e onde o
+                      Web não cruza o Desktop desenha a chamada e o bloco onde ele desenha;
     TestZoom          Correção de Zoom ligada (terreno) e desligada (tela), e o piso da hachura;
     TestRender        PNG de cada tipo, estilo salvo no layer_styles reaberto sem o plugin,
                       tempo de 30 áreas e a seleção pelo interior;
@@ -468,14 +471,20 @@ class TestContraWeb(unittest.TestCase):
                 # linha de chamada e bloco de texto (todos os tipos)
                 w = [geojson_para_geom(d['geometry']) for d in _lin(deco, 'leader')]
                 q = avaliar(m.expr('area_chamada'), vl, f)
-                if w:
+                # a chamada do Web que cruza o polígono é o D3 dele: o Desktop não cruza, e a
+                # chamada, o bloco e a âncora saem da comparação (TestChamadaNoU os mede)
+                d3 = bool(w) and bool(cruzamentos(w[0], coords, tr))
+                if d3:
+                    self.assertEqual(cruzamentos(q, coords, tr), 0, nome + ': chamada que cruza o polígono')
+                    pior['chamada no D3 do Web'] = pior.get('chamada no D3 do Web', 0) + 1
+                elif w:
                     pior['chamada'] = max(pior.get('chamada', 0), self._comparar(nome + ' chamada', w, partes(q), tr))
                 else:
                     self.assertTrue(q is None or q.isNull(), nome + ': chamada que o Web não desenha')
                 linhas = '\n'.join(avaliar(m.expr_linhas(), vl, f) or [])
                 blocos = _web_textos(deco, lambda p: p.get('boxed') and '\n' in p['text'] or p['text'] == linhas)
                 blocos = [b for b in blocos if b['properties']['text'] == linhas]
-                if linhas:
+                if linhas and not d3:
                     self.assertEqual(len(blocos), 1, nome + ': o bloco do Web')
                     b = blocos[0]
                     pq = avaliar(m.expr('area_rotulo_ponto'), vl, f)
@@ -531,6 +540,120 @@ class TestContraWeb(unittest.TestCase):
                 with self.subTest(caso=nome):
                     e = 'area_dentes' if attrs['symbol_code'] == '151203' else 'area_portoes'
                     self.assertTrue(dentes_para_fora(f, partes(avaliar(m.expr(e), vl, f))), nome)
+
+
+# U aberto ao norte com braços de 0,01 grau e vão de 0,02 grau, como o D3 do Web (DEFEITOS-CONHECIDOS
+# do ebgeo_web): na parede de dentro de um braço, a normal externa aponta para o outro braço.
+U_D3 = [(-43.10, -22.95), (-43.06, -22.95), (-43.06, -22.90), (-43.07, -22.90), (-43.07, -22.94),
+        (-43.09, -22.94), (-43.09, -22.90), (-43.10, -22.90)]
+RAZOES_D3 = [round(0.005 * i, 3) for i in range(1, 200)]
+
+
+def cruzamentos(chamada, anel, tr):
+    """Arestas do anel que a linha de chamada cruza, fora das que passam a 1 m do ponto da borda."""
+    if chamada is None or chamada.isNull() or chamada.isEmpty():
+        return None
+    linha = metrico(chamada, tr).asPolyline()
+    pq = QgsGeometry.fromPointXY(linha[0])
+    seg = QgsGeometry.fromPolylineXY(linha)
+    pts = [metrico(QgsGeometry.fromPointXY(QgsPointXY(*p)), tr).asPoint() for p in anel + [anel[0]]]
+    n = 0
+    for a, b in zip(pts, pts[1:]):
+        aresta = QgsGeometry.fromPolylineXY([a, b])
+        if aresta.distance(pq) >= 1.0 and seg.intersects(aresta):
+            n += 1
+    return n
+
+
+class TestChamadaNoU(unittest.TestCase):
+    """
+    Texto externo num polígono côncavo: a linha de chamada não cruza o polígono. O Web leva o bloco
+    pela normal até o retângulo ficar livre e não testa o segmento (D3 do Web); o Desktop gira a
+    normal quando o segmento corta o polígono. Régua independente: as arestas que a chamada cruza,
+    contadas no plano local; e, onde o Web não cruza, a chamada, o bloco e a âncora do Web.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        textos = dict(tipo='Obj', identificacao='BAGRE', gdh_ini='121400Z JUN', gdh_fim='121800Z JUN',
+                      outras_info='Outras info')
+        cls.casos, entrada = {}, []
+        for nome, g in (('U', U_D3), ('convexo', QUADRA)):
+            for r in RAZOES_D3:
+                attrs = dict(symbol_code='150000', text_position='externa', text_ratio=r, **textos)
+                vl, f = nova_area(g, **attrs)
+                cls.casos.setdefault(nome, []).append((r, g, vl, f))
+                col = dict(schema.padroes('coordination_area'))
+                col.update(created_zoom=Z0, symbol_size_km=0.2)
+                col.update(attrs)
+                entrada.append({'coords': [list(c) for c in g] + [list(g[0])], 'props': props_web(col), 'zoom': Z0})
+        web, cls.motivo = rodar_web(entrada)
+        cls.web = {}
+        if web is not None:
+            cls.web = {'U': web[:len(RAZOES_D3)], 'convexo': web[len(RAZOES_D3):]}
+
+    def _medir(self, nome):
+        m = ea()
+        out = []
+        for (r, g, vl, f), deco in zip(self.casos[nome], self.web.get(nome) or [None] * len(RAZOES_D3)):
+            tr = plano(*centro_de(f))
+            q = avaliar(m.expr('area_chamada'), vl, f)
+            w = [geojson_para_geom(d['geometry']) for d in _lin(deco, 'leader')] if deco else []
+            out.append((r, g, vl, f, deco, tr, q, cruzamentos(q, g, tr), cruzamentos(w[0], g, tr) if w else None, w))
+        return out
+
+    def test_chamada_nunca_cruza_o_poligono(self):
+        for nome in ('U', 'convexo'):
+            medidas = self._medir(nome)
+            cruzam = [r for r, *_x, nd, _nw, _w in medidas if nd]
+            sem = [r for r, *_x, nd, _nw, _w in medidas if nd is None]
+            self.assertEqual(sem, [], nome + ': razão sem linha de chamada')
+            self.assertEqual(cruzam, [], nome)
+            # o bloco fica fora do polígono, e a chamada termina no ponto do bloco
+            m = ea()
+            for r, g, vl, f, _d, tr, q, *_x in medidas:
+                p = avaliar(m.expr('area_rotulo_ponto'), vl, f)
+                self.assertFalse(p.intersects(f.geometry()), (nome, r))
+                self.assertLess(metrico(p, tr).distance(metrico(QgsGeometry.fromPointXY(q.asPolyline()[-1]), tr)), 0.01)
+            web = sum(1 for *_x, nw, _w in medidas if nw)
+            medir('texto externo, {} em {} razões: chamadas que cruzam o polígono no Desktop {}, no Web {}'.format(
+                nome, len(medidas), len(cruzam), web if self.web else 'sem o Web'))
+
+    def test_igual_ao_web_onde_o_web_nao_cruza(self):
+        if not self.web:
+            self.skipTest(self.motivo)
+        m = ea()
+        exercitado = 0
+        for nome in ('U', 'convexo'):
+            iguais, cruzam = 0, 0
+            for r, g, vl, f, deco, tr, q, nd, nw, w in self._medir(nome):
+                if nw:
+                    cruzam += 1
+                    continue
+                with self.subTest(caso=nome, razao=r):
+                    self.assertLess(_pareados(w, partes(q), tr), TOL_M)
+                    linhas = chr(10).join(avaliar(m.expr_linhas(), vl, f) or [])
+                    b = [t for t in _web_textos(deco, lambda p: p['text'] == linhas)][0]
+                    self.assertLess(_hausdorff(geojson_para_geom(b['geometry']), avaliar(m.expr('area_rotulo_ponto'), vl, f), tr),
+                                    TOL_M)
+                    self.assertEqual(avaliar(m.expr('area_rotulo_quadrante'), vl, f), ANCORA_QUADRANTE[b['properties']['anchor']])
+                    iguais += 1
+            if nome == 'convexo':
+                self.assertEqual(cruzam, 0)  # o caso convexo é todo comparado
+            else:
+                exercitado = cruzam
+            medir('texto externo, {}: chamada, bloco e âncora iguais ao Web em {} razões; {} em que o Web cruza'.format(
+                nome, iguais, cruzam))
+        self.assertGreater(exercitado, 20)  # o U exercita o defeito do Web
+
+    def test_regua_reprova_a_chamada_que_cruza(self):
+        """Pior caso: a chamada REAL do Web (o algoritmo do Desktop de antes) no U, razão 0,045."""
+        if not self.web:
+            self.skipTest(self.motivo)
+        i = RAZOES_D3.index(0.045)
+        r, g, vl, f = self.casos['U'][i]
+        w = [geojson_para_geom(d['geometry']) for d in _lin(self.web['U'][i], 'leader')]
+        self.assertEqual(cruzamentos(w[0], g, plano(*centro_de(f))), 2)
 
 
 ANCORA_QUADRANTE = {'left': 5, 'bottom-left': 2, 'bottom': 1, 'bottom-right': 0, 'right': 3,

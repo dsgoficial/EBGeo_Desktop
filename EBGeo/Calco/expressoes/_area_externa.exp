@@ -3,7 +3,21 @@
    vez (até 8) enquanto um polígono côncavo ainda o alcançar. O tamanho do bloco é a
    estimativa do Web (0,62 em por caractere, linha de 1,2 em, folga de 8 x 4 px), em metros
    de terreno pelo px do zoom de criação (texto preso ao terreno) ou da escala atual.
-   ks é o setor da normal (0 = leste, sentido anti-horário), que dá a âncora do texto. */
+   ks é o setor da normal (0 = leste, sentido anti-horário), que dá a âncora do texto.
+
+   A linha de chamada (pq até q) não cruza o polígono: na concavidade a normal aponta para o
+   outro braço do U, e o único lugar livre do bloco ficava além dele (D3 do Web, que segue com
+   o defeito). dh é a distância de pq ao primeiro ponto do polígono pela normal (-1 sem
+   nenhum); quando o q do Web fica além dele, o segmento corta o polígono, e rc procura, a
+   cada distância (kk de 0 a 7), a normal girada de 15 em 15 graus para cada lado até 75 (cand:
+   seno, cosseno, distância até a tangente e rumo de cada direção) com o bloco a meia altura do
+   polígono, folga para o rótulo desenhado, que não tem o tamanho exato da estimativa, e o
+   segmento sem cruzar. O bloco mantém a âncora da normal (ks), para o quadrante do rótulo
+   (area_rotulo_quadrante) seguir barato. Sem cruzamento (todo polígono convexo), q é o do
+   Web. O segmento testado começa 1 cm fora da borda, para não contar o próprio ponto pq, e o
+   giro de 90 graus fica de fora: a chamada correria rente à borda (medido no U). A
+   decisão fica no corpo (CASE preguiçoso), e não numa ligação: cada etapa nova do
+   with_variable dobra o parse da expressão inteira (seção 4 de ARQUITETURA.md). */
 dq := @@POS:A=@br * @L@@
 lns := @@LINHAS@@
 mppt := CASE WHEN coalesce("zoom_corr", true) AND coalesce("created_zoom", 0) > 0 THEN (@@M_POR_PX_CRIACAO@@) ELSE (@@ESCALA_TERRENO@@) * 0.00026458333 END * @k
@@ -20,5 +34,22 @@ y0 ::= CASE WHEN @ks IN (1, 2, 3) THEN 0 WHEN @ks IN (5, 6, 7) THEN -@h ELSE -@h
 ld := 2.5 * @s + max(0, -(@x0 * @nx + @y0 * @ny), -((@x0 + @w) * @nx + @y0 * @ny), -((@x0 + @w) * @nx + (@y0 + @h) * @ny), -(@x0 * @nx + (@y0 + @h) * @ny))
 r0 := make_polygon(make_line(make_point(x(@pq) + @x0, y(@pq) + @y0), make_point(x(@pq) + @x0 + @w, y(@pq) + @y0), make_point(x(@pq) + @x0 + @w, y(@pq) + @y0 + @h), make_point(x(@pq) + @x0, y(@pq) + @y0 + @h), make_point(x(@pq) + @x0, y(@pq) + @y0)))
 st ::= max(@w, @h) / 2
+cand := array_foreach(array(15, -15, 30, -30, 45, -45, 60, -60, 75, -75),
+  @@SEJA@@
+  ca ::= @azn + radians(@element)
+  @@EM@@
+  array(sin(@ca), cos(@ca), 2.5 * @s + max(0, -(min(@x0 * sin(@ca), (@x0 + @w) * sin(@ca)) + min(@y0 * cos(@ca), (@y0 + @h) * cos(@ca)))), @ca)
+  @@FIM@@
+  )
+dh := CASE WHEN intersects(make_line(project(@pq, 0.01, @azn), project(@pq, 2.5 * @s + @w + @h + 8 * @st, @azn)), @gp) THEN distance(@pq, intersection(make_line(project(@pq, 0.01, @azn), project(@pq, 2.5 * @s + @w + @h + 8 * @st, @azn)), @gp)) ELSE -1 END
 kk := coalesce(array_first(array_filter(generate_series(0, 7), NOT intersects(translate(@r0, @nx * (@ld + @element * @st), @ny * (@ld + @element * @st)), @gp))), 8)
-q ::= make_point(x(@pq) + @nx * (@ld + @kk * @st), y(@pq) + @ny * (@ld + @kk * @st))
+q0 ::= make_point(x(@pq) + @nx * (@ld + @kk * @st), y(@pq) + @ny * (@ld + @kk * @st))
+rc ::= coalesce(array_first(array_filter(generate_series(0, 79),
+  @@SEJA@@
+  cu ::= @cand[@element % 10]
+  cd ::= @cu[2] + floor(@element / 10) * @st
+  @@EM@@
+  distance(translate(@r0, @cu[0] * @cd, @cu[1] * @cd), @gp) > @h / 2 AND NOT intersects(make_line(project(@pq, 0.01, @cu[3]), project(@pq, @cd, @cu[3])), @gp)
+  @@FIM@@
+  )), -1)
+q ::= CASE WHEN @dh < 0 OR @ld + @kk * @st < @dh THEN @q0 ELSE with_variable('ix', @rc, CASE WHEN @ix < 0 THEN @q0 ELSE project(@pq, @cand[@ix % 10][2] + floor(@ix / 10) * @st, @cand[@ix % 10][3]) END) END
