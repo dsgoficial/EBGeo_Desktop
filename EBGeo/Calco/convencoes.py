@@ -606,6 +606,13 @@ def _png_base64(img):
     return base64.b64encode(bytes(buf)).decode('ascii')
 
 
+# Fundo transparente PRETO, não branco: com QColor(255, 255, 255, 0), o desenho em paralelo
+# (QgsMapRendererParallelJob, o da amostra do dock) devolvia o preenchimento semitransparente
+# branqueado, #00897b a 50 % saía #fdffff a 50 % (medido no QGIS 4.0.0), e a amostra do polígono
+# ficava sem preenchimento; o desenho em sequência (o quadro de convenções) saía certo.
+FUNDO_AMOSTRA = QColor(0, 0, 0, 0)
+
+
 def amostras_png(camada, tipo, feicoes, largura_mm=FIG_L, altura_mm=FIG_A, dpi=DPI_AMOSTRA, geometria=None,
                  pronto=None):
     """
@@ -710,7 +717,7 @@ def amostras_png(camada, tipo, feicoes, largura_mm=FIG_L, altura_mm=FIG_A, dpi=D
     ms.setDestinationCrs(crs_local)
     ms.setOutputSize(QSize(int(math.ceil(total.width() / mpp)), int(math.ceil(total.height() / mpp))))
     ms.setOutputDpi(dpi)
-    ms.setBackgroundColor(QColor(255, 255, 255, 0))
+    ms.setBackgroundColor(FUNDO_AMOSTRA)
     ms.setExtent(total)
     ms.setFlag(Qgis.MapSettingsFlag.Antialiasing, True)
     ms.setFlag(Qgis.MapSettingsFlag.DrawLabeling, True)

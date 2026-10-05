@@ -273,6 +273,162 @@ class TesteDock(unittest.TestCase):
         self.assertGreater(magenta, 20)
 
 
+def cor_da_tinta(img, cx, cy, r=20):
+    """
+    (cor, cobertura) da janela (2r+1)² em volta de (cx, cy): a cor mais frequente, composta sobre
+    branco e sem os pixels quase brancos (o preenchimento liso, ou o miolo do traço da hachura;
+    branco puro quando a janela não tem tinta), e a fração da janela com tinta (1 no liso, menos
+    na hachura).
+    """
+    from collections import Counter
+    cont = Counter()
+    total = 0
+    for y in range(max(0, cy - r), min(img.height(), cy + r + 1)):
+        for x in range(max(0, cx - r), min(img.width(), cx + r + 1)):
+            c = img.pixelColor(x, y)
+            a = c.alphaF()
+            rgb = tuple(int(round(a * v + (1 - a) * 255)) for v in (c.red(), c.green(), c.blue()))
+            total += 1
+            if min(rgb) < 248:
+                cont[rgb] += 1
+    return (cont.most_common(1)[0][0] if cont else (255, 255, 255)), sum(cont.values()) / max(1, total)
+
+
+class TesteAmostraDoPoligono(unittest.TestCase):
+    """
+    A amostra no topo do dock do polígono tem, no centro, a cor que o mapa desenha na mesma feição,
+    em TODOS os casos de hachura: caixa marcada, desmarcada e nula, vezes os tipos da lista e o
+    nulo, com o preenchimento semitransparente (#00897b a 50 %, que o mapa desenha #7fc4bd sobre
+    branco). O desenho em paralelo com fundo branco transparente branqueava o preenchimento
+    (convencoes.FUNDO_AMOSTRA), e o pior caso o devolve e tem de reprovar.
+    """
+    COR, OPACIDADE = '#00897b', 0.5
+
+    @classmethod
+    def setUpClass(cls):
+        from qgis.core import QgsFeature, QgsGeometry, QgsPointXY
+        from qgis.testing.mocked import get_iface
+        from Calco import calco as C, gpkg
+        from Calco.formulario.tipos import comuns as CM
+        from Calco.ui.painel import PainelCalco
+        cls.caminho = os.path.join(TMP, 'amostra_poligono.gpkg')
+        gpkg.criar_calco(cls.caminho, ['polygon'])
+        vl = QgsVectorLayer('{}|layername=polygon'.format(cls.caminho), 'Polígono', 'ogr')
+        vl.setCustomProperty(PROP_CAMINHO, cls.caminho)
+        vl.setCustomProperty(PROP_TIPO, 'polygon')
+        cls.casos = [(ligada, tipo_h) for ligada in (True, False, None) for tipo_h in [v for v, _r in CM.HACHURAS] + [None]]
+        vl.startEditing()
+        for k, (ligada, tipo_h) in enumerate(cls.casos):
+            a = dict(schema.padroes('polygon'), ebgeo_id=str(uuid.uuid4()), nome='{} {}'.format(ligada, tipo_h),
+                     fill_color=cls.COR, opacity=cls.OPACIDADE, hatch_enabled=ligada, hatch_type=tipo_h)
+            f = QgsFeature(vl.fields())
+            for col, v in schema.atributos_para_qgis('polygon', a).items():
+                if vl.fields().indexOf(col) >= 0:
+                    f.setAttribute(vl.fields().indexOf(col), v)
+            x, y = -43.0 + (k % 6) * 0.1, -22.9 - (k // 6) * 0.1
+            anel = [QgsPointXY(x, y), QgsPointXY(x + 0.04, y), QgsPointXY(x + 0.04, y + 0.04), QgsPointXY(x, y + 0.04),
+                    QgsPointXY(x, y)]
+            f.setGeometry(QgsGeometry.fromMultiPolygonXY([[anel]]))
+            vl.addFeature(f)
+        assert vl.commitChanges(), vl.commitErrors()
+        C.aplicar_estilo(vl, 'polygon')
+        C.aplicar_formulario(vl, 'polygon')
+        QgsProject.instance().addMapLayer(vl)
+        cls.vl = vl
+        cls.painel = PainelCalco(get_iface())
+        cls.painel.setParent(None)
+        cls.painel.resize(440, 980)
+        cls.painel.show()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.painel.hide()
+        cls.painel.deleteLater()
+        QgsProject.instance().removeMapLayer(cls.vl.id())
+        _app.processEvents()
+
+    def _no_mapa(self, f):
+        """A cor no centro da feição desenhada pelo estilo da camada sobre branco, na resolução da amostra."""
+        from qgis.core import (QgsExpressionContext, QgsExpressionContextUtils, QgsMapRendererParallelJob,
+                               QgsMapSettings)
+        from qgis.PyQt.QtCore import QSize
+        from qgis.PyQt.QtGui import QColor
+        from Calco.ui.blocos.previa import LARGURA_AMOSTRA
+        ms = QgsMapSettings()
+        ms.setLayers([self.vl])
+        ms.setDestinationCrs(self.vl.crs())
+        ms.setOutputSize(QSize(300, 300))
+        ms.setOutputDpi(LARGURA_AMOSTRA / (40.0 / 25.4))  # a da amostra: o traço da hachura com o mesmo miolo
+        ms.setBackgroundColor(QColor('white'))
+        ms.setExtent(f.geometry().boundingBox())
+        ctx = QgsExpressionContext()
+        ctx.appendScope(QgsExpressionContextUtils.mapSettingsScope(ms))
+        ms.setExpressionContext(ctx)
+        job = QgsMapRendererParallelJob(ms)
+        job.start()
+        job.waitForFinished()
+        img = job.renderedImage()
+        return cor_da_tinta(img, img.width() // 2, img.height() // 2) + (img,)
+
+    def _na_amostra(self, f):
+        from qgis.PyQt.QtWidgets import QLabel
+        from Calco.ui.blocos.previa import esperar
+        self.painel._camada_mudou(self.vl)
+        self.vl.selectByIds([f.id()])
+        self.painel._selecao_mudou()
+        _app.processEvents()
+        w = self.painel.findChild(QLabel, 'EBGeoPreviaAmostra')
+        self.assertIsNotNone(w)
+        esperar(self.painel)
+        img = w.pixmap().toImage()
+        return cor_da_tinta(img, img.width() // 2, img.height() // 2)
+
+    def divergencias(self, capturar=False):
+        """
+        [(caso, cor na amostra, cor no mapa)] que diferem mais de 3 num canal, ou em que um é liso
+        e o outro hachurado (cobertura acima ou abaixo de 95 %); e as medidas.
+        """
+        from Calco.ui.blocos import previa
+        erros, medidas = [], []
+        previa._JOBS.clear()
+        for f in self.vl.getFeatures():
+            caso = f['nome']
+            mapa, cob_mapa, img = self._no_mapa(f)
+            amostra, cob_amostra = self._na_amostra(f)
+            medidas.append('{}: amostra {} ({:.0%}) mapa {} ({:.0%})'.format(
+                caso, '#%02x%02x%02x' % amostra, cob_amostra, '#%02x%02x%02x' % mapa, cob_mapa))
+            if max(abs(a - b) for a, b in zip(amostra, mapa)) > 3 or (cob_amostra > 0.95) != (cob_mapa > 0.95):
+                erros.append((caso, amostra, mapa, round(cob_amostra, 2), round(cob_mapa, 2)))
+            if capturar and caso in ('True none', 'False cross', 'True cross', 'None None'):
+                rot = caso.replace(' ', '_')
+                self.painel.grab().save(os.path.join(SAIDA, 'dock_amostra_poligono_{}.png'.format(rot)))
+                img.save(os.path.join(SAIDA, 'mapa_poligono_{}.png'.format(rot)))
+        return erros, medidas
+
+    def test_centro_da_amostra_igual_ao_mapa_em_todos_os_casos_de_hachura(self):
+        erros, medidas = self.divergencias(capturar=True)
+        self.assertEqual(len(medidas), len(self.casos))
+        self.assertEqual(erros, [], '\n'.join(medidas))
+        # o liso é o que o chefe mediu no mapa (#7fc4bd), e a hachura desenhada põe a mesma cor no traço
+        self.assertTrue(any(m.startswith('True none:') and 'mapa #7fc4bd' in m for m in medidas), medidas)
+        hachurados = [m for m in medidas if m.startswith('True ') and m.split(':')[0].split(' ')[1] in ('diagonal-right', 'cross', 'dots')]
+        self.assertTrue(all('(100%)' not in m for m in hachurados), hachurados)  # a régua separa o liso da hachura
+        MEDIDAS.append('amostra do polígono contra o mapa, {} casos de hachura: '.format(len(medidas)) + '; '.join(medidas))
+
+    def test_pior_caso_fundo_branco_transparente_reprova(self):
+        from qgis.PyQt.QtGui import QColor
+        from Calco import convencoes
+        original = convencoes.FUNDO_AMOSTRA
+        convencoes.FUNDO_AMOSTRA = QColor(255, 255, 255, 0)
+        try:
+            erros, _m = self.divergencias()
+        finally:
+            convencoes.FUNDO_AMOSTRA = original
+        self.assertEqual(len(erros), len(self.casos), erros)  # nenhum caso sai certo com o fundo de antes
+        MEDIDAS.append('pior caso (fundo branco transparente): {} de {} casos divergem, ex. {}'.format(
+            len(erros), len(self.casos), erros[0]))
+
+
 def tearDownModule():
     print('\n--- medidas ---')
     for m in MEDIDAS:
