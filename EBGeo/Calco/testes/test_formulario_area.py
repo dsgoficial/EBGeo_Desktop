@@ -22,6 +22,7 @@ o texto das capturas só sai legível com QT_QPA_FONTDIR apontando a pasta de fo
 """
 import copy
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -741,6 +742,26 @@ class TesteNativoArea(unittest.TestCase):
         MEDIDAS.append('hachura ao vivo no nativo sem o plugin: ' + '; '.join(
             '{} -> {}'.format(p['passo'], p['visiveis']) for p in res['passos']))
 
+    def test_posicao_na_borda_nula_no_nativo(self):
+        """
+        Sem o plugin, a área com text_ratio nulo mostra "Posição na borda (0 %)", a posição que o
+        desenho usa; o rótulo segue o valor em edição (40 % com 0,4) e volta a 0 % com o nulo.
+        """
+        import shutil
+        copia = os.path.join(TMP, 'posicao_nativo.gpkg')
+        shutil.copy(self.caminho, copia)
+        passos = (('identificacao', 'BAGRE', 'nativo_area_posicao_nula_sem_plugin.png'),
+                  ('text_ratio', 0.4, 'nativo_area_posicao_40_sem_plugin.png'),
+                  ('text_ratio', None, ''))
+        res, codigo = tfs.rodar_passos(copia, 'coordination_area', 'sem_zoom', 'Textos', ['text_ratio'], passos, SAIDA)
+        self.assertEqual((codigo, res.get('etapa')), (0, 'fim'), res)
+        self.assertEqual(res.get('modulos_ebgeo'), [])
+        vistos = [[r for r in p['rotulos'] if 'Posição na borda' in r] for p in res['passos']]
+        self.assertEqual(vistos, [['Posição na borda (0 %)'], ['Posição na borda (0 %)'],
+                                  ['Posição na borda (40 %)'], ['Posição na borda (0 %)']], vistos)
+        MEDIDAS.append('posição na borda nula no nativo sem o plugin: ' + '; '.join(
+            '{} -> {}'.format(p['passo'], v) for p, v in zip(res['passos'], vistos)))
+
     def test_pior_caso_hachura_pela_coluna_sem_widget_reprova(self):
         """
         O mesmo estilo com a condição do espaçamento escrita pelas duas colunas do desenho
@@ -1005,6 +1026,23 @@ class TestePainelArea(unittest.TestCase):
         self.assertTrue(self.painel.descartar())
         _app.processEvents()
 
+    def test_posicao_na_borda_nula_mostra_zero_sem_gravar(self):
+        """O dock mostra 0 % na razão nula (o desenho usa 0), em todo tipo e posição, sem gravar nada."""
+        vistos = []
+        for codigo, extra in (('150000', {}), ('170999-01', {'text_position': 'externa'}),
+                              ('151203', {'escalao': 'II'}), ('150000', {'text_position': 'interna'})):
+            eid = self._nova(symbol_code=codigo, text_ratio=None, **extra)
+            w = self.painel.widgets['text_ratio']
+            vistos.append('{} {}: {} %'.format(codigo, extra.get('text_position', 'padrão'), w.value()))
+            self.assertEqual(w.value(), 0, (codigo, extra))
+            self.assertFalse(self.lyr.isEditable(), 'mostrar a posição não pode gravar')
+            self.assertIsNone(regras.valor(self._disco(eid)['text_ratio']))
+            if codigo == '170999-01':
+                self._capturar('dock_area_posicao_nula_externa.png')
+        self._nova(symbol_code='150000', text_ratio=0.4)
+        self.assertEqual(self.painel.widgets['text_ratio'].value(), 40)
+        MEDIDAS.append('posição na borda nula no dock: ' + '; '.join(vistos))
+
     def test_bloqueada_so_leitura(self):
         self._nova(symbol_code='170999-01', bloqueado=True, portoes=PORTOES)
         for col in ('nome', 'symbol_code', 'line_color', 'portoes', 'text_position'):
@@ -1103,6 +1141,90 @@ class TesteRegrasArea(unittest.TestCase):
         self.assertEqual(vl.getFeature(fid)['symbol_code'], '270800')
         self.assertEqual(cor(vl, fid), '#000000')  # sem a cor do tipo
         vl.rollBack()
+
+
+def calco_uma_area(caminho, attrs):
+    """Calco com uma área na QUADRA, o estilo da camada gravado no arquivo (o que renderizar() lê)."""
+    gpkg.criar_calco(caminho, ['coordination_area'])
+    vl = QgsVectorLayer(gpkg.uri_camada(caminho, 'coordination_area'), 'Área de Coordenação', 'ogr')
+    a = dict(schema.padroes('coordination_area'), ebgeo_id=str(uuid.uuid4()), nome='área', created_zoom=12.0,
+             symbol_size_km=0.3)
+    a.update(attrs)
+    f = QgsFeature(vl.fields())
+    for k, v in schema.atributos_para_qgis('coordination_area', a).items():
+        if vl.fields().indexOf(k) >= 0:
+            f.setAttribute(vl.fields().indexOf(k), v)
+    f.setGeometry(QgsGeometry.fromMultiPolygonXY([[[QgsPointXY(*p) for p in QUADRA + [QUADRA[0]]]]]))
+    vl.startEditing()
+    vl.addFeature(f)
+    assert vl.commitChanges(), vl.commitErrors()
+    C.aplicar_estilo(vl, 'coordination_area')
+    C.salvar_estilo_padrao(vl)
+    return vl
+
+
+class TestePosicaoNaBorda(unittest.TestCase):
+    """
+    Decisão do chefe (2026-10-05): o text_ratio nulo é desenhado a 0 % (o vértice mais ao norte,
+    `rt` de _area_posicao.exp), e o dock e o nativo mostram 0 %, sem gravar e sem mudar o desenho.
+    A regra em Python (fa.percentual_na_borda) e a expressão do rótulo do nativo são conferidas
+    contra o `rt` lido do próprio .exp do desenho.
+    """
+    VALORES = (None, 0.0, 0.4, 0.125, 0.145, 0.5, 1.0, 1.3, -0.2, 0.30000000000000004, 0.999)
+
+    def test_desenho_da_nula_igual_ao_de_zero(self):
+        imgs = {}
+        for rot, v in (('nula', None), ('zero', 0.0), ('meio', 0.5)):
+            caminho = os.path.join(TMP, 'posicao_{}.gpkg'.format(rot))
+            calco_uma_area(caminho, dict(symbol_code='150000', tipo='Obj', identificacao='BAGRE', text_ratio=v))
+            imgs[rot] = renderizar(caminho, 'area_posicao_{}.png'.format(rot))
+        self.assertEqual(pixels_diferentes(imgs['nula'], imgs['zero']), 0)
+        meio = pixels_diferentes(imgs['nula'], imgs['meio'])
+        self.assertGreater(meio, 200)  # a régua enxerga a troca de posição do texto
+        MEDIDAS.append('desenho com text_ratio nulo: 0 pixels diferentes do de 0, {} do de 0,5'.format(meio))
+
+    def _rt_do_desenho(self):
+        """A expressão do `rt` em _area_posicao.exp (a razão que o desenho usa)."""
+        caminho = os.path.join(os.path.dirname(ea.__file__), 'expressoes', '_area_posicao.exp')
+        with open(caminho, encoding='utf-8') as fh:
+            linhas = [ln for ln in fh if ln.startswith('rt :=')]
+        self.assertEqual(len(linhas), 1)
+        return QgsExpression(linhas[0].split(':=', 1)[1].strip())
+
+    def _desenho(self, rt, v):
+        campos = QgsFields()
+        campos.append(QgsField('text_ratio', QMetaType.Type.Double))
+        f = QgsFeature(campos)
+        f.setAttributes([v])
+        ctx = QgsExpressionContext()
+        ctx.setFeature(f)
+        r = rt.evaluate(ctx)
+        self.assertFalse(rt.hasEvalError(), rt.evalErrorString())
+        return int(math.floor(100 * r + 0.5))
+
+    def test_python_e_nativo_iguais_ao_desenho(self):
+        rt = self._rt_do_desenho()
+        campo = esp.formulario('coordination_area').campo('text_ratio')
+        rotulo = QgsExpression(campo.expressao_rotulo())
+        self.assertFalse(rotulo.hasParserError(), rotulo.parserErrorString())
+        campos = QgsFields()
+        campos.append(QgsField('symbol_code', QMetaType.Type.QString))
+        campos.append(QgsField('text_ratio', QMetaType.Type.Double))
+        for codigo, base in (('150000', 'Posição na borda'), ('151203', 'Posição do escalão na borda')):
+            for v in self.VALORES:
+                desenho = self._desenho(rt, v)
+                self.assertEqual(fa.percentual_na_borda(v), desenho, v)
+                attrs = {'symbol_code': codigo, 'text_ratio': v}
+                esperado_ = '{} ({} %)'.format(base, desenho)
+                self.assertEqual(campo.rotulo_para(attrs), esperado_)
+                f = QgsFeature(campos)
+                f.setAttributes([codigo, v])
+                ctx = QgsExpressionContext()
+                ctx.setFeature(f)
+                ctx.appendScope(QgsExpressionContextUtils.formScope(f))  # current_value(), como no formulário
+                self.assertEqual(rotulo.evaluate(ctx), esperado_, (codigo, v))
+                self.assertEqual(campo.rotulo_para(attrs, rico=True), base)  # o dock mostra o % na caixa
+        self.assertEqual(self._desenho(rt, None), 0)
 
 
 def tearDownModule():

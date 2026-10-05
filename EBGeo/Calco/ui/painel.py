@@ -490,8 +490,8 @@ class PainelCalco(QDockWidget):
             if isinstance(el, esp.Campo):
                 if vis:
                     self._visiveis.add(el.coluna)
-                if rotulo is not None and el.expressao_rotulo():
-                    rotulo.setText(str(self._expressao(el.expressao_rotulo()).evaluate(ctx)))
+                if rotulo is not None and el.expressao_rotulo_dock():
+                    rotulo.setText(str(self._expressao(el.expressao_rotulo_dock()).evaluate(ctx)))
                 if rotulo is not None and el.dica_por is not None:
                     dica = el.dica_para({n: feat[n] for n in feat.fields().names()}) or ''
                     rotulo.setToolTip(dica)

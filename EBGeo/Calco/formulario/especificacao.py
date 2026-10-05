@@ -239,6 +239,10 @@ class Campo:
         return 'if({}, {}, {})'.format(self.rotulo_se[0].expressao(), _literal(self.rotulo_se[1]),
                                        _literal(self.rotulo))
 
+    def expressao_rotulo_dock(self):
+        """O rótulo por dados do dock: o mesmo, salvo quando o widget rico já mostra o que o nativo põe no rótulo."""
+        return self.expressao_rotulo()
+
 
 @dataclass
 class Texto:

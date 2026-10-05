@@ -19,6 +19,7 @@ Caixas e números vêm dos ajudantes comuns (esp.caixa, esp.numero), que preserv
 exato ao salvar outra mudança; aqui a Correção de Zoom nula, que desenha ligada, ficaria
 desligada sem isso (testes/test_formulario_area.py, pior caso).
 """
+import math
 from dataclasses import dataclass
 
 from .. import especificacao as esp
@@ -36,6 +37,49 @@ class Resumo(esp.Texto):
     não o mostra: põe no lugar o `campo_rico`, o editor da coluna.
     """
     campo_rico: esp.Campo = None
+
+
+def percentual_na_borda(valor):
+    """
+    A posição na borda que o DESENHO usa, em % inteiro: o `rt` de _area_posicao.exp, em que a
+    razão nula vale 0 (o vértice mais ao norte, onde toda área nasce e sempre foi desenhada) e a
+    fora de [0, 1] vai à ponta, arredondada como o Math.round do Web. Decisão do chefe
+    (2026-10-05): o dock e o nativo mostram essa posição, sem gravá-la.
+    """
+    try:
+        r = float(valor)
+    except (TypeError, ValueError):
+        r = 0.0
+    if r != r:  # NaN
+        r = 0.0
+    return int(math.floor(100 * min(1.0, max(0.0, r)) + 0.5))
+
+
+# A mesma conta no formulário nativo, sem o plugin: current_value() renova o rótulo a cada mudança.
+EXPRESSAO_PERCENTUAL = "round(100 * min(1, max(0, coalesce(to_real(current_value('{c}')), 0))))"
+
+
+@dataclass
+class CampoPosicaoNaBorda(esp.Campo):
+    """
+    text_ratio. O nativo é a caixa numérica da razão (0 a 1), que mostra NULL na nula e não pode
+    mostrar outro valor sem gravá-lo: o rótulo dele leva a posição que o desenho usa, em %
+    ("Posição na borda (0 %)"), por dados e sem código. O dock mostra a mesma posição na caixa
+    em % (ui/painel_area.py) e fica com o rótulo sem o sufixo.
+    """
+
+    def rotulo_para(self, atributos, rico=False):
+        base = esp.Campo.rotulo_para(self, atributos, rico)
+        if rico:
+            return base
+        return '{} ({} %)'.format(base, percentual_na_borda(atributos.get(self.coluna)))
+
+    def expressao_rotulo(self):
+        base = esp.Campo.expressao_rotulo(self) or esp._literal(self.rotulo)
+        return "{} || ' (' || to_string({}) || ' %)'".format(base, EXPRESSAO_PERCENTUAL.format(c=self.coluna))
+
+    def expressao_rotulo_dock(self):
+        return esp.Campo.expressao_rotulo(self)
 
 
 def _lista_com_nulo(opcoes, rotulo_nulo):
@@ -110,8 +154,9 @@ def formulario():
         # nulo é a posição padrão do tipo (externa no VAB, interna no Ponto Forte, sobre a borda nos demais)
         esp.Campo('text_position', 'Posição do texto', _lista_com_nulo(POSICOES_TEXTO, 'Padrão do tipo'),
                   rico='area_lista', rico_config=((None, 'Padrão do tipo'),) + tuple(POSICOES_TEXTO)),
-        esp.Campo('text_ratio', 'Posição na borda', esp.numero(0, 1, 0.05, 2),
-                  rotulo_se=(ponto_forte, 'Posição do escalão na borda'), rico='area_pct'),
+        # nula é 0 %, o vértice mais ao norte, como o desenho (CampoPosicaoNaBorda)
+        CampoPosicaoNaBorda('text_ratio', 'Posição na borda', esp.numero(0, 1, 0.05, 2),
+                            rotulo_se=(ponto_forte, 'Posição do escalão na borda'), rico='area_pct'),
         esp.Campo('text_north_facing', 'Texto sempre para o norte', esp.caixa()),
         esp.Campo('text_size', 'Tamanho do texto', esp.numero(8, 40, 1, 0, ' px')),
     ])

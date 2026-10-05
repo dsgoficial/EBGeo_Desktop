@@ -219,7 +219,7 @@ def hachura_desenhada(layer):
 
 # Passos ao vivo no formulário nativo, num processo novo SEM o plugin: abre a feição de nome dado,
 # muda as colunas passo a passo pelo widget (como o operador) e anota, a cada passo, quais das
-# colunas observadas estão à mostra na aba; captura a aba nos passos pedidos.
+# colunas observadas estão à mostra na aba e os rótulos à mostra; captura a aba nos passos pedidos.
 # argv: gpkg, json de saída, pasta; EBGEO_PASSOS no ambiente (json).
 SCRIPT_PASSOS = r'''
 import sys, os, json
@@ -232,7 +232,7 @@ def gravar():
 from qgis.core import QgsApplication, QgsVectorLayer
 app = QgsApplication([], True); app.initQgis()
 from qgis.gui import QgsGui, QgsAttributeForm, QgsEditorWidgetWrapper, QgsAttributeEditorContext
-from qgis.PyQt.QtWidgets import QTabWidget
+from qgis.PyQt.QtWidgets import QTabWidget, QLabel
 QgsGui.editorWidgetRegistry().initEditors()
 L = QgsVectorLayer(gp + '|layername=' + cfg['camada'], cfg['camada'], 'ogr')
 L.startEditing()
@@ -248,13 +248,15 @@ app.processEvents()
 wrappers = {L.fields().at(wr.fieldIdx()).name(): wr for wr in form.findChildren(QgsEditorWidgetWrapper)}
 def vistos():
     return sorted(c for c in cfg['observar'] if c in wrappers and wrappers[c].widget().isVisibleTo(form))
-res['passos'].append({'passo': 'abrir', 'visiveis': vistos()})
+def rotulos():
+    return sorted(lb.text() for lb in form.findChildren(QLabel) if lb.isVisibleTo(form) and lb.text())
+res['passos'].append({'passo': 'abrir', 'visiveis': vistos(), 'rotulos': rotulos()})
 for k, (col, valor, captura) in enumerate(cfg['passos']):
     res['etapa'] = 'passo {}'.format(k)
     gravar()
     wrappers[col].setValues(valor, []); wrappers[col].emitValueChanged()
     app.processEvents()
-    res['passos'].append({'passo': '{} = {}'.format(col, valor), 'visiveis': vistos()})
+    res['passos'].append({'passo': '{} = {}'.format(col, valor), 'visiveis': vistos(), 'rotulos': rotulos()})
     if captura and pasta:
         form.grab().save(os.path.join(pasta, captura))
 res['modulos_ebgeo'] = sorted(m for m in sys.modules if m.split('.')[0] in ('Calco', 'EBGeo'))

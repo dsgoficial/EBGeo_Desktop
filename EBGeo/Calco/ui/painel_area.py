@@ -6,7 +6,7 @@ não tem, chamados por `widget_area` para os campos com rico 'area_*':
 
   area_tipo     o tipo da área; grava só o symbol_code (os padrões do tipo são regra do guardião,
                 regras.padroes_da_troca_area), lembra o último tipo para a área nova e remonta o dock
-  area_pct      a posição na borda em % (a coluna guarda de 0 a 1)
+  area_pct      a posição na borda em % (a coluna guarda de 0 a 1); a nula mostra 0 %, como o desenho
   area_lista    lista com o nulo como opção (a posição do texto: "Padrão do tipo")
   area_portoes  os portões do VAB: nome e posição na borda em %, remover, "Acrescentar portão" na
                 metade da borda e "Marcar portão na borda", que espera um clique no mapa e o põe
@@ -39,18 +39,6 @@ def _lista_json(valor):
         return []
 
 
-def _atributo(painel, col):
-    if painel.layer is None or painel.fid is None or painel.layer.fields().indexOf(col) < 0:
-        return None
-    v = painel.layer.getFeature(painel.fid)[col]
-    return None if v is None or (hasattr(v, 'isNull') and v.isNull()) else v
-
-
-def razao_padrao(posicao):
-    """text_ratio nulo, como o Web o desenha: 25 % no texto externo, metade da borda nos demais."""
-    return 0.25 if posicao == 'externa' else 0.5
-
-
 def widget_area(painel, col, spec, valor, nulo):
     """Widget dos campos ricos da área; None para os que o painel comum monta."""
     kind = spec[0]
@@ -74,13 +62,12 @@ def widget_area(painel, col, spec, valor, nulo):
         w.currentIndexChanged.connect(lambda _i, c=col, w=w: painel._mudou(c, w.currentData()))
         return w
     if kind == 'area_pct':
+        from ..formulario.tipos.area import percentual_na_borda
         w = QSpinBox()
         w.setRange(0, 100)
         w.setSuffix(' %')
-        if nulo:  # mostra a posição que o desenho usa, sem gravá-la
-            posicao = _atributo(painel, 'text_position') or ea.posicao_padrao(str(_atributo(painel, 'symbol_code') or ''))
-            valor = razao_padrao(posicao)
-        w.setValue(int(round(float(valor) * 100)))
+        # a posição que o desenho usa, sem gravá-la: a nula é 0 %, o vértice mais ao norte
+        w.setValue(percentual_na_borda(None if nulo else valor))
         w.valueChanged.connect(lambda v, c=col: painel._mudou(c, v / 100.0))
         return w
     if kind == 'area_minas':
