@@ -82,8 +82,17 @@ class GerenciadorCalco:
         self.menu.addSeparator()
         self.acao_painel = self._acao('propriedades.svg', 'Painel de propriedades', self.alternar_painel)
         self.acao_painel.setCheckable(True)
+        self.acao_convencoes = self._acao('convencoes.svg', 'Quadro de convenções no layout...',
+                                          lambda *_: self.quadro_convencoes())
         # atlas importados de .ebgeo: a carga preguiçosa dos mapas volta a funcionar ao reabrir o projeto
         QgsProject.instance().readProject.connect(self._religar_atlas)
+        # guardião das camadas do calco: regras de troca e bloqueio em qualquer caminho de edição
+        from . import guardiao
+        guardiao.ligar_projeto(QgsProject.instance())
+        # no designer de layout, a mesma ação no menu Itens, já com o layout aberto
+        self.acoes_designer = []
+        if hasattr(self.iface, 'layoutDesignerOpened'):
+            self.iface.layoutDesignerOpened.connect(self._designer_aberto)
 
     def _religar_atlas(self, *_):
         try:
@@ -107,6 +116,19 @@ class GerenciadorCalco:
             QgsProject.instance().readProject.disconnect(self._religar_atlas)
         except (TypeError, RuntimeError):
             pass
+        from . import guardiao
+        guardiao.desligar_todos()
+        if hasattr(self.iface, 'layoutDesignerOpened'):
+            try:
+                self.iface.layoutDesignerOpened.disconnect(self._designer_aberto)
+            except (TypeError, RuntimeError):
+                pass
+        for menu, a in getattr(self, 'acoes_designer', []):
+            try:
+                menu.removeAction(a)
+                a.deleteLater()
+            except RuntimeError:  # o designer já fechou
+                pass
         canvas = self.iface.mapCanvas()
         for ft in self.ferramentas.values():
             if canvas.mapTool() is ft:
@@ -237,3 +259,52 @@ class GerenciadorCalco:
             processing.execAlgorithmDialog('EBGeoProvider:importarebgeo')
         except Exception as e:
             self.iface.messageBar().pushCritical('EBGeo', 'Importador indisponível: {}'.format(e))
+
+    # ---------- quadro de convenções ----------
+    def _designer_aberto(self, designer):
+        a = QAction(_icone('convencoes.svg'), 'Quadro de convenções do calco...', designer.window())
+        a.triggered.connect(lambda *_: self.quadro_convencoes(designer.layout(), self._mapa_selecionado(designer)))
+        menu = designer.itemsMenu() if hasattr(designer, 'itemsMenu') else designer.layoutMenu()
+        menu.addSeparator()
+        menu.addAction(a)
+        self.acoes_designer.append((menu, a))
+
+    @staticmethod
+    def _mapa_selecionado(designer):
+        from qgis.core import QgsLayoutItemMap
+        try:
+            for item in designer.layout().selectedLayoutItems():
+                if isinstance(item, QgsLayoutItemMap):
+                    return item
+        except RuntimeError:
+            pass
+        return None
+
+    def quadro_convencoes(self, layout=None, mapa=None, dialogo=None):
+        """
+        Pergunta o layout, o mapa e o recorte e insere (ou refaz) o quadro de convenções.
+        `dialogo` é a fábrica do diálogo (o teste passa uma que aceita sem mostrar).
+        """
+        from .ui.dialogo_convencoes import DialogoConvencoes
+        from . import convencoes
+        projeto = QgsProject.instance()
+        if not projeto.layoutManager().printLayouts():
+            self.iface.messageBar().pushWarning(
+                'EBGeo', 'Crie antes um layout de impressão com um mapa (Projeto > Novo layout de impressão).')
+            return None
+        dlg = (dialogo or DialogoConvencoes)(projeto, layout, mapa, self.iface.mainWindow())
+        if not dlg.exec():
+            return None
+        layout, mapa = dlg.layout_escolhido(), dlg.mapa_escolhido()
+        if layout is None or mapa is None:
+            self.iface.messageBar().pushWarning('EBGeo', 'O layout escolhido não tem mapa.')
+            return None
+        grupo, entradas = convencoes.montar_quadro(layout, mapa, so_extensao=dlg.so_extensao())
+        if grupo is None:
+            self.iface.messageBar().pushWarning(
+                'EBGeo', 'O mapa "{}" não desenha nenhum símbolo do calco{}.'.format(
+                    mapa.displayName(), ' na extensão dele' if dlg.so_extensao() else ''))
+            return None
+        self.iface.messageBar().pushSuccess(
+            'EBGeo', 'Quadro de convenções com {} símbolos no layout "{}".'.format(len(entradas), layout.name()))
+        return grupo
