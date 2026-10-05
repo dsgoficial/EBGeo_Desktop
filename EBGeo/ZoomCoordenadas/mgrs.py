@@ -391,7 +391,7 @@ def _mgrsToUps(mgrs):
     ]
     if (letters[1] < ltr2LowValue) \
             or (letters[1] > ltr2HighValue) \
-            or (letters[1] in [invalid]) \
+            or (letters[1] in invalid) \
             or (letters[2] > ltr3HighValue):
         raise MgrsException(BADLY_FORMED)
 

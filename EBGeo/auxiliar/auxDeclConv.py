@@ -8,22 +8,6 @@ class AuxiliarDeclConv(object):
         super(AuxiliarDeclConv, self).__init__()
         self.iface = iface
         
-    def calculateKappa(self, point):
-        """Calculates the linear deformation factor (Kappa) for UTM projections
-        """
-        kappaZero = 0.9996
-        latitude = float(point.y())
-        longitude = float(point.x())
-        centralMeridian = int(abs(longitude)/6)*6 + 3
-        if longitude < 0:
-            centralMeridian = centralMeridian*(-1)
-        
-        b = math.cos(math.radians(latitude))*math.sin(math.radians(longitude - centralMeridian))
-        
-        k = kappaZero/math.sqrt(1 - b*b)
-        
-        return k
-    
     def calculateConvergence(self, point):
         """Calculates the meridian convergence
         """
@@ -64,35 +48,6 @@ class AuxiliarDeclConv(object):
         b = distanceArea.ellipsoidSemiMinor()
         
         return (a,b)
-    
-    def getPlanarCoordinates(self, lon, lat):
-        """Transform the geographic coordinates to projected coordinates
-        """
-        crsDest = self.iface.mapCanvas().mapRenderer().destinationCrs()
-        crsSrc = QgsCoordinateReferenceSystem(crsDest.geographicCRSAuthId())
-        
-        coordinateTransformer = QgsCoordinateTransform(crsSrc, crsDest, QgsProject.instance())
-        
-        utmPoint = coordinateTransformer.transform(QgsPoint(lon, lat))
-        
-        return utmPoint
-
-    def getGeographicCoordinates(self, ponto):
-        """Transform the planar coordinates to geographic coordinates
-        """
-        crsSrc = self.iface.mapCanvas().mapRenderer().destinationCrs()
-        crsDest = QgsCoordinateReferenceSystem(crsSrc.geographicCRSAuthId())
-
-        coordinateTransformer = QgsCoordinateTransform(crsSrc, crsDest, QgsProject())
-
-        geoPoint = coordinateTransformer.transform(ponto)
-
-        return geoPoint
-
-    def getReprojection(self, ponto, crsSrc, crsDest):
-        coordinateTransformer = QgsCoordinateTransform(crsSrc, crsDest, QgsProject.instance())
-        repPoint = coordinateTransformer.transform(ponto)
-        return repPoint
     
     def getCentralMeridian(self, longitude):
         centralMeridian = int(abs(longitude)/6)*6 + 3
