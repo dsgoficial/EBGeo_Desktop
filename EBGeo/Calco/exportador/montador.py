@@ -717,8 +717,12 @@ class Montador:
                     g = copy.deepcopy(orig.get('geometry'))
                     g['coordinates'] = _arredondar(_deslocar(g['coordinates'], *d))
                     return g, True
-                self._aviso('{} "{}" editada vértice a vértice: o Web a mostra como desenhada, mas a edita '
-                            'pelos parâmetros (centro, raio).'.format(schema.TIPOS[tipo]['nome_pt'], p.get('nome')))
+                g, motivo = self._forma_ajustada(tipo, p, orig, geo)
+                if g is not None:
+                    return g, True
+                self._aviso('{} "{}" editada vértice a vértice: {}; o Web a mostra como desenhada, mas a edita '
+                            'pelos parâmetros (centro, raio).'.format(schema.TIPOS[tipo]['nome_pt'], p.get('nome'),
+                                                                      motivo))
             partes = co
             if tipo in ('polygon', 'coordination_area'):
                 if tipo == 'coordination_area' or 'baseCoordinates' in p or novo:
@@ -736,6 +740,42 @@ class Montador:
                 return {'type': 'LineString', 'coordinates': _arredondar(co[0])}, True
             return {'type': 'MultiLineString', 'coordinates': _arredondar(co)}, True
         return {'type': geo['type'], 'coordinates': _arredondar(co)}, True
+
+    def _forma_ajustada(self, tipo, p, orig, geo):
+        """
+        Forma paramétrica editada no QGIS (escalada, girada): se o polígono ainda é a forma, os
+        parâmetros do Web são recalculados (formas.ajustar) e a geometria sai regenerada por eles,
+        com o gerador do Web. Devolve (geometria, None), ou (None, motivo) quando deixou de ser a forma.
+        """
+        from . import formas
+        nome = schema.TIPOS[tipo]['nome_pt'].lower()
+        g0 = orig.get('geometry') or {}
+        anel0 = (g0.get('coordinates') or [[]])[0] if g0.get('type') == 'Polygon' else (
+            ((g0.get('coordinates') or [[[]]])[0] or [[]])[0] if g0.get('type') == 'MultiPolygon' else None)
+        partes = geo.get('coordinates') or []
+        if not anel0 or len(partes) != 1 or len(partes[0]) != 1:
+            return None, 'com mais de uma parte ou com furo, não é mais {}'.format(nome)
+        r = formas.ajustar(tipo, p, anel0, partes[0][0])
+        if r is None:
+            return None, 'os parâmetros do {} não se recalculam por ela'.format(nome)
+        q, anel, desvio, tol = r
+        if desvio > tol:
+            return None, 'não é mais {} (fica a {:.1f} m do mais próximo, tolerância de {:.1f} m)'.format(
+                nome, desvio, tol).replace('.', ',')
+        q['center'] = [q['center'][0], q['center'][1]]
+        for k in formas._LIVRES[tipo]:
+            q[k] = round(q[k], 6 if k in ('bearing', 'aperture', 'majorRadius', 'minorRadius') else 3)
+        anel = formas.gerar(tipo, q)
+        p['center'] = q['center']
+        for k in formas._LIVRES[tipo]:
+            p[k] = q[k]
+        if tipo == 'rectangle':
+            # buildFromModel do Web: os cantos que o modelo põe em (+w/2, +h/2) e (-w/2, -h/2)
+            p['corner1'] = formas._girar_transladar(q['width'] / 2, q['height'] / 2, q['center'], q['bearing'])
+            p['corner2'] = formas._girar_transladar(-q['width'] / 2, -q['height'] / 2, q['center'], q['bearing'])
+        tipo_geo = g0.get('type') or 'Polygon'
+        coords = [_arredondar(anel)]
+        return {'type': tipo_geo, 'coordinates': coords if tipo_geo == 'Polygon' else [coords]}, None
 
     def _reserva(self, tipo, linha, co, anterior):
         """Sem o desenho refeito: o eixo (que o Web redesenha no Limite e na Linha) ou o contorno antigo."""

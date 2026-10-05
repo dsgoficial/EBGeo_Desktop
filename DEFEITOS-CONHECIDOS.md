@@ -10,14 +10,6 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 
 **Conserto sugerido.** Quando o calco ativo é um atlas importado, criar a camada do tipo dentro do mapa e da camada do EBGeo ativos na árvore.
 
-## K4 Formas de centro e raio editadas vértice a vértice
-
-**Sintoma.** Círculo, elipse, retângulo e setor editados vértice a vértice no QGIS saem no `.ebgeo` como desenhados, com aviso; o Web os edita pelo centro e pelo raio, e a forma pode deixar de ser editável lá como forma.
-
-**Onde.** `EBGeo/Calco/exportador/montador.py`.
-
-**Conserto sugerido.** Recalcular centro, raios e ângulo a partir da geometria editada quando ela ainda é a forma (ajuste por mínimos quadrados com tolerância), e manter o aviso só quando não for.
-
 ## K5 Sem o plugin, trocar o tipo no formulário nativo não aplica os padrões
 
 **Sintoma.** Num QGIS sem o plugin, trocar o símbolo da Área de Coordenação, da Linha de Coordenação ou da Medida pelo formulário nativo grava só o código; a cor padrão, as minas e os demais padrões do tipo novo não são aplicados.
@@ -63,6 +55,7 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 ## Menores
 
 - **Fator de 512 px do zoom:** o tamanho com correção de zoom usa a convenção do MapLibre (78271,517 m/px no zoom 0, tiles de 512 px) e ainda não foi medido lado a lado com a tela do Web.
+- **Forma girada no QGIS:** a ferramenta Girar gira em graus, na camada em EPSG:4326, e o círculo, a elipse, o retângulo ou o setor girado fora do equador deixa de ser a forma (0,6 a 10 % do tamanho a 15 a 24 graus de latitude): sai no `.ebgeo` como desenhado, com aviso (`EBGeo/Calco/exportador/formas.py`). Escalar e transladar voltam com os parâmetros.
 - **Alças de edição do Web** (mover a instância do escalão, largura da seta, distância do texto) não existem no Desktop.
 - **Ramo da Seta combinada no dock:** o Web edita cada ramo (largura, ponta, ponta dupla, aeromóvel) no painel; o dock edita a seta inteira (vai a todos os ramos), e o ramo só se edita na coluna JSON `ramos` (oculta no formulário e na tabela), pela calculadora de campo. O desenho e o exportador já leem o ramo editado assim.
 - **Âncora do Naval (modificador 1, código 46):** vem do milsymbol pelo motor do Web; as pontas saem em seta cheia e o desenho fica cerca de 21 % mais largo que o recorte do MD33-C-01.
