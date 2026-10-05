@@ -304,7 +304,7 @@ def imagem():
         esp.Campo('altura_px', 'Altura original (px)', numero(0, 100000, 1, 0, ' px'), somente_leitura=True),
         grupo_zoom(),
     ])
-    return _formulario('image', [aba], ('bitmap_b64', 'bitmap_mime'))
+    return _formulario('image', [aba], ('bitmap_b64', 'bitmap_mime', 'bitmap_largura_px'))
 
 
 def pincel():

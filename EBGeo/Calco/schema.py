@@ -332,7 +332,10 @@ TIPOS = {
                    ('altura_px', 'real', None, 'height')]
                   + _ZOOM
                   + [('bitmap_b64', 'str', None, None),
-                     ('bitmap_mime', 'str', None, None)],
+                     ('bitmap_mime', 'str', None, None),
+                     # a largura natural do bitmap (px lógicos), com que o Web desenha a imagem:
+                     # ele não lê width (importador/leitor.largura_natural)
+                     ('bitmap_largura_px', 'real', None, None)],
     },
     'brush': {
         'balde': 'brushes', 'tabela': 'brush', 'geometria': 'LineString',

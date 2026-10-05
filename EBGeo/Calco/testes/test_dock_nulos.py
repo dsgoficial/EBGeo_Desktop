@@ -554,13 +554,18 @@ class TesteDockLogicosNulos(unittest.TestCase):
             len(self.resultados), len(self.resultados) - len(nao_definidos), len(nao_definidos), ', '.join(nao_definidos)))
         self.assertEqual(erros, [])
 
+    # As entradas da visada e da visibilidade não desenham nada, como no Web (opacidade zero, K9 de
+    # 2026-10-05): o "Mostrar no mapa" delas segue a regra do atlas no dock, e nenhum estado muda pixel.
+    SEM_DESENHO = {('los', 'visivel'), ('visibility', 'visivel')}
+
     def test_cada_campo_exercitado(self):
         """O outro estado desenha outra coisa em ao menos uma configuração; fora disso, só o que o estilo não lê."""
         exercitados = {(r['tipo'], r['col']) for r in self.resultados if r['dif_verdadeiro'] or r['dif_falso']}
         sem_leitura = {(r['tipo'], r['col']) for r in self.resultados
                        if r['mostrado'] is None and not (r['dif_verdadeiro'] or r['dif_falso'])}
-        faltam = sorted({(r['tipo'], r['col']) for r in self.resultados} - exercitados - sem_leitura)
+        faltam = sorted({(r['tipo'], r['col']) for r in self.resultados} - exercitados - sem_leitura - self.SEM_DESENHO)
         self.assertEqual(faltam, [])
+        self.assertEqual(sorted(self.SEM_DESENHO & exercitados), [])
         # "Não definido" só onde nenhum estado desenha como o nulo, ou nenhum desenha diferente
         for r in self.resultados:
             if r['mostrado'] is None:
@@ -582,28 +587,43 @@ class TesteDockLogicosNulos(unittest.TestCase):
             self.assertIn(esperado, reprovados)
 
     def test_terceiro_estado_grava_nulo(self):
+        """
+        Desde o K9 (2026-10-05) o estilo lê todas as caixas, e nenhuma mostra "Não definido" no calco
+        do importador. O terceiro estado segue para o estilo que não lê a coluna: aqui o rótulo do
+        Ponto com o tamanho fixo de antes, sem a Correção de Zoom do rótulo.
+        """
+        from qgis.core import QgsPalLayerSettings, QgsProperty, QgsVectorLayerSimpleLabeling
         tipo = 'point'
         lyr = self.camadas[tipo]
-        a = dict(schema.padroes(tipo), nome='caixa')
-        a['label_zoom_corr'] = None
-        eid = self._nova(tipo, a)
-        self._abrir(tipo, eid)
-        w = self.painel.widgets['label_zoom_corr']
-        self.assertEqual((w.checkState(), w.text()), (Qt.CheckState.PartiallyChecked, TEXTO_NULO))
-        w.setCheckState(Qt.CheckState.Checked)
-        self.painel._gravar_pendentes()
-        self.assertIs(lyr.getFeature(self.painel.fid)['label_zoom_corr'], True)
-        self.assertEqual(w.text(), '')
-        w.setCheckState(Qt.CheckState.PartiallyChecked)
-        self.painel._gravar_pendentes()
-        self.assertTrue(_nulo(lyr.getFeature(self.painel.fid)['label_zoom_corr']))
-        self.assertTrue(self.painel.descartar())
+        antigo = lyr.labeling().clone()
+        s = lyr.labeling().settings()
+        dd = s.dataDefinedProperties()
+        dd.setProperty(QgsPalLayerSettings.Property.Size, QgsProperty.fromExpression('coalesce("label_size", 14) * 25.4 / 96'))
+        s.setDataDefinedProperties(dd)
+        lyr.setLabeling(QgsVectorLayerSimpleLabeling(s))
+        try:
+            a = dict(schema.padroes(tipo), nome='caixa')
+            a['label_zoom_corr'] = None
+            eid = self._nova(tipo, a)
+            self._abrir(tipo, eid)
+            w = self.painel.widgets['label_zoom_corr']
+            self.assertEqual((w.checkState(), w.text()), (Qt.CheckState.PartiallyChecked, TEXTO_NULO))
+            w.setCheckState(Qt.CheckState.Checked)
+            self.painel._gravar_pendentes()
+            self.assertIs(lyr.getFeature(self.painel.fid)['label_zoom_corr'], True)
+            self.assertEqual(w.text(), '')
+            w.setCheckState(Qt.CheckState.PartiallyChecked)
+            self.painel._gravar_pendentes()
+            self.assertTrue(_nulo(lyr.getFeature(self.painel.fid)['label_zoom_corr']))
+            self.assertTrue(self.painel.descartar())
+        finally:
+            lyr.setLabeling(antigo)
 
     def test_captura(self):
         """
         O Ponto com as caixas nulas: "Mostrar no mapa" marcada (a regra do atlas mostra a nula), a
-        Correção de Zoom do marcador marcada (o estilo das formas lê a nula como ligada, como o Web) e a do
-        rótulo "Não definido" (o estilo não a lê).
+        Correção de Zoom do marcador e a do rótulo marcadas (o estilo das formas lê a nula como ligada,
+        como o Web; a do rótulo desde o K9 de 2026-10-05).
         """
         tipo = 'point'
         a = dict(schema.padroes(tipo), nome='caixas nulas', zoom_corr=None, label_zoom_corr=None, visivel=None,
@@ -622,7 +642,7 @@ class TesteDockLogicosNulos(unittest.TestCase):
         self.painel.resize(440, 980)
         self.assertEqual(self.painel.widgets['zoom_corr'].checkState(), Qt.CheckState.Checked)
         self.assertEqual(self.painel.widgets['visivel'].checkState(), Qt.CheckState.Checked)
-        self.assertEqual(self.painel.widgets['label_zoom_corr'].checkState(), Qt.CheckState.PartiallyChecked)
+        self.assertEqual(self.painel.widgets['label_zoom_corr'].checkState(), Qt.CheckState.Checked)
 
 
 def tearDownModule():

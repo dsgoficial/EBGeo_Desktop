@@ -72,8 +72,28 @@ def garantir_tabela_tipo(ds, tipo):
             lyr.CreateField(_campo_ogr(nome, tp, padrao))
     if tipo == 'arrow' and 'ramos' not in existentes and 'props' in existentes:
         _ramos_do_calco_antigo(lyr)
+    if tipo == 'image' and 'bitmap_largura_px' not in existentes and 'bitmap_b64' in existentes:
+        _largura_da_imagem_antiga(lyr)
     _comentarios(lyr, tipo)
     return lyr
+
+
+def _largura_da_imagem_antiga(lyr):
+    """Calco anterior à coluna bitmap_largura_px: a largura natural lida do bitmap guardado."""
+    import base64
+    import json
+    from .importador import leitor
+    lyr.ResetReading()
+    for f in lyr:
+        try:
+            b = base64.b64decode(f.GetField('bitmap_b64') or '')
+            props = json.loads(f.GetField('props') or 'null') if 'props' in f.keys() else None
+        except (ValueError, TypeError):
+            continue
+        w = leitor.largura_natural(b, props if isinstance(props, dict) else None)
+        if w:
+            f.SetField('bitmap_largura_px', w)
+            lyr.SetFeature(f)
 
 
 def _ramos_do_calco_antigo(lyr):

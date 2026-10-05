@@ -168,6 +168,10 @@ def referencias(tipo, web, coluna, tp, padrao, original, literais):
     # nos dois lados pareceria não lida
     if tp == 'real':
         vals.append(2.5)
+    # a opacidade 2,5 o Web desenha estourando a cor (o MapLibre não corta a 1) e o Desktop corta:
+    # sem um valor dentro da faixa, a opacidade lida pelos dois lados parecia lida só pelo Web
+    if tp == 'real' and web.lower().endswith('opacity'):
+        vals.append(0.5)
     elif tp == 'str' and ('olor' in web or web.endswith('Color')):
         vals += ['#ff00ff', '#000000']  # e o preto, o padrão do MapLibre para cor nula
     out = []
@@ -275,19 +279,35 @@ def desktop_assinaturas(caminho_gpkg, mapa_ids):
     return out
 
 
+# Unidades de EPSG:3857 por pixel no zoom do MapLibre (mundo de 512 px), a convenção do Desktop
+# (zoom.py, 78271,517 m no zoom 0): o zoom em que o Web é avaliado é o zoom em que o Desktop desenha.
+# A de 256 px (156543,03 / 2^z), usada até 2026-10-05, desenhava o Desktop no zoom ZOOM - 1, o zoom
+# de criação das bases da fixture 06, e a correção de zoom ligada e a desligada davam os mesmos pixels.
+RES_ZOOM = 78271.51696402048 / 2 ** ZOOM
+# Folga em volta da feição: o texto das pontas da Linha de Coordenação e o bloco externo da Área
+# ficam fora da caixa da geometria.
+FOLGA_PX = 400
+TETO_PX = 2400
+
+
 def _render(vl, ext_wgs):
     ms = QgsMapSettings()
     ms.setLayers([vl])
     ms.setDestinationCrs(QgsCoordinateReferenceSystem('EPSG:3857'))
-    ms.setOutputSize(QSize(360, 270))
     ms.setOutputDpi(96)
     ms.setBackgroundColor(QColor('white'))
     # a escala do zoom em que o Web foi avaliado (ZOOM), centrada na feição: o desenho que muda
-    # com o zoom (correção de zoom, tamanho do símbolo) sai na mesma escala dos dois lados
+    # com o zoom (correção de zoom, tamanho do símbolo) sai na mesma escala dos dois lados; o
+    # quadro cobre todas as variantes da base (com a folga), para o que o Web desenha longe da
+    # geometria entrar na comparação (antes, num quadro fixo de 360 x 270, saía fora dele)
     tr = QgsCoordinateTransform(vl.crs(), ms.destinationCrs(), QgsProject.instance())
-    c = tr.transformBoundingBox(ext_wgs).center()
-    res = 156543.03392804097 / 2 ** ZOOM
-    ms.setExtent(QgsRectangle(c.x() - 180 * res, c.y() - 135 * res, c.x() + 180 * res, c.y() + 135 * res))
+    caixa = tr.transformBoundingBox(ext_wgs)
+    c = caixa.center()
+    res = RES_ZOOM
+    w = min(TETO_PX, max(360, int(caixa.width() / res) + 2 * FOLGA_PX))
+    h = min(TETO_PX, max(270, int(caixa.height() / res) + 2 * FOLGA_PX))
+    ms.setOutputSize(QSize(w, h))
+    ms.setExtent(QgsRectangle(c.x() - w / 2 * res, c.y() - h / 2 * res, c.x() + w / 2 * res, c.y() + h / 2 * res))
     ctx = QgsExpressionContext()
     ctx.appendScope(QgsExpressionContextUtils.globalScope())
     ctx.appendScope(QgsExpressionContextUtils.projectScope(QgsProject.instance()))
@@ -441,6 +461,19 @@ class TesteChavesAusentes(unittest.TestCase):
         # a pendência que deixou de divergir sai da lista (a lista não envelhece em silêncio)
         self.assertEqual(sorted(set(PENDENTES) - chaves), [])
 
+    def test_os_dois_lados_leem_as_mesmas_chaves(self):
+        """
+        A chave que só um lado desenha (mudar o valor muda os pixels de um e não do outro) é
+        divergência também. Medido em 2026-10-05: 34 só no Web e 3 só no Desktop no código de
+        antes; parte era o instrumento (o Desktop desenhado no zoom 12 com as bases criadas no 12,
+        o quadro que cortava o texto, a opacidade sem valor dentro da faixa), parte o estilo (o
+        rótulo do ponto e das formas sem a correção de zoom, a imagem pela width e as entradas da
+        visada e da visibilidade desenhadas).
+        """
+        self.assertEqual(sorted(self.so_web - set(SO_WEB_PENDENTES)), [])
+        self.assertEqual(sorted(set(SO_WEB_PENDENTES) - self.so_web), [])
+        self.assertEqual(sorted(self.so_desk), [])
+
     def test_regua_exercita_e_compara_todas_as_chaves(self):
         todas = {(t, w) for t in schema.TIPOS for w in schema.mapa_web(t) if w not in FORA}
         self.assertEqual(todas - self.comparadas, set())
@@ -474,6 +507,15 @@ PENDENTES = {}
 # de 500 px no tamanho no terreno do Desktop, que hoje não tem teto, ou o Web pode estar errado:
 # fica para o chefe.
 PENDENTES[('point', 'sizeCreatedAtZoom')] = 'âncora nula do Ponto: o Web satura em 500 px; corrigir o Web ou portar o teto'
+
+
+# Chave que só o Web desenha, à espera de conserto fora do estilo: a âncora da Medida. O Web
+# ancora o bitmap por properties.anchor (coalesce 'center') e só a reescreve quando regenera o
+# bitmap (bitmapVersion menor que 4, ou o desenho mudou); o Desktop ancora o SVG pela âncora do
+# catálogo (pointData.anchor do gerador), e a coluna anchor do Desktop (padrão 'center') não é a do
+# gerador. Os dois só divergem quando o arquivo traz uma âncora diferente da do catálogo com o
+# bitmap em dia (DEFEITOS-CONHECIDOS.md, Menores).
+SO_WEB_PENDENTES = {('coordination_measure', 'anchor'): 'âncora da Medida: a do arquivo no Web, a do catálogo no Desktop'}
 
 
 def tearDownModule():

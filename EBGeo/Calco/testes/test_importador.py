@@ -1040,6 +1040,63 @@ class TestAlgoritmo(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(TMP, 'ruim.gpkg')))
 
 
+class TesteLarguraNaturalDaImagem(unittest.TestCase):
+    """
+    O Web desenha a feição Imagem no tamanho natural do bitmap registrado no mapa (icon-size sobre a
+    imagem, content.layers.js), e não pela propriedade width: a auditoria de chaves media width lida
+    só pelo Desktop (K9). O importador grava a largura natural em bitmap_largura_px, lida dos
+    cabeçalhos, e o calco antigo a ganha do bitmap guardado ao abrir.
+    """
+
+    @staticmethod
+    def _bytes(w, h, formato):
+        from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice
+        im = QImage(w, h, QImage.Format.Format_ARGB32)
+        im.fill(QColor('#336699'))
+        ba = QByteArray()
+        buf = QBuffer(ba)
+        buf.open(QIODevice.OpenModeFlag.WriteOnly)
+        assert im.save(buf, formato), formato
+        return bytes(ba)
+
+    def test_dimensoes_pelos_cabecalhos(self):
+        from qgis.PyQt.QtGui import QImageWriter
+        formatos = ['PNG', 'JPG'] + [f for f in ('WEBP', 'GIF') if f.lower().encode() in
+                                      [bytes(x).lower() for x in QImageWriter.supportedImageFormats()]]
+        for formato in formatos:
+            for w, h in ((40, 30), (801, 3), (1, 1)):
+                b = self._bytes(w, h, formato)
+                self.assertEqual(tuple(leitor.dimensoes_bitmap(b)), (w, h), (formato, w, h))
+        # cabeçalho truncado, SVG e lixo: sem dimensão, e o estilo cai na width
+        png = self._bytes(40, 30, 'PNG')
+        for ruim in (png[:12], b'<svg xmlns="http://www.w3.org/2000/svg" width="40"/>', b'', b'xxxx'):
+            self.assertIsNone(leitor.dimensoes_bitmap(ruim))
+        self.assertEqual(leitor.largura_natural(png, {'pixelRatio': 2}), 20.0)
+        self.assertEqual(leitor.largura_natural(png, {'pixelRatio': 0.5}), 40.0)  # só acima de 1, como o Web
+        self.assertEqual(leitor.largura_natural(png, {'width': 999}), 40.0)
+
+    def test_calco_antigo_ganha_a_coluna_do_bitmap(self):
+        from Calco import gpkg
+        caminho = os.path.join(TMP, 'imagem_antiga.gpkg')
+        gpkg.criar_calco(caminho, ['image'])
+        ds = ogr.Open(caminho, 1)
+        lyr = ds.GetLayerByName('image')
+        f = ogr.Feature(lyr.GetLayerDefn())
+        f.SetField('bitmap_b64', base64.b64encode(self._bytes(37, 21, 'PNG')).decode('ascii'))
+        f.SetField('largura_px', 160.0)
+        f.SetField('props', json.dumps({'width': 160}))
+        lyr.CreateFeature(f)
+        defn = lyr.GetLayerDefn()
+        lyr.DeleteField(defn.GetFieldIndex('bitmap_largura_px'))  # o calco de antes da coluna
+        ds = None
+        gpkg.criar_calco(caminho, ['image'])  # abrir completa o esquema
+        ds = ogr.Open(caminho)
+        f = next(iter(ds.GetLayerByName('image')))
+        self.assertEqual(f.GetField('bitmap_largura_px'), 37.0)
+        self.assertEqual(f.GetField('largura_px'), 160.0)
+        ds = None
+
+
 if __name__ == '__main__':
     print('fixtures:', FIXTURES)
     print('saída temporária:', TMP)

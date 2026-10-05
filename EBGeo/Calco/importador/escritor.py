@@ -746,6 +746,9 @@ def gravar_documento(doc, caminho_gpkg, log=None, sobrescrever=True, feedback=No
                             guardadas.add(p.get('id'))
                             linha['bitmap_b64'] = base64.b64encode(blob[0]).decode('ascii')
                             linha['bitmap_mime'] = blob[1]
+                            if 'bitmap_largura_px' in tipos_col[tipo]:
+                                # o tamanho natural do bitmap, com que o Web desenha a imagem
+                                linha['bitmap_largura_px'] = leitor.largura_natural(blob[0], p)
                         elif tipo == 'image':
                             msg = 'mapa "{}": imagem {} ({}) sem bitmap no arquivo: perda'.format(
                                 nome, p.get('id'), p.get('nome'))

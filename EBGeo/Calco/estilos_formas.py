@@ -266,6 +266,24 @@ def _estilo_ponto(layer):
     _rotulo_forma(layer, ponto=True)
 
 
+def expr_tamanho_rotulo_px():
+    """
+    O tamanho do rótulo do ponto e das formas em px do Web: o LABEL_SIZE de point.layers.js,
+    polygon.layers.js e shape.layers.js (zoomScaledStop). Com a correção de zoom do rótulo e a
+    âncora (labelCreatedAtZoom) número, labelSize x 2^(zoom - âncora), no teto de 255 px, preso
+    ao terreno; a correção desligada (só o falso gravado) ou a âncora nula deixam o labelSize fixo
+    na tela. O zoom atual é o do MapLibre (m/px de terreno no zoom da âncora sobre o de agora).
+    """
+    from .estilos_taticos import compor, finalizar
+    base = 'coalesce("label_size", 14)'
+    m_ancora = "{m0} * cos(radians(y(centroid(transform($geometry, @layer_crs, 'EPSG:4326'))))) / 2 ^ \"label_created_zoom\"".format(
+        m0=M_POR_PX_Z0)
+    return ('CASE WHEN "label_zoom_corr" IS NOT NULL AND NOT "label_zoom_corr" THEN {b} '
+            'WHEN "label_created_zoom" IS NULL OR coalesce(@map_scale, 0) <= 0 THEN {b} '
+            'ELSE min(255, {b} * ({m}) / (({e}) * 0.00026458333)) END').format(
+                b=base, m=m_ancora, e=finalizar(compor('_escala_terreno')))
+
+
 def _rotulo_forma(layer, ponto=False):
     """Rótulo de ponto e de forma: label_text em Noto Sans Bold, halo label_outline_*."""
     s = QgsPalLayerSettings()
@@ -285,7 +303,7 @@ def _rotulo_forma(layer, ponto=False):
     dd = s.dataDefinedProperties()
     dd.setProperty(QgsPalLayerSettings.Property.Show,
                    _p("coalesce(\"show_label\", false) AND coalesce(\"label_text\", '') <> ''"))
-    dd.setProperty(QgsPalLayerSettings.Property.Size, _p(_mm('coalesce("label_size", 14)')))
+    dd.setProperty(QgsPalLayerSettings.Property.Size, _p(_mm(expr_tamanho_rotulo_px())))
     dd.setProperty(QgsPalLayerSettings.Property.Color, _p("coalesce(\"label_color\", '#ffffff')"))
     dd.setProperty(QgsPalLayerSettings.Property.BufferColor, _p("coalesce(\"label_outline_color\", '#000000')"))
     dd.setProperty(QgsPalLayerSettings.Property.BufferSize, _p(_mm('coalesce("label_outline_width", 2)')))
@@ -336,10 +354,13 @@ def _estilo_pincel(layer):
 
 
 def _estilo_los(layer):
-    """Entrada da linha de visada: o Web a desenha com opacidade zero. A árvore a deixa desligada."""
+    """
+    Entrada da linha de visada: o Web a desenha com opacidade zero, sem filtro de visivel
+    (los-layer de tactical.layers.js), e o Desktop também. Antes um tracejado cinza, que só o
+    Desktop desenhava, e a única chave que mudava o desenho era visivel. A árvore a deixa desligada.
+    """
     s = _simbolo_limpo(QgsLineSymbol)
-    sl = QgsSimpleLineSymbolLayer(QColor('#808080'), 0.4)
-    sl.setPenStyle(_qt_pen('dash'))
+    sl = QgsSimpleLineSymbolLayer(QColor(211, 211, 211, 0), 0.4)
     s.appendSymbolLayer(sl)
     layer.setRenderer(QgsSingleSymbolRenderer(s))
 
@@ -440,10 +461,10 @@ def _estilo_visibilidade(layer, processado):
         fill.setStrokeStyle(_qt_pen('none'))
         fill.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p(_cor_alfa('"color"', '"opacity"', '#000000')))
     else:
-        fill.setColor(QColor(0, 0, 0, 0))
-        fill.setStrokeColor(QColor('#808080'))
-        fill.setStrokeWidth(0.3)
-        fill.setStrokeStyle(_qt_pen('dash'))
+        # a entrada da visibilidade: o Web a desenha com opacidade zero, sem filtro de visivel
+        # (visibility-layer de tactical.layers.js); antes, um contorno tracejado só no Desktop
+        fill.setColor(QColor(211, 211, 211, 0))
+        fill.setStrokeStyle(_qt_pen('none'))
     s.appendSymbolLayer(fill)
     layer.setRenderer(QgsSingleSymbolRenderer(s))
 
@@ -553,7 +574,9 @@ def _marcador_bitmap(terreno, largura_px_expr, rotacao=True, svg=True):
 
 
 def _estilo_imagem(layer):
-    largura = 'coalesce("largura_px", 64) * coalesce("size", 1)'
+    # o Web desenha a imagem no tamanho natural do bitmap (icon-size sobre a imagem registrada) e
+    # não lê width; largura_px fica de reserva para o calco sem a coluna e a imagem sem cabeçalho lido
+    largura = 'coalesce("bitmap_largura_px", "largura_px", 64) * coalesce("size", 1)'
     layer.setRenderer(_regras_por_zoom(lambda t: _marcador_bitmap(t, largura, svg=False), 'Imagem'))
 
 
