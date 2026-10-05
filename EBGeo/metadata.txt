@@ -143,7 +143,7 @@ tags=Exército,Brasileiro,DSG,Diretoria,Serviço,Geográfico,BDGEx,Militar
 homepage=http://bit.ly/ebgeo
 tracker=https://github.com/dsgoficial/EBGeo/issues
 repository=https://github.com/dsgoficial/EBGeo
-icon=icons/dsg.png
+icon=icons/ebgeo.png
 # experimental flag
 experimental=False
 

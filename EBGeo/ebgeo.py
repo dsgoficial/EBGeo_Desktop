@@ -437,7 +437,7 @@ class EBGeo(QObject):
 		self.ebGeo.addAction(self.ms_action)
 
 		self.ms_action = self.add_action(
-		 	os.path.join(os.path.dirname(__file__), 'icons', 'dsg.png'),
+		 	os.path.join(os.path.dirname(__file__), 'icons', 'ebgeo.png'),
 		 	text=u'Sobre',
 		 	callback=self.loadAbout,
 		 	parent=self.ebGeo,

@@ -69,6 +69,6 @@ class Provider(QgsProcessingProvider):
                 )),
                 '..',
                 'icons',
-                'dsg.png'
+                'ebgeo.png'
             )
         )
