@@ -474,6 +474,8 @@ def linha_feicao(tipo, mapa, p, grupos):
         if web is not None:
             if web in p:
                 linha[col] = valor_coluna(tp, p[web])
+            elif web in schema.AUSENTE_COMO_NULA.get(tipo, ()):
+                linha[col] = None  # o Web desenha a chave ausente como a nula (schema.AUSENTE_COMO_NULA)
             elif tp == 'json' and isinstance(padrao, str):
                 linha[col] = padrao  # o padrão do schema já é JSON em texto
             else:

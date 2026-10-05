@@ -236,6 +236,10 @@ def gerar_desenho(tipo, atributos):
     """Resultado bruto do gerador (svg, svgWeb, largura, altura, ancoraX, ancoraY, valido...)."""
     props = props_web_de_atributos(tipo, atributos)
     if tipo == 'magnetic_declination':
+        # generateDeclinationBitmap do Web recusa a declinação que não é número e guarda o bitmap
+        # de antes: aqui também, e quem grava fica com o bitmap do arquivo
+        if not isinstance(props.get('declination'), (int, float)) or isinstance(props.get('declination'), bool):
+            raise ValueError('declinação ausente: fica o bitmap')
         from .motor import declinacao
         return declinacao.renderizar(props.get('declination') or 0.0, props.get('convergence') or 0.0,
                                      props.get('fillColor'))

@@ -64,7 +64,8 @@ ICONES_WEB = {
 }
 
 # condição de tamanho fixo no terreno (correção de zoom ligada e zoom de criação conhecido)
-COND_ZOOM = 'coalesce("zoom_corr", false) AND "created_zoom" IS NOT NULL'
+# zoom_corr nulo corrige, como no Web: zoomScaledStop só desliga a escala com zoomCorrectionEnabled === false
+COND_ZOOM = 'coalesce("zoom_corr", true) AND "created_zoom" IS NOT NULL'
 
 
 def _mm(expr_px):
@@ -224,8 +225,17 @@ def _estilo_ponto(layer):
         sm.setDataDefinedProperty(QgsSymbolLayer.Property.Size, _p(_tamanho(
             "2 * coalesce(\"size\", 10) * if(coalesce(\"marker_symbol\", 'circle') = 'circle', 1, {})".format(
                 RAZAO_DESENHO), terreno)))
-        sm.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p("coalesce(\"fill_color\", '#3388ff')"))
-        sm.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p("coalesce(\"line_color\", '#ffffff')"))
+        # cor nula como no Web (point.layers.js): o círculo é a camada circle, com circle-color cru
+        # (nulo é o preto do MapLibre) e contorno 'transparent'; as demais formas são a imagem
+        # gerada, com POINT_MARKER_DEFAULTS (preenchimento #3f4fb5, contorno preto) no lugar do
+        # que é falso (orDefault: nulo e texto vazio)
+        circulo = "coalesce(\"marker_symbol\", 'circle') = 'circle'"
+        sm.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p(
+            "CASE WHEN {} THEN coalesce(\"fill_color\", '#000000') "
+            "ELSE coalesce(nullif(\"fill_color\", ''), '#3f4fb5') END".format(circulo)))
+        sm.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p(
+            "CASE WHEN {} THEN coalesce(\"line_color\", '0,0,0,0') "
+            "ELSE coalesce(nullif(\"line_color\", ''), '#000000') END".format(circulo)))
         sm.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeWidth, _p(_mm('coalesce("line_width", 0)')))
         sm.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p('NOT ({})'.format(cond_custom)))
         s.appendSymbolLayer(sm)
@@ -302,7 +312,8 @@ def _rotulo_forma(layer, ponto=False):
 
 def _estilo_linha(layer):
     s = _simbolo_limpo(QgsLineSymbol)
-    for sl in _linhas_com_traco("coalesce(\"line_color\", '#3388ff')", 'coalesce("line_width", 3)'):
+    # nulo: o padrão do MapLibre (line-color preto, line-width 1), como o Web desenha
+    for sl in _linhas_com_traco("coalesce(\"line_color\", '#000000')", 'coalesce("line_width", 1)'):
         s.appendSymbolLayer(sl)
     s.setDataDefinedProperty(QgsSymbol.Property.Opacity, _p('100 * coalesce("opacity", 1)'))
     layer.setRenderer(QgsSingleSymbolRenderer(s))
@@ -315,8 +326,10 @@ def _estilo_pincel(layer):
         sl.setWidthUnit(_unidade(terreno))
         sl.setPenCapStyle(_qt_cap('round'))
         sl.setPenJoinStyle(_qt_join('round'))
-        sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeWidth, _p(_tamanho('coalesce("line_width", 5)', terreno)))
-        sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p("coalesce(\"line_color\", '#ff0000')"))
+        # nulo como no Web: a base da largura é coalesce(lineWidth, 10) (BRUSH_WIDTH de line.layers.js),
+        # e a cor nula é o padrão do MapLibre (preto)
+        sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeWidth, _p(_tamanho('coalesce("line_width", 10)', terreno)))
+        sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p("coalesce(\"line_color\", '#000000')"))
         s.appendSymbolLayer(sl)
         return s
     layer.setRenderer(_regras_por_zoom(fabrica, 'Pincel'))
@@ -341,7 +354,7 @@ def _estilo_processed_los(layer):
     sl = QgsSimpleLineSymbolLayer()
     sl.setWidthUnit(Qgis.RenderUnit.Millimeters)
     sl.setPenCapStyle(_qt_cap('round'))
-    sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p("coalesce(\"color\", '#00FF00')"))
+    sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p("coalesce(\"color\", '#000000')"))  # nulo: preto, como o Web
     sl.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeWidth, _p(_mm(
         "coalesce(to_real(map_get({}, 'width')), 4)".format(expr_json_mapa('parametros')))))
     s.appendSymbolLayer(sl)
@@ -370,7 +383,7 @@ def _estilo_forma(layer):
     fill = QgsSimpleFillSymbolLayer()
     fill.setStrokeStyle(_qt_pen('none'))
     fill.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor,
-                                _p(_cor_alfa('"fill_color"', '"opacity"')))
+                                _p(_cor_alfa('"fill_color"', '"opacity"', '#000000')))  # nula: preta, como o Web
     fill.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p('NOT ({})'.format(COND_HACHURA)))
     s.appendSymbolLayer(fill)
     # hachura: cor do preenchimento (hatchColor é só reserva), com a mesma opacidade
@@ -406,7 +419,8 @@ def _estilo_forma(layer):
     pp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p("{} AND \"hatch_type\" = '{}'".format(COND_HACHURA, HACHURA_PONTOS)))
     s.appendSymbolLayer(pp)
     # contorno com opacidade 1 (polygon.layers.js:117)
-    for sl in _linhas_com_traco("coalesce(\"line_color\", '#3388ff')", 'coalesce("line_width", 2)'):
+    # nulos: o padrão do MapLibre (line-color preto, line-width 1), como o Web desenha
+    for sl in _linhas_com_traco("coalesce(\"line_color\", '#000000')", 'coalesce("line_width", 1)'):
         s.appendSymbolLayer(sl)
     layer.setRenderer(QgsSingleSymbolRenderer(s))
     _rotulo_forma(layer)
@@ -417,7 +431,7 @@ def _estilo_visibilidade(layer, processado):
     fill = QgsSimpleFillSymbolLayer()
     if processado:
         fill.setStrokeStyle(_qt_pen('none'))
-        fill.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p(_cor_alfa('"color"', '"opacity"', '#00FF00')))
+        fill.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p(_cor_alfa('"color"', '"opacity"', '#000000')))
     else:
         fill.setColor(QColor(0, 0, 0, 0))
         fill.setStrokeColor(QColor('#808080'))

@@ -602,7 +602,7 @@ class TesteDockLogicosNulos(unittest.TestCase):
     def test_captura(self):
         """
         O Ponto com as caixas nulas: "Mostrar no mapa" marcada (a regra do atlas mostra a nula), a
-        Correção de Zoom do marcador desmarcada (o estilo das formas lê a nula como falsa) e a do
+        Correção de Zoom do marcador marcada (o estilo das formas lê a nula como ligada, como o Web) e a do
         rótulo "Não definido" (o estilo não a lê).
         """
         tipo = 'point'
@@ -620,7 +620,7 @@ class TesteDockLogicosNulos(unittest.TestCase):
         esperar(self.painel)
         self.painel.grab().save(os.path.join(SAIDA, 'dock_nulos_ponto_caixas.png'))
         self.painel.resize(440, 980)
-        self.assertEqual(self.painel.widgets['zoom_corr'].checkState(), Qt.CheckState.Unchecked)
+        self.assertEqual(self.painel.widgets['zoom_corr'].checkState(), Qt.CheckState.Checked)
         self.assertEqual(self.painel.widgets['visivel'].checkState(), Qt.CheckState.Checked)
         self.assertEqual(self.painel.widgets['label_zoom_corr'].checkState(), Qt.CheckState.PartiallyChecked)
 

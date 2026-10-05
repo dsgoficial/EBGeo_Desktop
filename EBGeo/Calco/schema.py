@@ -543,3 +543,37 @@ def razao_texto_area(p):
 def razao_desenhada_area(valor):
     """A razão na borda que o desenho usa para o valor da coluna: nula vale 0, cortada a [0, 1]."""
     return min(1.0, max(0.0, 0.0 if valor is None else float(valor)))
+
+
+# ---------------------------------------------------------------- chave ausente no .ebgeo
+
+_FORMA_AUSENTE = frozenset({'fillColor', 'lineColor', 'lineWidth', 'opacity', 'labelColor', 'labelOutlineColor',
+                            'labelOutlineWidth'})
+# A chave AUSENTE que o Web desenha como a NULA: a camada MapLibre lê a propriedade crua e o nulo
+# cai no padrão do MapLibre (cor preta, espessura e opacidade 1) ou no coalesce da expressão, e o
+# gerador de símbolo recusa e o Web guarda o bitmap do arquivo. O padrão do esquema (o da
+# ferramenta de criação do Web, que o Web só aplica ao criar) desenharia outra coisa: para estas,
+# o importador grava NULL, e o estilo desenha o nulo como o Web. Lista medida pela auditoria
+# testes/test_chaves_ausentes.py (fixture 06, o Web em node): chave que falta aqui e diverge
+# reprova lá.
+AUSENTE_COMO_NULA = {
+    'arrow': frozenset({'fillColor', 'fillOpacity', 'lineColor', 'lineWidth', 'width'}),
+    'boundary': frozenset({'echelon'}),
+    'brush': frozenset({'lineColor', 'lineWidth'}),
+    'circle': _FORMA_AUSENTE,
+    'ellipse': _FORMA_AUSENTE,
+    'polygon': _FORMA_AUSENTE,
+    'rectangle': _FORMA_AUSENTE,
+    'sector': _FORMA_AUSENTE,
+    'coordination_area': frozenset({'hatchLineWidth', 'opacity'}),
+    'coordination_line': frozenset({'color', 'symbol_spacing'}),
+    'coordination_measure': frozenset({'pointCode'}),
+    'engineering_symbol': frozenset({'pointCode'}),
+    'line': frozenset({'lineColor', 'lineWidth'}),
+    'magnetic_declination': frozenset({'declination', 'size'}),
+    'military_symbol': frozenset({'sidc'}),
+    'occupied_front': frozenset({'lineWidth'}),
+    'point': frozenset({'fillColor', 'lineColor', 'lineWidth', 'labelColor', 'labelOutlineColor', 'labelOutlineWidth'}),
+    'processed_los': frozenset({'color'}),
+    'processed_visibility': frozenset({'color', 'opacity'}),
+}

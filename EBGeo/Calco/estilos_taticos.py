@@ -619,16 +619,18 @@ def renderer_limite(projecao=None):
 
 
 def renderer_seta(projecao=None):
-    fundo = expr_cor('fill_color', 'fill_opacity', '#3f4fb5')
-    borda = expr_cor('line_color', 'line_opacity', '#3f4fb5')
-    largura = expr_largura_px('line_width', 3, 60, zoom=False)
+    # nulos como no Web (arrow-fill-layer e arrow-layer leem a propriedade crua): o padrão do
+    # MapLibre, cor preta e largura 1
+    fundo = expr_cor('fill_color', 'fill_opacity', '#000000')
+    borda = expr_cor('line_color', 'line_opacity', '#000000')
+    largura = expr_largura_px('line_width', 1, 60, zoom=False)
     poly = _preenchimento(fundo, borda, largura, arredondada=False)
     poly.symbolLayer(0).setPenJoinStyle(Qt.PenJoinStyle.MiterJoin)
     return QgsSingleSymbolRenderer(_simbolo_linha([_gerador(expr_seta(projecao), poly)]))
 
 
 def renderer_frente_ocupada(projecao=None):
-    largura = expr_largura_px('line_width', 4, 60, zoom=False)
+    largura = expr_largura_px('line_width', 1, 60, zoom=False)  # nula: 1, o padrão do MapLibre, como o Web
     cor = expr_cor('color', 'opacity')
     return QgsSingleSymbolRenderer(_simbolo_linha([_gerador(expr_frente_ocupada(projecao), _linha(largura, cor))]))
 
