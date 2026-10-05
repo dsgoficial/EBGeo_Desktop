@@ -445,6 +445,24 @@ class Montador:
         """O veredito do importador: geometria que ele não grava (feição repassada como veio)."""
         return escritor.geometria_qgis(tipo, f.get('geometry'), copy.deepcopy(f.get('properties') or {})) is None
 
+    @staticmethod
+    def _razao_texto_area(linha, p, props0, editadas, novo):
+        """
+        A posição do texto da área que o Web vai desenhar é a que o Desktop desenha. Sem a chave
+        text_ratio (ou com o que o Number() do Web não lê), o Web resolve o padrão da posição a
+        partir do text_position e do tipo; quando a edição no Desktop muda essa resolução, ou a
+        área nova tem a razão nula, a chave vai com o valor da coluna. A feição não editada
+        sai como veio: o importador gravou na coluna o mesmo padrão.
+        """
+        coluna = _norm('real', linha['text_ratio'])
+        web = schema.razao_texto_area(p)
+        if abs(schema.razao_desenhada_area(web) - schema.razao_desenhada_area(coluna)) <= TOL_REAL:
+            return
+        p['text_ratio'] = None if coluna is None else _para_web(
+            'real', coluna, None if novo else props0.get('text_ratio'), not novo and 'text_ratio' in props0)
+        if not novo and 'text_ratio' not in editadas:
+            editadas.append('text_ratio')
+
     def feicao(self, tipo, linha):
         """(feição GeoJSON do Web, situação) a partir da linha do calco."""
         props0 = _json(linha.get('props'))
@@ -465,6 +483,8 @@ class Montador:
                 continue
             editadas.append(col)
             p[web] = _para_web(tp, atual, props0.get(web), web in props0)
+        if tipo == 'coordination_area' and 'text_ratio' in linha:
+            self._razao_texto_area(linha, p, props0, editadas, novo)
 
         p['id'] = eid
         camada = linha.get('camada_id') or 'default'

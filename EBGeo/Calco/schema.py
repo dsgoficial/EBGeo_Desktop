@@ -454,3 +454,92 @@ def atributos_para_qgis(tipo, atributos):
     js = colunas_json(tipo)
     return {k: (valor_json_para_qgis(v) if k in js else cor_canonica(v) if coluna_de_cor(k) else v)
             for k, v in atributos.items()}
+
+
+# ---------------------------------------------------------------- Área de Coordenação: text_ratio
+
+# Os brancos que o Number() do JavaScript tira das pontas de um texto (StrWhiteSpaceChar).
+_BRANCOS_JS = '\t\n\x0b\x0c\r \xa0            ' \
+              '    　﻿'
+
+
+def _texto_js(v):
+    """String(v) do JavaScript, para o Number() de uma lista ([0.3] vale 0,3; [] vale 0)."""
+    if v is None:
+        return ''
+    if isinstance(v, bool):
+        return 'true' if v else 'false'
+    if isinstance(v, (list, tuple)):
+        return ','.join(_texto_js(x) for x in v)
+    if isinstance(v, dict):
+        return '[object Object]'
+    if isinstance(v, float) and v.is_integer() and abs(v) < 1e21:
+        return str(int(v))
+    return repr(v) if isinstance(v, float) else str(v)
+
+
+def numero_js(v):
+    """
+    Number(v) do JavaScript, ou None quando o resultado não é finito (NaN ou ±Infinity), que é o
+    teste Number.isFinite do Web. Nulo vale 0, lógico vale 1 ou 0, texto vazio vale 0, e texto só
+    é número na grafia do JavaScript: '0,4' e '1_0' não são ('0x1A' é).
+    """
+    import math
+    import re
+    if v is None:
+        return 0.0
+    if isinstance(v, bool):
+        return 1.0 if v else 0.0
+    if isinstance(v, (int, float)):
+        try:
+            f = float(v)
+        except OverflowError:
+            return None
+        return f if math.isfinite(f) else None
+    if isinstance(v, (list, tuple)):
+        return numero_js(_texto_js(v))
+    if not isinstance(v, str):
+        return None
+    s = v.strip(_BRANCOS_JS)
+    if s == '':
+        return 0.0
+    if re.fullmatch(r'[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?', s):
+        f = float(s)
+        return f if math.isfinite(f) else None
+    for prefixo, base in (('0x', 16), ('0o', 8), ('0b', 2)):
+        if s[:2].lower() == prefixo and s[2:] and all(c in '0123456789abcdef'[:base] for c in s[2:].lower()):
+            return float(int(s[2:], base))
+    return None
+
+
+# A posição do texto que o Web resolve quando text_position não é uma das três: a
+# defaultTextPosition do tipo, ou 'interna' no innerAnchor 'centro' (o Ponto Forte), e 'borda' nos
+# demais e no código desconhecido (coordination_area_catalog.js; o mesmo de _area_posicao.exp).
+POSICOES_TEXTO_AREA = ('borda', 'interna', 'externa')
+POSICAO_TEXTO_DO_TIPO_AREA = {'151203': 'interna', '170999-01': 'externa'}
+
+
+def razao_texto_area(p):
+    """
+    A coluna text_ratio a partir das properties do Web: a razão que o Web desenha (areaTextRatio).
+    A chave NULA fica nula (o desenho, no Web e no estilo, a lê como 0, o vértice mais ao norte);
+    o número fica como veio (o desenho o corta a [0, 1]); a chave AUSENTE, ou o que Number() não lê
+    como finito, vale o padrão da posição, 0,25 com o texto externo e 0,5 nas demais, que o Web
+    desenha e que o estilo do Desktop, lendo nulo como 0, não desenharia.
+    """
+    if 'text_ratio' in p:
+        if p['text_ratio'] is None:
+            return None
+        r = numero_js(p['text_ratio'])
+        if r is not None:
+            return r
+    posicao = p.get('text_position')
+    if not isinstance(posicao, str) or posicao not in POSICOES_TEXTO_AREA:
+        codigo = p.get('symbol_code')
+        posicao = POSICAO_TEXTO_DO_TIPO_AREA.get(_texto_js(codigo) if codigo is not None else None, 'borda')
+    return 0.25 if posicao == 'externa' else 0.5
+
+
+def razao_desenhada_area(valor):
+    """A razão na borda que o desenho usa para o valor da coluna: nula vale 0, cortada a [0, 1]."""
+    return min(1.0, max(0.0, 0.0 if valor is None else float(valor)))

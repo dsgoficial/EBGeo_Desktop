@@ -480,6 +480,9 @@ def linha_feicao(tipo, mapa, p, grupos):
                 linha[col] = valor_coluna(tp, padrao) if padrao is not None else None
         else:
             linha[col] = valor_coluna(tp, padrao) if (padrao is not None and tp != 'json') else None
+    if tipo == 'coordination_area':
+        # a chave ausente (ou não numérica) é o padrão da posição no Web, não o nulo
+        linha['text_ratio'] = schema.razao_texto_area(p)
     linha['mapa'] = mapa
     linha['camada_id'] = p.get('layerId') or 'default'
     linha['ebgeo_id'] = p.get('id')

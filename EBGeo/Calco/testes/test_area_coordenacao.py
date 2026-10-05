@@ -13,6 +13,7 @@ Variáveis de ambiente opcionais:
                        roda em node e as posições são comparadas com as do QGIS.
     EBGEO_NODE         executável do node, quando o python-qgis.bat o tira do PATH.
     EBGEO_TESTE_SAIDA  pasta para os PNG de conferência (padrão: pasta temporária).
+    EBGEO_FIXTURES     pasta das fixtures .ebgeo (a 06; padrão ../_ebgeo_dados_teste).
 
 O que cada classe prova:
     TestEsquema       a tabela, as chaves do Web e a pilha de desenho;
@@ -24,7 +25,11 @@ O que cada classe prova:
     TestZoom          Correção de Zoom ligada (terreno) e desligada (tela), e o piso da hachura;
     TestRender        PNG de cada tipo, estilo salvo no layer_styles reaberto sem o plugin,
                       tempo de 30 áreas e a seleção pelo interior;
-    TestFerramenta, TestPainel, TestImportador, TestGerenciador: o resto do tipo.
+    TestFerramenta, TestPainel, TestImportador, TestGerenciador: o resto do tipo;
+    TestRazaoAusenteDoWeb  text_ratio ausente, nulo e não numérico no .ebgeo do Web (fixture 06
+                      com as variantes): o Desktop desenha a razão, o bloco de texto e o escalão
+                      onde o Web aberto em node desenha, a ida e volta devolve a chave ausente
+                      ausente, e a posição do texto editada no Desktop chega ao Web com a razão.
 """
 import json
 import math
@@ -992,6 +997,268 @@ class TestImportador(unittest.TestCase):
         f2 = next(vl2.getFeatures())
         self.assertEqual(len(partes(avaliar(m.expr('area_portoes'), vl2, f2))), 2)
         self.assertEqual(avaliar(m.expr_nome_portao(0), vl2, f2), 'PORTÃO ALFA')
+
+
+# ---------------------------------------------------------------- text_ratio ausente no .ebgeo
+
+FIXTURES = os.path.abspath(os.environ.get('EBGEO_FIXTURES') or os.path.join(RAIZ_REPO, '..', '_ebgeo_dados_teste'))
+FIXTURE_06 = os.path.join(FIXTURES, '06-completo-3.0.ebgeo')
+
+# O Web lido em node pelo caminho de abrir o arquivo (portão de versão e normalização de
+# import_export) e desenhado por buildAreaDecorations; a razão é a de areaTextRatio, com a posição
+# resolvida como em coordination_area_drawing.js.
+NODE_RAZAO = r'''
+import { register, createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { join, basename } from 'node:path';
+import { tmpdir } from 'node:os';
+const [frontend, saida, zoom, ...arquivos] = process.argv.slice(2);
+const js = join(frontend, 'src', 'js');
+const dir = mkdtempSync(join(tmpdir(), 'ebgeo-area-razao-'));
+const req = createRequire(join(frontend, 'package.json'));
+const ALIAS = { '@js/': js, '@store/': join(js, 'store'), '@utils/': join(js, 'utilities'), '@state/': join(js, 'state'),
+  '@tools/': join(js, 'tool_manager'), '@layers/': join(js, 'layers'), '@events/': join(js, 'events'), '@ui/': join(js, 'ui') };
+const hooks = join(dir, 'hooks.mjs');
+writeFileSync(hooks, `
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+const ALIAS = ${JSON.stringify(ALIAS)};
+const JSZIP = ${JSON.stringify(pathToFileURL(req.resolve('jszip')).href)};
+export async function resolve(spec, ctx, next) {
+  if (spec === 'jszip') return { url: JSZIP, shortCircuit: true };
+  for (const [p, d] of Object.entries(ALIAS)) {
+    if (spec.startsWith(p)) return { url: pathToFileURL(join(d, spec.slice(p.length))).href, shortCircuit: true };
+  }
+  return next(spec, ctx);
+}
+`);
+register(pathToFileURL(hooks).href);
+const imp = (p) => import(pathToFileURL(join(js, ...p.split('/'))).href);
+const gate = await imp('import_export/ebgeo-file-gate.js');
+const norm = await imp('import_export/import-normalize.js');
+const cat = await imp('military_tools/coordination_area_tool/coordination_area_catalog.js');
+const des = await imp('military_tools/coordination_area_tool/coordination_area_drawing.js');
+const out = [];
+for (const caminho of arquivos) {
+  const { data } = await gate.readEbgeoArchive(new File([readFileSync(caminho)], basename(caminho)));
+  const feicoes = {};
+  for (const mapa of Object.values(data.maps)) {
+    const r = norm.normalizeMapDataForCurrentVersion(structuredClone(mapa), (l) => ({ processed: l, unavailableCount: 0 }));
+    for (const f of (r.mapData.features?.coordination_areas ?? [])) {
+      const p = f.properties;
+      const symbol = cat.resolveAreaSymbol(p.symbol_code);
+      const position = ['borda', 'interna', 'externa'].includes(p.text_position)
+        ? p.text_position : (symbol.defaultTextPosition ?? (symbol.innerAnchor === 'centro' ? 'interna' : 'borda'));
+      feicoes[p.id] = { ausente: !('text_ratio' in p), razao: cat.areaTextRatio(p, position),
+                        deco: des.buildAreaDecorations(f, Number(zoom)) };
+    }
+  }
+  out.push(feicoes);
+}
+writeFileSync(saida, JSON.stringify(out));
+'''
+
+# O que o arquivo do Web pode trazer em text_ratio além do número: a chave ausente (o padrão da
+# posição), o nulo (0, onde toda área nasce) e o que Number() do JavaScript não lê como finito.
+VARIANTES_RAZAO = [
+    ('ausente', lambda p: p.pop('text_ratio', None)),
+    ('ausente sem posição', lambda p: (p.pop('text_ratio', None), p.pop('text_position', None))),
+    ('nula', lambda p: p.__setitem__('text_ratio', None)),
+    ('palavra', lambda p: p.__setitem__('text_ratio', 'x')),
+    ('vírgula', lambda p: p.__setitem__('text_ratio', '0,4')),        # NaN no Web; o float do Python leria 0,4
+    ('infinito', lambda p: p.__setitem__('text_ratio', 'Infinity')),  # não finito: o padrão da posição
+    ('texto numérico', lambda p: p.__setitem__('text_ratio', ' 0.4 ')),
+]
+
+
+def _rodar_node_razao(arquivos):
+    web, node, motivo = _web_e_node()
+    if motivo:
+        return None, motivo
+    d = tempfile.mkdtemp(prefix='ebgeo_area_razao_')
+    script, saida = os.path.join(d, 'razao.mjs'), os.path.join(d, 'saida.json')
+    with open(script, 'w', encoding='utf-8') as fh:
+        fh.write(NODE_RAZAO)
+    r = subprocess.run([node, script, os.path.join(web, 'frontend'), saida, str(Z0)] + list(arquivos),
+                       capture_output=True, text=True, encoding='utf-8')
+    if r.returncode != 0:
+        raise AssertionError('node falhou: ' + r.stderr[-3000:])
+    with open(saida, encoding='utf-8') as fh:
+        return json.load(fh), None
+
+
+def _areas_por_id(data):
+    return {f['properties']['id']: f for m in data['maps'].values()
+            for f in (m.get('features') or {}).get('coordination_areas', [])}
+
+
+def _nulo(v):
+    return v is None or (hasattr(v, 'isNull') and v.isNull())
+
+
+@unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente (EBGEO_FIXTURES)')
+class TestRazaoAusenteDoWeb(unittest.TestCase):
+    """
+    A posição do texto da área que vem do Web SEM a chave text_ratio (ou com o que Number() não lê)
+    é o padrão da posição no Web (50 %, ou 25 % com o texto externo), e a nula é 0 % (areaTextRatio).
+    O .ebgeo é o data.json da fixture 06 (as 24 áreas nascidas pela ferramenta do Web) com as
+    variantes acima, gravado no contêiner do Web; o Desktop importa e desenha, o Web em node abre o
+    mesmo arquivo e desenha, e a razão, o bloco de texto e o escalão caem no mesmo lugar. O
+    exportador devolve a feição não editada como veio (a chave ausente segue ausente), e a área
+    cuja posição do texto o Desktop mudou leva a razão que o Desktop desenha.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from Calco.importador import escritor, leitor
+        from Calco.exportador import arquivo
+        orig = leitor.abrir(FIXTURE_06).data
+        nome, mapa = next((n, m) for n, m in orig['maps'].items() if (m.get('features') or {}).get('coordination_areas'))
+        feicoes = []
+        for f in mapa['features']['coordination_areas']:
+            for rot, mudar in VARIANTES_RAZAO:
+                g = json.loads(json.dumps(f))
+                g['properties']['id'] = '{}-{}'.format(f['properties']['id'], rot)
+                mudar(g['properties'])
+                feicoes.append(g)
+        cls.n_base = len(mapa['features']['coordination_areas'])
+        cls.data = {'version': orig['version'], 'mapOrder': [nome], 'currentMap': nome,
+                    'maps': {nome: {'features': {'coordination_areas': feicoes}, 'layers': mapa.get('layers') or {}}}}
+        cls.arquivo = os.path.join(TMP, 'razao_ausente.ebgeo')
+        arquivo.gravar(cls.arquivo, cls.data, {})
+        cls.gpkg = os.path.join(TMP, 'razao_ausente.gpkg')
+        escritor.importar(cls.arquivo, cls.gpkg)
+        cls.vl = QgsVectorLayer('{}|layername=coordination_area'.format(cls.gpkg), 'razao', 'ogr')
+        cls.feicoes = {f['ebgeo_id']: f for f in cls.vl.getFeatures()}
+        cls.web, cls.motivo = _rodar_node_razao([cls.arquivo])
+
+    def _rt(self):
+        caminho = os.path.join(os.path.dirname(ea().__file__), 'expressoes', '_area_posicao.exp')
+        with open(caminho, encoding='utf-8') as fh:
+            linhas = [ln for ln in fh if ln.startswith('rt :=')]
+        self.assertEqual(len(linhas), 1)
+        return linhas[0].split(':=', 1)[1].strip()
+
+    def _comparar_com_o_web(self, web, vl, feicoes, ids):
+        """Divergências (id, eixo, Web, Desktop) da razão, do bloco de texto e do escalão."""
+        m = ea()
+        rt = self._rt()
+        erros, blocos, escaloes = [], 0, 0
+        for eid in ids:
+            w, f = web[eid], feicoes[eid]
+            razao = avaliar(rt, vl, f)
+            if abs(razao - w['razao']) > 1e-9:
+                erros.append((eid, 'razão', w['razao'], razao))
+            tr = plano(*centro_de(f))
+            linhas = '\n'.join(avaliar(m.expr_linhas(), vl, f) or [])
+            bloco = [d for d in _web_textos(w['deco'], lambda p: True) if linhas and d['properties']['text'] == linhas]
+            if bloco:
+                blocos += 1
+                d = _hausdorff(geojson_para_geom(bloco[0]['geometry']), avaliar(m.expr('area_rotulo_ponto'), vl, f), tr)
+                if d > TOL_M:
+                    erros.append((eid, 'bloco de texto (m)', 0, round(d, 1)))
+            ech = _web_textos(w['deco'], lambda p: p.get('bold') and p.get('boxed'))
+            if ech:
+                escaloes += 1
+                d = _hausdorff(geojson_para_geom(ech[0]['geometry']), avaliar(m.expr('area_escalao_ponto'), vl, f), tr)
+                if d > TOL_M:
+                    erros.append((eid, 'escalão (m)', 0, round(d, 1)))
+        return erros, blocos, escaloes
+
+    def test_desktop_desenha_onde_o_web_desenha(self):
+        if self.web is None:
+            self.skipTest(self.motivo)
+        web = self.web[0]
+        self.assertEqual(set(web), set(self.feicoes))
+        self.assertEqual(sum(1 for w in web.values() if w['ausente']), 2 * self.n_base)  # o Web vê a chave ausente
+        erros, blocos, escaloes = self._comparar_com_o_web(web, self.vl, self.feicoes, sorted(web))
+        medir('text_ratio do Web: {} áreas ({} variantes), {} blocos de texto e {} escalões comparados, {} divergências'.format(
+            len(web), len(VARIANTES_RAZAO), blocos, escaloes, len(erros)))
+        self.assertGreater(blocos, len(web) // 2)
+        self.assertGreater(escaloes, 0)
+        self.assertEqual(erros, [])
+        # o importador grava o padrão da posição na ausente e deixa a nula nula
+        for eid, f in self.feicoes.items():
+            if eid.endswith('-nula'):
+                self.assertTrue(_nulo(f['text_ratio']), eid)
+            elif eid.endswith('-ausente') or eid.endswith('-palavra'):
+                self.assertIn(f['text_ratio'], (0.25, 0.5), eid)
+
+    def test_numero_js_igual_ao_number_do_web(self):
+        """schema.numero_js contra o Number() e o Number.isFinite do próprio node, valor a valor."""
+        from Calco import schema as sc
+        web, node, motivo = _web_e_node()
+        if motivo:
+            self.skipTest(motivo)
+        valores = [None, True, False, 0, 0.3, -2, 1.7, 151203, '', ' ', '0.4', ' 0.4 ', ' 0.5﻿', '0,4', 'x',
+                   'Infinity', '-Infinity', 'NaN', 'inf', '1e-1', '1E+2', '.5', '5.', '+.5', '-', '0x1A', '0X1a',
+                   '-0x1A', '0o17', '0b101', '0b102', '1_0', '12px', [], [0.3], ['0.3'], [1, 2], [None], [[0.25]], {}]
+        r = subprocess.run([node, '-e', 'const v = JSON.parse(process.argv[1]); console.log(JSON.stringify('
+                            'v.map((x) => { const n = Number(x); return Number.isFinite(n) ? n : null; })))',
+                            json.dumps(valores)], capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        esperado = json.loads(r.stdout)
+        obtido = [sc.numero_js(v) for v in valores]
+        self.assertEqual([(v, o, e) for v, o, e in zip(valores, obtido, esperado) if o != e], [])
+
+    def test_regua_reprova_a_razao_ausente_como_nula(self):
+        """Pior caso, da saída REAL: a ausente gravada nula (o importador de antes) diverge do Web."""
+        if self.web is None:
+            self.skipTest(self.motivo)
+        copia = os.path.join(TMP, 'razao_ausente_degradada.gpkg')
+        shutil.copy(self.gpkg, copia)
+        vl = QgsVectorLayer('{}|layername=coordination_area'.format(copia), 'pior', 'ogr')
+        i = vl.fields().indexOf('text_ratio')
+        ausentes = {f.id(): f['ebgeo_id'] for f in vl.getFeatures() if f['ebgeo_id'].endswith('-ausente')}
+        self.assertTrue(vl.dataProvider().changeAttributeValues({fid: {i: None} for fid in ausentes}))
+        vl = QgsVectorLayer('{}|layername=coordination_area'.format(copia), 'pior', 'ogr')
+        feicoes = {f['ebgeo_id']: f for f in vl.getFeatures()}
+        erros, _b, _e = self._comparar_com_o_web(self.web[0], vl, feicoes, sorted(ausentes.values()))
+        eixos = {e[1] for e in erros}
+        self.assertEqual(eixos, {'razão', 'bloco de texto (m)', 'escalão (m)'})
+
+    def test_ida_e_volta_e_edicao_da_posicao(self):
+        from Calco.importador import leitor
+        from Calco.exportador import arquivo, desenho, montador
+        exp = montador.montar(self.gpkg, montador.ESCOPO_TUDO, None, desenho.GeradorDesenho())
+        volta_arq = os.path.join(TMP, 'razao_ausente_volta.ebgeo')
+        arquivo.gravar(volta_arq, exp.data, exp.imagens)
+        volta = _areas_por_id(leitor.abrir(volta_arq).data)
+        ida = _areas_por_id(self.data)
+        self.assertEqual(set(volta), set(ida))
+        dif = {k: (ida[k]['properties'], volta[k]['properties']) for k in ida
+               if ida[k]['properties'] != volta[k]['properties']}
+        self.assertEqual(dif, {})
+        self.assertEqual(sum(1 for f in volta.values() if 'text_ratio' not in f['properties']), 2 * self.n_base)
+        # pior caso da régua: a chave posta de volta numa ausente
+        pior = json.loads(json.dumps(volta))
+        next(f for k, f in pior.items() if k.endswith('-ausente'))['properties']['text_ratio'] = 0.5
+        self.assertTrue(any(ida[k]['properties'] != pior[k]['properties'] for k in ida))
+
+        # a posição do texto editada no Desktop numa área sem a chave: o Web desenha o que o Desktop desenha
+        copia = os.path.join(TMP, 'razao_ausente_editada.gpkg')
+        shutil.copy(self.gpkg, copia)
+        vl = QgsVectorLayer('{}|layername=coordination_area'.format(copia), 'ed', 'ogr')
+        alvos = [f['ebgeo_id'] for f in vl.getFeatures() if f['ebgeo_id'].endswith('-ausente') and f['text_position'] == 'borda']
+        self.assertTrue(alvos)
+        i = vl.fields().indexOf('text_position')
+        self.assertTrue(vl.dataProvider().changeAttributeValues(
+            {f.id(): {i: 'externa'} for f in vl.getFeatures() if f['ebgeo_id'] in alvos}))
+        exp = montador.montar(copia, montador.ESCOPO_TUDO, None, desenho.GeradorDesenho())
+        ed_arq = os.path.join(TMP, 'razao_ausente_editada.ebgeo')
+        arquivo.gravar(ed_arq, exp.data, exp.imagens)
+        editadas = _areas_por_id(leitor.abrir(ed_arq).data)
+        for eid in alvos:
+            p = editadas[eid]['properties']
+            self.assertEqual((p['text_position'], p.get('text_ratio')), ('externa', 0.5), eid)
+        r, motivo = _rodar_node_razao([ed_arq])
+        if r is None:
+            self.skipTest(motivo)
+        vl = QgsVectorLayer('{}|layername=coordination_area'.format(copia), 'ed', 'ogr')
+        feicoes = {f['ebgeo_id']: f for f in vl.getFeatures()}
+        erros, _b, _e = self._comparar_com_o_web(r[0], vl, feicoes, sorted(feicoes))
+        self.assertEqual(erros, [])
 
 
 class TestGerenciador(unittest.TestCase):
