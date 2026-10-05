@@ -582,7 +582,8 @@ class TesteEspecificacao(unittest.TestCase):
 # ---------------------------------------------------------------------------------------------
 
 SO_COM_HACHURA = ('hatch_line_width', 'hatch_spacing')
-# as opções da lista, o nulo, o vazio e um tipo desconhecido (o estilo não desenha os três últimos)
+# as opções da lista, o nulo, o vazio e um tipo desconhecido (o estilo desenha o nulo e o vazio
+# em diagonal, como o Web, decisão do chefe de 2026-10-05; o desconhecido, não)
 VALORES_HACHURA = [v for v, _r in CM.HACHURAS] + [None, '', 'desconhecida']
 
 
@@ -627,9 +628,12 @@ class TesteHachuraFormas(unittest.TestCase):
         casos = {
             'só a caixa marcada (o código de antes)': CM.Ligado('hatch_enabled'),
             'sem condição': None,
-            "caixa marcada e tipo diferente de 'none' (mostra no nulo, no vazio e no desconhecido)":
+            "caixa marcada e tipo diferente de 'none' (mostra no desconhecido)":
                 esp.Todas((CM.Ligado('hatch_enabled'), esp.Condicao('hatch_type', frozenset({'none'}), negar=True))),
             'só o tipo (mostra com a caixa desmarcada)': esp.Condicao('hatch_type', HACHURAS_DESENHADAS),
+            # o código de antes da decisão de 2026-10-05: esconde no tipo nulo e no vazio, que desenham diagonal
+            'caixa marcada e um tipo desenhado (esconde no nulo e no vazio)':
+                esp.Todas((CM.Ligado('hatch_enabled'), esp.Condicao('hatch_type', HACHURAS_DESENHADAS))),
         }
         for nome, cond in casos.items():
             spec = esp.formulario('polygon')
@@ -1288,6 +1292,9 @@ class TesteHachuraVisivelFormas(unittest.TestCase):
             self.assertEqual(am(ant, {'hatch_enabled': True, 'hatch_type': 'cross'}), {'opacity': 1.0}, tipo)
             self.assertEqual(am(ant, {'hatch_type': 'cross'}), {}, tipo)          # caixa desmarcada: não desenha
             self.assertEqual(am(ant, {'hatch_enabled': True}), {}, tipo)          # 'Nenhuma': não desenha
+            # tipo nulo ou vazio com a caixa marcada desenha diagonal (decisão do chefe, 2026-10-05)
+            self.assertEqual(am(dict(ant, hatch_type=None), {'hatch_enabled': True}), {'opacity': 1.0}, tipo)
+            self.assertEqual(am(dict(ant, hatch_type=''), {'hatch_enabled': True}), {'opacity': 1.0}, tipo)
             self.assertEqual(am(dict(ant, hatch_type='dots'), {'hatch_enabled': True}), {'opacity': 1.0}, tipo)
             self.assertEqual(am(ant, {'hatch_enabled': True, 'hatch_type': 'cross', 'opacity': 0.2}), {}, tipo)
             self.assertEqual(am(dict(ant, opacity=0.3), {'hatch_enabled': True, 'hatch_type': 'cross'}), {}, tipo)

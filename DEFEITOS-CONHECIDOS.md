@@ -10,16 +10,6 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 
 **Conserto sugerido.** Não há conserto sem código no formulário; o caminho é aceitar e documentar, ou aplicar os padrões que couberem como valor padrão de campo por expressão.
 
-## K8 Formas com hachura ligada e tipo vazio não desenham a hachura
-
-**Sintoma.** Polígono, círculo, elipse, retângulo ou setor vindo do Web com `hatchEnabled` verdadeiro e `hatchType` ausente ou nulo: o Web desenha hachura diagonal, o Desktop não desenha nenhuma.
-
-**Onde.** `EBGeo/Calco/estilos_formas.py` (as camadas de padrão só ligam com um tipo desenhado) e as condições dos campos de hachura em `EBGeo/Calco/formulario/tipos/comuns.py`. A auditoria `EBGeo/Calco/testes/test_chaves_ausentes.py` mantém o caso na lista `PENDENTES`.
-
-**Decisão do chefe (2026-10-05).** O Desktop passa a desenhar como o Web: tipo vazio com hachura ligada desenha diagonal, e os campos de espaçamento e espessura aparecem nesse caso.
-
-**Conserto sugerido.** Tratar o tipo nulo como diagonal na expressão das camadas de padrão e na condição do formulário e do dock; tirar o caso de `PENDENTES` e conferir pela auditoria.
-
 ## K9 Chaves que o Web desenha e o Desktop ignora
 
 **Sintoma.** Mudar o valor de 34 chaves muda o desenho no Web e não muda no Desktop. Exemplos: opacidade da Linha de Coordenação, da Frente Ocupada, da imagem e do ponto; textos da Linha de Coordenação; os campos de zoom do rótulo; `lineOpacity` da Seta. No sentido oposto, 3 chaves só mudam o Desktop: `width` da imagem e `visivel` das entradas de linha de visada e de visibilidade.

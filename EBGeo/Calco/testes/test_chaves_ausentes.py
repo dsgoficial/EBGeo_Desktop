@@ -147,6 +147,9 @@ def _literais_do_estilo(texto, coluna):
     from Calco.ui import padrao_estilo as pe
     out = list(pe.candidatos(texto, coluna)) + list(pe.candidatos_logicos(texto, coluna))
     out += re.findall(r"coalesce\(\s*\"{}\"\s*,\s*'([^']*)'\s*\)".format(re.escape(coluna)), texto)
+    # o vazio que vale o nulo: coalesce(nullif("c", ''), 'x') (o tipo da hachura das formas)
+    out += re.findall(r"coalesce\(\s*nullif\(\s*\"{}\"\s*,\s*''\s*\)\s*,\s*'([^']*)'\s*\)".format(
+        re.escape(coluna)), texto)
     return out
 
 
@@ -461,11 +464,9 @@ class TesteChavesAusentes(unittest.TestCase):
         MEDIDAS.append('ida e volta: {} feições iguais, {} chaves ausentes voltaram ausentes'.format(len(ida), ausentes))
 
 
-# Divergência conhecida que espera o aval do chefe: o Web desenha hatchType nulo (e vazio) como
-# 'diagonal-right' quando hatchEnabled é verdadeiro (orDefault de HATCH_IMAGE_EXPRESSION); o estilo
-# do Desktop não desenha a hachura sem tipo, como registra a decisão de 2026-10-05 sobre a hachura
-# (ARQUITETURA.md, seção 11). O importador não resolve: a nula tem de ficar nula.
-PENDENTES = {(t, 'hatchType'): 'hachura sem tipo: decisão do chefe' for t in ('circle', 'ellipse', 'polygon', 'rectangle', 'sector')}
+# Divergência conhecida que espera o aval do chefe. (O hatchType nulo das cinco formas saiu daqui
+# em 2026-10-05: por decisão do chefe, o Desktop o desenha diagonal como o Web.)
+PENDENTES = {}
 # O Web lê a âncora nula do tamanho do Ponto como zoom 0 (POINT_SIZE com anchorDefault 0, e
 # `props.sizeCreatedAtZoom || 0` em AddPointControl.applyZoomCorrections): com a correção ligada, o
 # ponto sem âncora sai no teto de 500 px. O rótulo do mesmo ponto lê a âncora ausente como "não

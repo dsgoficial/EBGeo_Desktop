@@ -573,8 +573,10 @@ def ramos_seta(p, linha):
 
 # ---------------------------------------------------------------- chave ausente no .ebgeo
 
+# hatchType: o Web desenha o tipo ausente com a hachura ligada como diagonal, e o padrão 'none' da
+# ferramenta de criação não desenharia (decisão do chefe de 2026-10-05, estilos_formas.TIPO_HACHURA)
 _FORMA_AUSENTE = frozenset({'fillColor', 'lineColor', 'lineWidth', 'opacity', 'labelColor', 'labelOutlineColor',
-                            'labelOutlineWidth'})
+                            'labelOutlineWidth', 'hatchType'})
 # A chave AUSENTE que o Web desenha como a NULA: a camada MapLibre lê a propriedade crua e o nulo
 # cai no padrão do MapLibre (cor preta, espessura e opacidade 1) ou no coalesce da expressão, e o
 # gerador de símbolo recusa e o Web guarda o bitmap do arquivo. O padrão do esquema (o da

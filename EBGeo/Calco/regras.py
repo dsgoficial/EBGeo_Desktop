@@ -278,7 +278,8 @@ def hachura_ligada(tipo_hachura):
 # hachura escolhida sai invisível. Na transição de sem hachura para com hachura, a opacidade 0
 # vai a 1; a feição que já tem hachura não muda, e a opacidade que o operador muda na mesma
 # edição fica. "Com hachura" é o que o estilo desenha: a caixa ligada e um dos tipos das camadas
-# de padrão (COND_HACHURA e HACHURAS_DESENHADAS do estilo).
+# de padrão (COND_HACHURA e HACHURAS_DESENHADAS do estilo; nas formas também o tipo vazio, que
+# desenha diagonal como o Web, VALORES_QUE_DESENHAM).
 # ---------------------------------------------------------------------------------------------
 
 def _real(v):
@@ -293,9 +294,16 @@ def _real(v):
 
 
 def hachura_desenhada(atributos, desenhadas):
-    """O estilo desenha a hachura: a caixa ligada e um tipo das camadas de padrão (`desenhadas`)."""
-    ligada, tipo = valor(atributos.get('hatch_enabled')), valor(atributos.get('hatch_type'))
-    return bool(ligada) and not nao_definido(ligada) and tipo is not None and str(tipo) in desenhadas
+    """
+    O estilo desenha a hachura: a caixa ligada e um tipo das camadas de padrão (`desenhadas`, na
+    grafia das condições do formulário: o tipo nulo é '', que as formas desenham diagonal e a
+    Área não desenha). O marcador de "não definido" vale o DEFAULT da coluna.
+    """
+    ligada, tipo = valor(atributos.get('hatch_enabled')), atributos.get('hatch_type')
+    if nao_definido(tipo):
+        tipo = str(tipo.defaultValueClause()).strip("'")
+    tipo = valor(tipo)
+    return bool(ligada) and not nao_definido(ligada) and ('' if tipo is None else str(tipo)) in desenhadas
 
 
 def opacidade_ao_ligar_hachura(anterior, mudadas, extra, desenhadas):
@@ -403,8 +411,8 @@ CAMPOS_VIGIADOS.update({t: () for t in ('point', 'line', 'text', 'image', 'brush
 
 # As cinco formas (Polígono, Círculo, Elipse, Retângulo, Setor): a hachura visível, como na Área.
 def _forma(anterior, mudadas):
-    from .estilos_formas import HACHURAS_DESENHADAS
-    return opacidade_ao_ligar_hachura(anterior, mudadas, {}, HACHURAS_DESENHADAS)
+    from .estilos_formas import VALORES_QUE_DESENHAM
+    return opacidade_ao_ligar_hachura(anterior, mudadas, {}, VALORES_QUE_DESENHAM)
 
 
 CAMPOS_VIGIADOS.update({t: ('opacity', 'hatch_enabled', 'hatch_type')

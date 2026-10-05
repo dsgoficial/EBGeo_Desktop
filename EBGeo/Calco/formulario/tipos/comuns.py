@@ -232,12 +232,12 @@ def linha():
 def com_hachura():
     """
     O estilo das formas desenha a hachura com a caixa marcada E um dos tipos das camadas de padrão
-    (estilos_formas.COND_HACHURA e HACHURAS_DESENHADAS): só então o espaçamento e a espessura
-    valem (decisão do chefe, 2026-10-05). As duas colunas têm widget aqui, e o nativo renova a
-    condição a cada mudança delas.
+    ou o tipo vazio, que desenha diagonal como o Web (estilos_formas.COND_HACHURA e
+    VALORES_QUE_DESENHAM): só então o espaçamento e a espessura valem (decisões do chefe de
+    2026-10-05). As duas colunas têm widget aqui, e o nativo renova a condição a cada mudança delas.
     """
-    from ...estilos_formas import HACHURAS_DESENHADAS
-    return esp.Todas((Ligado('hatch_enabled'), esp.Condicao('hatch_type', HACHURAS_DESENHADAS)))
+    from ...estilos_formas import VALORES_QUE_DESENHAM
+    return esp.Todas((Ligado('hatch_enabled'), esp.Condicao('hatch_type', VALORES_QUE_DESENHAM)))
 
 
 def forma(tipo):

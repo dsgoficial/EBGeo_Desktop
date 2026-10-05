@@ -370,11 +370,18 @@ _HACHURAS = [  # (ângulo QGIS, tipos que o ligam)
     (0, ('horizontal', 'cross')),
     (90, ('vertical', 'cross')),
 ]
-COND_HACHURA = "coalesce(\"hatch_enabled\", false) AND coalesce(\"hatch_type\", 'none') <> 'none'"
+# Tipo vazio (nulo ou texto vazio) com a hachura ligada desenha diagonal, como o Web (orDefault de
+# HATCH_IMAGE_EXPRESSION, hatch_pattern_generator.js; decisão do chefe de 2026-10-05).
+HACHURA_SEM_TIPO = 'diagonal-right'
+TIPO_HACHURA = "coalesce(nullif(\"hatch_type\", ''), '{}')".format(HACHURA_SEM_TIPO)
+COND_HACHURA = "coalesce(\"hatch_enabled\", false) AND {} <> 'none'".format(TIPO_HACHURA)
 HACHURA_PONTOS = 'dots'  # a única desenhada por padrão de pontos (QgsPointPatternFillSymbolLayer)
 # Os tipos que o estilo desenha, lidos das camadas de padrão abaixo: o formulário mostra o
 # espaçamento e a espessura da hachura só com um deles (formulario/tipos/comuns.py).
 HACHURAS_DESENHADAS = frozenset(t for _a, tipos in _HACHURAS for t in tipos) | {HACHURA_PONTOS}
+# Os valores da coluna com que o estilo desenha, na grafia das condições do formulário
+# (especificacao.Condicao lê o nulo como ''): os tipos desenhados e o vazio.
+VALORES_QUE_DESENHAM = HACHURAS_DESENHADAS | {''}
 
 
 def _estilo_forma(layer):
@@ -401,7 +408,7 @@ def _estilo_forma(layer):
         sub.appendSymbolLayer(ln)
         lp.setSubSymbol(sub)
         lp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p(
-            "{} AND \"hatch_type\" IN ({})".format(COND_HACHURA, ', '.join(_sql_str(t) for t in tipos))))
+            "{} AND {} IN ({})".format(COND_HACHURA, TIPO_HACHURA, ', '.join(_sql_str(t) for t in tipos))))
         s.appendSymbolLayer(lp)
     pp = QgsPointPatternFillSymbolLayer()
     pp.setDistanceXUnit(Qgis.RenderUnit.Millimeters)
@@ -416,7 +423,7 @@ def _estilo_forma(layer):
     dot.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p(cor_h))
     msub.appendSymbolLayer(dot)
     pp.setSubSymbol(msub)
-    pp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p("{} AND \"hatch_type\" = '{}'".format(COND_HACHURA, HACHURA_PONTOS)))
+    pp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p("{} AND {} = '{}'".format(COND_HACHURA, TIPO_HACHURA, HACHURA_PONTOS)))
     s.appendSymbolLayer(pp)
     # contorno com opacidade 1 (polygon.layers.js:117)
     # nulos: o padrão do MapLibre (line-color preto, line-width 1), como o Web desenha
