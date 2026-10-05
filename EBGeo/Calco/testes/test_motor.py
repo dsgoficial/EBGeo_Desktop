@@ -150,8 +150,10 @@ def casos_simbolo():
     add('36/110000 mod 01', sidc=sidc('36', icone='110000', escalao='00', m1='01', m2='01'))
     # Correções de 2026-10-05 do MD33-C-01: os rótulos traduzidos do setor 1 das unidades no tamanho
     # do comprimento em português (simbologia-md33-setor1-unidades.test.js do Web), mais o 01 e o 47,
-    # que a milsymbol desenha pela tabela do 2525E.
-    for m1 in ('01', '05', '12', '15', '20', '39', '47', '52', '63', '74', '77', '79'):
+    # que a milsymbol desenha pela tabela do 2525E; e a âncora do 46 (Naval) e os rótulos de uma ou
+    # duas letras, traduzidos ou não, no tamanho e na linha do manual (shortLabelLayout do Web).
+    for m1 in ('01', '03', '04', '05', '07', '12', '15', '20', '39', '46', '47', '48', '52', '63', '67', '69', '74',
+               '77', '79', '80'):
         add('10 mod1 ' + m1, sidc=sidc(icone='000000', escalao='00', m1=m1))
     return casos
 
