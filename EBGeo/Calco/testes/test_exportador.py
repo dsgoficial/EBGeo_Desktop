@@ -626,6 +626,69 @@ def _json_col(v):
 
 
 @unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
+class TestCalcoSemImagens(unittest.TestCase):
+    """
+    O calco importado antes da tabela ebgeo_imagem (a 06 importada e a tabela apagada) não tem os
+    bytes das fotos de 3D e 360 e das figuras de slide. Apontado o .ebgeo de que ele foi importado,
+    o exportador os recupera, e o arquivo sai com as 1.305 imagens do original byte a byte; outro
+    arquivo (o SHA-256 difere da importação) é recusado com aviso e não entra nada dele.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from osgeo import ogr
+        cls.cam = copia_06('sem_ebgeo_imagem')
+        ds = ogr.Open(cls.cam, 1)
+        for i in range(ds.GetLayerCount()):
+            if ds.GetLayerByIndex(i).GetName() == 'ebgeo_imagem':
+                ds.DeleteLayer(i)
+                break
+        ds = None
+        cls.a = bytes_imagens(FIXTURE_06)
+
+    def _exportar(self, original, nome):
+        exp = montador.montar(self.cam, montador.ESCOPO_TUDO, None, desenho.GeradorDesenho(), original=original)
+        saida = os.path.join(TMP, nome + '.ebgeo')
+        arquivo.gravar(saida, exp.data, exp.imagens)
+        return bytes_imagens(saida), exp.relatorio
+
+    def test_sem_original_avisa(self):
+        b, r = self._exportar(None, 'sem_original')
+        self.assertLess(len(b), len(self.a))                       # pior caso: faltam bytes
+        self.assertTrue(any('ebgeo_imagem' in a for a in r.avisos))
+
+    def test_original_recupera_os_bytes(self):
+        b, r = self._exportar(FIXTURE_06, 'com_original')
+        print('\ncalco sem ebgeo_imagem: {} imagens recuperadas do original, {} no arquivo (original {})'.format(
+            r.recuperadas, len(b), len(self.a)))
+        self.assertEqual(set(b), set(self.a))
+        self.assertEqual([k for k in self.a if self.a[k] != b[k]], [])
+        self.assertGreater(r.recuperadas, 0)
+        self.assertEqual([a for a in r.avisos if 'ebgeo_imagem' in a or 'SHA-256' in a], [])
+
+    def test_outro_arquivo_recusado(self):
+        outro = os.path.join(FIXTURES, '03-completo-2.4.ebgeo')
+        if not os.path.exists(outro):
+            self.skipTest('fixture 03 ausente')
+        b, r = self._exportar(outro, 'outro_original')
+        self.assertTrue(any('SHA-256 difere' in a for a in r.avisos))
+        self.assertEqual(r.recuperadas, 0)
+        self.assertLess(len(b), len(self.a))
+
+    def test_algoritmo(self):
+        from Calco.exportador.algoritmo import ExportarEbgeo
+        alg = ExportarEbgeo().create()
+        alg.initAlgorithm()
+        ctx, fb = QgsProcessingContext(), QgsProcessingFeedback()
+        ctx.setProject(QgsProject.instance())
+        saida = os.path.join(TMP, 'algoritmo_original.ebgeo')
+        res, ok = alg.run({'CALCO': self.cam, 'ESCOPO': 0, 'SAIDA': saida, 'ORIGINAL': FIXTURE_06}, ctx, fb)
+        self.assertTrue(ok)
+        self.assertGreater(res['RECUPERADAS'], 0)
+        self.assertEqual(set(bytes_imagens(saida)), set(self.a))
+
+
+@unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
 class TestArvore(unittest.TestCase):
     """O atlas no projeto: estado das camadas, mapa atual e a feição desenhada numa camada dele."""
 

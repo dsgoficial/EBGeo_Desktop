@@ -36,6 +36,7 @@ class ExportarEbgeo(QgsProcessingAlgorithm):
     CALCO = 'CALCO'
     ESCOPO = 'ESCOPO'
     SAIDA = 'SAIDA'
+    ORIGINAL = 'ORIGINAL'
 
     def tr(self, s):
         return QCoreApplication.translate('ExportarEbgeo', s)
@@ -62,7 +63,8 @@ class ExportarEbgeo(QgsProcessingAlgorithm):
             'temporal, comentários) volta como veio. Só as propriedades editadas no Desktop são reescritas; a '
             'feição desenhada no Desktop vai para o mapa e a camada em que foi desenhada. Com o atlas no '
             'projeto, o mapa ligado é o mapa atual do arquivo e o estado das camadas é o da árvore. Salve as '
-            'edições antes de exportar: o arquivo sai do que está gravado no GeoPackage.')
+            'edições antes de exportar: o arquivo sai do que está gravado no GeoPackage. Calco importado antes de '
+            '2026-10-05: aponte o .ebgeo original para recuperar as fotos de 3D e 360 e as figuras de slide.')
 
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterFile(
@@ -72,8 +74,17 @@ class ExportarEbgeo(QgsProcessingAlgorithm):
             options=[self.tr('Todos os mapas do calco'), self.tr('Só o mapa atual')], defaultValue=0))
         self.addParameter(QgsProcessingParameterFileDestination(
             self.SAIDA, self.tr('Arquivo .ebgeo de saída'), self.tr('Arquivo do EBGeo (*.ebgeo)')))
+        original = QgsProcessingParameterFile(
+            self.ORIGINAL, self.tr('Arquivo .ebgeo original (só para calco importado antes de 2026-10-05)'),
+            extension='ebgeo', optional=True)
+        original.setHelp(self.tr(
+            'O calco importado antes de 2026-10-05 não guardou os bytes das fotos de 3D e 360 e das figuras de '
+            'slide. Aponte o .ebgeo de que ele foi importado para recuperá-los: o arquivo só é usado se for o '
+            'mesmo da importação (SHA-256 conferido).'))
+        self.addParameter(original)
         for nome, rotulo in (('FEICOES', 'Feições no arquivo'), ('EDITADAS', 'Feições editadas no Desktop'),
-                             ('NOVAS', 'Feições criadas no Desktop'), ('IMAGENS', 'Imagens no arquivo')):
+                             ('NOVAS', 'Feições criadas no Desktop'), ('IMAGENS', 'Imagens no arquivo'),
+                             ('RECUPERADAS', 'Imagens recuperadas do .ebgeo original')):
             self.addOutput(QgsProcessingOutputNumber(nome, self.tr(rotulo)))
 
     def prepareAlgorithm(self, parameters, context, feedback):
@@ -102,7 +113,9 @@ class ExportarEbgeo(QgsProcessingAlgorithm):
         log.addHandler(h)
         log.setLevel(logging.INFO)
         try:
-            exp = montador.montar(caminho, escopo, getattr(self, '_estado', {}), desenho.GeradorDesenho(), log)
+            original = self.parameterAsFile(parameters, self.ORIGINAL, context) or None
+            exp = montador.montar(caminho, escopo, getattr(self, '_estado', {}), desenho.GeradorDesenho(), log,
+                                  original)
             feedback.setProgress(70)
             arquivo.gravar(saida, exp.data, exp.imagens)
         except montador.ErroExportacao as e:
@@ -117,5 +130,7 @@ class ExportarEbgeo(QgsProcessingAlgorithm):
             '{} feições em {} mapa(s): {} sem mudança, {} editadas, {} criadas no Desktop, {} apagadas no '
             'Desktop, {} devolvidas como vieram; {} imagens. Relido e conferido.').format(
             r.total(), len(r.mapas), r.iguais, r.editadas, r.novas, r.apagadas, r.repassadas, r.imagens))
+        if r.recuperadas:
+            feedback.pushInfo(self.tr('{} imagens recuperadas do .ebgeo original.').format(r.recuperadas))
         return {self.SAIDA: saida, 'FEICOES': r.total(), 'EDITADAS': r.editadas, 'NOVAS': r.novas,
-                'IMAGENS': r.imagens}
+                'IMAGENS': r.imagens, 'RECUPERADAS': r.recuperadas}

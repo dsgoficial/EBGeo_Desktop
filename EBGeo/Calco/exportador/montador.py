@@ -90,6 +90,7 @@ class Relatorio:
         self.mapas = []
         self.imagens = 0
         self.segundos = 0.0
+        self.recuperadas = 0      # imagens tiradas do .ebgeo original (calco anterior à ebgeo_imagem)
 
     def total(self):
         return sum(self.por_balde.values())
@@ -369,6 +370,7 @@ class Calco:
             if self.documento is not None and not isinstance(self.documento, dict):
                 raise ErroExportacao('O documento original guardado no calco está corrompido.')
             self.arquivo_origem = docs[0].get('arquivo') if docs else None
+            self.sha256_origem = docs[0].get('sha256') if docs else None
             self.mapas = sorted(_linhas(ds, 'ebgeo_mapa'),
                                 key=lambda m: (m['ordem'] if m.get('ordem') is not None else 1e9, m['_fid']))
             self.camadas = _linhas(ds, 'ebgeo_camada')
@@ -403,10 +405,11 @@ def _agora_ms():
 
 
 class Montador:
-    def __init__(self, calco, gerar_desenho=None, log=None):
+    def __init__(self, calco, gerar_desenho=None, log=None, original=None):
         self.c = calco
         self.gerar_desenho = gerar_desenho
         self.log = log or _log
+        self.original = original  # o .ebgeo importado, para o calco anterior à ebgeo_imagem
         self.rel = Relatorio()
         self.imagens = {}
         self.doc0 = calco.documento or {}
@@ -1080,10 +1083,40 @@ class Montador:
             if iid and iid not in self.imagens and iid in texto:
                 self._imagem(iid, _b64(r.get('bitmap_b64')), r.get('mime'))
         if self.c.documento is not None and not self.c.tem_imagens_extra:
+            if self.original and self._recuperar_do_original(texto):
+                return
             self._aviso('Calco importado antes da tabela ebgeo_imagem: as fotos de 3D e 360 e as figuras de '
-                        'slide do arquivo original não estão nele e saem sem os bytes.')
+                        'slide do arquivo original não estão nele e saem sem os bytes. Para recuperá-las, '
+                        'aponte o .ebgeo de que o calco foi importado no campo "Arquivo .ebgeo original".')
+
+    def _recuperar_do_original(self, texto):
+        """
+        Os bytes que o calco antigo não guardou, tirados do .ebgeo de que ele foi importado: só se o
+        arquivo é o mesmo, pelo SHA-256 do arquivo inteiro que o importador gravou em ebgeo_documento.
+        Devolve se recuperou.
+        """
+        try:
+            doc = leitor.abrir(self.original)
+        except leitor.ErroEbgeo as e:
+            self._aviso('O .ebgeo original não abriu ({}): as imagens não foram recuperadas.'.format(e))
+            return False
+        if not self.c.sha256_origem or doc.sha256 != self.c.sha256_origem:
+            self._aviso('O arquivo {} não é o .ebgeo de que este calco foi importado ({}; o SHA-256 difere): as '
+                        'imagens não foram recuperadas.'.format(doc.arquivo, self.c.arquivo_origem or 'origem sem nome'))
+            return False
+        n = 0
+        for iid, (b, mime) in doc.imagens.items():
+            if iid not in self.imagens and iid in texto:
+                self._imagem(iid, b, mime)
+                n += 1
+        self.rel.recuperadas = n
+        self.log.info('%d imagens recuperadas do .ebgeo original %s (SHA-256 conferido).', n, doc.arquivo)
+        return True
 
 
-def montar(caminho_gpkg, escopo=ESCOPO_TUDO, estado=None, gerar_desenho=None, log=None):
-    """Lê o calco e devolve a Exportacao (data.json, imagens, relatório)."""
-    return Montador(Calco(caminho_gpkg), gerar_desenho, log).montar(escopo, estado)
+def montar(caminho_gpkg, escopo=ESCOPO_TUDO, estado=None, gerar_desenho=None, log=None, original=None):
+    """
+    Lê o calco e devolve a Exportacao (data.json, imagens, relatório). `original`: o .ebgeo de que o
+    calco foi importado, de onde o calco anterior à tabela ebgeo_imagem recupera os bytes que não guardou.
+    """
+    return Montador(Calco(caminho_gpkg), gerar_desenho, log, original).montar(escopo, estado)

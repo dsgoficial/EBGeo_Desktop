@@ -65,7 +65,6 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 - **Fator de 512 px do zoom:** o tamanho com correção de zoom usa a convenção do MapLibre (78271,517 m/px no zoom 0, tiles de 512 px) e ainda não foi medido lado a lado com a tela do Web.
 - **Alças de edição do Web** (mover a instância do escalão, largura da seta, distância do texto) não existem no Desktop.
 - **Ramo da Seta combinada no dock:** o Web edita cada ramo (largura, ponta, ponta dupla, aeromóvel) no painel; o dock edita a seta inteira (vai a todos os ramos), e o ramo só se edita na coluna JSON `ramos` (oculta no formulário e na tabela), pela calculadora de campo. O desenho e o exportador já leem o ramo editado assim.
-- **Calco importado antes de 2026-10-05:** não tem a tabela `ebgeo_imagem`, e o `.ebgeo` exportado sai sem os bytes das fotos de 3D e 360 e das figuras de slide; a exportação avisa. Reimportar o arquivo original resolve.
 - **Âncora do Naval (modificador 1, código 46):** vem do milsymbol pelo motor do Web; as pontas saem em seta cheia e o desenho fica cerca de 21 % mais largo que o recorte do MD33-C-01.
 - **Rótulos de 1 ou 2 letras no setor 1 de Unidades:** cerca de 6 % menores que no manual, pelo leiaute do milsymbol, igual no Web.
 - **Texto externo da Área num polígono côncavo:** a linha de chamada pode cruzar o braço do U (`EBGeo/Calco/expressoes/_area_externa.exp`), mesmo algoritmo do Web.
