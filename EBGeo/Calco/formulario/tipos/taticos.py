@@ -153,8 +153,9 @@ def _seta():
         esp.Campo('line_width', 'Espessura da Borda', esp.numero(1, 10, 1, 0, ' px')),
         esp.Campo('line_opacity', 'Opacidade da Borda', esp.numero(0, 1, 0.05, 2)),
     ])
+    # `ramos` (as propriedades de cada ramo da seta combinada, JSON) não tem widget nativo seguro
     return esp.Formulario('arrow', esp.cabecalho(), [seta, aparencia, esp.aba_atributos(), esp.aba_avancado()],
-                          esp.OCULTOS_COMUNS + ('geom_desenho',))
+                          esp.OCULTOS_COMUNS + ('geom_desenho', 'ramos'))
 
 
 def _frente_ocupada():

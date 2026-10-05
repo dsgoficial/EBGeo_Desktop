@@ -508,6 +508,123 @@ class TestLimiteDeCirculo(unittest.TestCase):
             self.assertTrue(len(eixo['coordinates']) != len(w['coordinates']) or _hausdorff_m(w, eixo) >= 1.5, ech)
 
 
+def _desenho_do_estilo(camada, f):
+    """O polígono que o estilo do calco desenha para a Seta (o Geometry Generator de estilos_taticos)."""
+    from qgis.core import QgsExpression, QgsExpressionContext, QgsExpressionContextUtils
+    from Calco import estilos_taticos as et
+    ctx = QgsExpressionContext(QgsExpressionContextUtils.globalProjectLayerScopes(camada))
+    ctx.setFeature(f)
+    e = QgsExpression(et.expr_seta())
+    g = e.evaluate(ctx)
+    assert not e.hasEvalError(), e.evalErrorString()
+    return json.loads(g.asJson(17))
+
+
+@unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
+class TestSetaCombinada(unittest.TestCase):
+    """
+    K1: a Seta combinada da fixture 06 (Seta #8, três ramos com ponta dupla num e aeromóvel noutro)
+    guarda as propriedades de cada ramo na coluna `ramos`, e o exportador as devolve: a coluna sem
+    edição volta igual (ida e volta), a coluna editada muda só o ramo editado (e o topo pelo ramo 0,
+    o espelho do Web), e a coluna da feição editada vai a todos os ramos. Em cada caso o desenho
+    exportado é o que o estilo do calco desenha (a paridade do estilo com o Web em node é a
+    TestSetaCombinada de test_estilos_taticos.py). O calco importado antes da coluna a ganha do
+    `props` ao abrir.
+    """
+
+    @staticmethod
+    def _seta(cam):
+        l = _camada(cam, 'arrow')
+        return l, next(x for x in l.getFeatures() if x['nome'] == 'Seta #8')
+
+    @classmethod
+    def setUpClass(cls):
+        cls.orig = leitor.abrir(FIXTURE_06)
+        # a coluna `ramos` editada: o ramo 1 perde a ponta dupla, o ramo 2 fica com 600 m
+        cam = copia_06('seta_ramos')
+        l, f = cls._seta(cam)
+        cls.id = f['ebgeo_id']
+        r = _json_col(f['ramos'])
+        cls.ramos0 = copy.deepcopy(r)
+        r['ramos'][1]['doubleHeaded'] = False
+        r['ramos'][2]['width'] = 600
+        l.startEditing()
+        l.changeAttributeValue(f.id(), l.fields().indexOf('ramos'), schema.valor_json_para_qgis(r))
+        assert l.commitChanges(), l.commitErrors()
+        l, f = cls._seta(cam)
+        cls.estilo_ramos = _desenho_do_estilo(l, f)
+        cls.doc_ramos, cls.exp_ramos = exportar(cam)
+        # a largura da feição editada
+        cam = copia_06('seta_largura')
+        l, f = cls._seta(cam)
+        l.startEditing()
+        l.changeAttributeValue(f.id(), l.fields().indexOf('width_m'), 650.0)
+        assert l.commitChanges(), l.commitErrors()
+        l, f = cls._seta(cam)
+        cls.estilo_largura = _desenho_do_estilo(l, f)
+        cls.doc_largura, cls.exp_largura = exportar(cam)
+
+    def _feicao(self, doc):
+        return next(f for k, f in feicoes_2d(doc.data).items() if k[2] == self.id)
+
+    def _original(self):
+        return self._feicao(self.orig)
+
+    def test_coluna_da_importacao(self):
+        p = self._original()['properties']
+        self.assertEqual([{k: b[k] for k in schema.RAMO_SETA if k in b} for b in p['branches']], self.ramos0['ramos'])
+        self.assertEqual(self.ramos0['topo'], {'width': 400.0, 'showArrowHead': True, 'doubleHeaded': False,
+                                               'headLengthRatio': 1.5, 'airmobile': False, 'airmobilePosition': 0.7})
+
+    def test_ramo_editado(self):
+        f, o = self._feicao(self.doc_ramos), self._original()
+        b, b0 = f['properties']['branches'], o['properties']['branches']
+        self.assertEqual((b[1]['doubleHeaded'], b[2]['width']), (False, 600))
+        self.assertEqual(b[0], b0[0])
+        self.assertEqual({k: v for k, v in b[1].items() if k != 'doubleHeaded'},
+                         {k: v for k, v in b0[1].items() if k != 'doubleHeaded'})
+        self.assertEqual({k: f['properties'][k] for k in schema.RAMO_SETA},
+                         {k: o['properties'][k] for k in schema.RAMO_SETA})       # o topo espelha o ramo 0
+        d = _hausdorff_m(self.estilo_ramos, f['geometry'])
+        print('\nSeta combinada, ramo editado: exportado x estilo {:.2f} m, x original {:.0f} m'.format(
+            d, _hausdorff_m(o['geometry'], f['geometry'])))
+        self.assertLess(d, 1.0)
+        self.assertGreater(_hausdorff_m(o['geometry'], f['geometry']), 50)   # o desenho mudou
+        self.assertEqual(self.exp_ramos.relatorio.colunas_editadas, {'ramos': 1})
+
+    def test_largura_da_feicao_vai_a_todos(self):
+        f, o = self._feicao(self.doc_largura), self._original()
+        self.assertEqual(f['properties']['width'], 650)
+        self.assertEqual([b['width'] for b in f['properties']['branches']], [650, 650, 650])
+        self.assertEqual([b['doubleHeaded'] for b in f['properties']['branches']],
+                         [b['doubleHeaded'] for b in o['properties']['branches']])
+        d = _hausdorff_m(self.estilo_largura, f['geometry'])
+        print('\nSeta combinada, largura da feição editada: exportado x estilo {:.2f} m'.format(d))
+        self.assertLess(d, 1.0)
+
+    def test_regua_reprova_ramos_ignorados(self):
+        """Pior caso: o exportado sem a edição do ramo (o original) fica longe do que o estilo desenha."""
+        self.assertGreater(_hausdorff_m(self.estilo_ramos, self._original()['geometry']), 50)
+
+    def test_calco_antigo_ganha_a_coluna(self):
+        from osgeo import ogr
+        from Calco import gpkg
+        cam = copia_06('seta_antigo')
+        ds = ogr.Open(cam, 1)
+        lyr = ds.GetLayerByName('arrow')
+        lyr.DeleteField(lyr.GetLayerDefn().GetFieldIndex('ramos'))
+        ds = None
+        gpkg.criar_calco(cam, schema.TIPOS_MILITARES)
+        l, f = self._seta(cam)
+        self.assertEqual(_json_col(f['ramos']), self.ramos0)
+        self.assertEqual(sum(1 for x in l.getFeatures() if x['ramos']), 1)
+
+
+def _json_col(v):
+    """Coluna JSON lida pelo QGIS (mapa, ou texto) como objeto."""
+    return json.loads(v) if isinstance(v, str) else v
+
+
 @unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
 class TestArvore(unittest.TestCase):
     """O atlas no projeto: estado das camadas, mapa atual e a feição desenhada numa camada dele."""

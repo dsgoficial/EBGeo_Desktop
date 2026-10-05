@@ -60,11 +60,11 @@ DESENHO_TATICO = {
     'boundary': ('echelon', 'symbol_instances', 'symbol_size_km', 'created_zoom', 'zoom_corr'),
     'coordination_line': ('symbol_code', 'symbol_size_km', 'symbol_spacing_km', 'created_zoom', 'zoom_corr'),
     'arrow': ('width_m', 'head_length_ratio', 'show_arrow_head', 'double_headed', 'airmobile',
-              'airmobile_position'),
+              'airmobile_position', 'ramos'),
     'occupied_front': (),
 }
 # Propriedades de cada ramo da Seta combinada (branches[] de arrow-merge.js).
-RAMO_SETA = ('width', 'showArrowHead', 'doubleHeaded', 'headLengthRatio', 'airmobile', 'airmobilePosition')
+RAMO_SETA = schema.RAMO_SETA
 
 EXTENSAO = {'image/png': 'png', 'image/jpeg': 'jpg', 'image/svg+xml': 'svg', 'image/webp': 'webp'}
 TOL_GRAUS = 1e-9
@@ -485,6 +485,9 @@ class Montador:
             p[web] = _para_web(tp, atual, props0.get(web), web in props0)
         if tipo == 'coordination_area' and 'text_ratio' in linha:
             self._razao_texto_area(linha, p, props0, editadas, novo)
+        if tipo == 'arrow' and not novo and 'ramos' in linha and not _iguais_prof(
+                _json(linha['ramos']), _json(base.get('ramos'))):
+            editadas.append('ramos')  # as propriedades de um ramo, editadas na coluna (Montador._ramos)
 
         p['id'] = eid
         camada = linha.get('camada_id') or 'default'
@@ -627,7 +630,8 @@ class Montador:
         """A geometria desenhada pelo estilo do calco (gerar_desenho), arredondada como o Web grava."""
         if self.gerar_desenho is None:
             return None
-        if tipo == 'arrow' and p is not None and p.get('isMerged') and isinstance(p.get('branches'), list):
+        if (tipo == 'arrow' and p is not None and p.get('isMerged') and isinstance(p.get('branches'), list)
+                and len(p['branches']) > 1):
             linha = dict(linha)
             linha['_ramos'] = [(self._colunas_do_ramo(linha, r), r.get('baseCoordinates'))
                                for r in p['branches'] if isinstance(r, dict) and r.get('baseCoordinates')]
@@ -643,11 +647,22 @@ class Montador:
 
     @staticmethod
     def _colunas_do_ramo(linha, ramo):
+        """
+        As colunas com que o estilo desenha um ramo sozinho, pela regra de generateMergedGeometry do
+        Web: largura e razão da cabeça falsas caem na da feição (branch.width || properties.width),
+        as demais não caem (showArrowHead !== false, doubleHeaded === true, airmobile || false,
+        airmobilePosition || 0,7). A coluna `ramos` sai: o ramo desenhado sozinho é uma seta simples.
+        """
         cols = dict(linha)
-        web = schema.mapa_web('arrow')
-        for k in RAMO_SETA:
-            if k in ramo and k in web:
-                cols[web[k]] = ramo[k]
+        cols['ramos'] = None
+        if ramo.get('width'):
+            cols['width_m'] = ramo['width']
+        if ramo.get('headLengthRatio'):
+            cols['head_length_ratio'] = ramo['headLengthRatio']
+        cols['show_arrow_head'] = ramo.get('showArrowHead') is not False
+        cols['double_headed'] = ramo.get('doubleHeaded') is True
+        cols['airmobile'] = bool(ramo.get('airmobile'))
+        cols['airmobile_position'] = ramo.get('airmobilePosition') or 0.7
         return cols
 
     def _geometria(self, tipo, linha, p, orig, editadas, novo):
@@ -665,7 +680,7 @@ class Montador:
             g = copy.deepcopy(orig.get('geometry'))
             if refaz:
                 if tipo == 'arrow':
-                    self._ramos(p, co, editadas)
+                    self._ramos(p, co, editadas, linha)
                 g = self._desenho(tipo, linha, geo, p) or self._reserva(tipo, linha, co, g)
             return g, False
 
@@ -675,7 +690,7 @@ class Montador:
             g = self._desenho(tipo, linha, geo, p)
             return g or self._reserva(tipo, linha, co, None), True
         if tipo == 'arrow':
-            self._ramos(p, co, editadas)
+            self._ramos(p, co, editadas, linha)
             g = self._desenho(tipo, linha, geo, p)
             return g or self._reserva(tipo, linha, co, orig.get('geometry') if orig else None), True
         if alvo == 'Point':
@@ -727,11 +742,14 @@ class Montador:
             schema.TIPOS[tipo]['nome_pt'], linha.get('ebgeo_id')))
         return anterior
 
-    def _ramos(self, p, partes, editadas):
+    def _ramos(self, p, partes, editadas, linha=None):
         """
         Seta: baseCoordinates e, na combinada, os ramos. Cada ramo guarda as propriedades dele
-        (no Web cada um tem a sua ponta dupla, largura...); só a coluna editada no Desktop vai a
-        todos, porque o Desktop edita a seta inteira.
+        (no Web cada um tem a sua ponta dupla, largura...), as da coluna `ramos` quando ela foi
+        editada; a coluna da feição editada no Desktop vai a todos, como o updateFeaturesProperty
+        do Web, que a grava em cada ramo (o estilo desenha assim, seta_ramo.exp). O ramo 0 editado
+        na coluna `ramos` volta também ao topo da feição, o espelho que o Web mantém
+        (_updateBranchProperty), salvo na chave cuja coluna da feição foi editada.
         """
         p['baseCoordinates'] = [_xy(c) for c in partes[0]]
         if len(partes) == 1:
@@ -742,13 +760,27 @@ class Montador:
         web = {c: w for w, c in schema.mapa_web('arrow').items()}
         mudadas = {web[c] for c in editadas if c in web}
         antigos = p.get('branches') if isinstance(p.get('branches'), list) else []
+        coluna = _json((linha or {}).get('ramos')) if 'ramos' in editadas else None
+        da_coluna = coluna.get('ramos') if isinstance(coluna, dict) and isinstance(coluna.get('ramos'), list) else []
         ramos = []
         for i, parte in enumerate(partes):
             velho = i < len(antigos) and isinstance(antigos[i], dict)
             r = copy.deepcopy(antigos[i]) if velho else {}
             r['baseCoordinates'] = [_xy(c) for c in parte]
+            if not velho:
+                r.update({k: p[k] for k in RAMO_SETA if k in p})  # ramo novo: o da feição
+            if i < len(da_coluna) and isinstance(da_coluna[i], dict):
+                for k in RAMO_SETA:
+                    if k in da_coluna[i]:
+                        r[k] = da_coluna[i][k]
+                    else:
+                        r.pop(k, None)
+                if i == 0:
+                    for k in RAMO_SETA:
+                        if k in r and k not in mudadas and (k not in p or not _iguais_prof(p[k], r[k])):
+                            p[k] = r[k]
             for k in RAMO_SETA:
-                if k in p and (not velho or k in mudadas or k not in r):
+                if k in p and k in mudadas:
                     r[k] = p[k]
             ramos.append(r)
         p['isMerged'] = True

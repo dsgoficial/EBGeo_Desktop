@@ -505,7 +505,7 @@ def expr_limite_rotulo(lado, norte, projecao=None):
 
 
 def expr_seta(projecao=None):
-    meio = '@w / 2'
+    meio = '@rw / 2'
     ramo = compor('seta_ramo', projecao,
                   OFFSET_D=_offset('@ax', meio, '90', projecao),
                   OFFSET_E=_offset('@ax', meio, '-90', projecao),

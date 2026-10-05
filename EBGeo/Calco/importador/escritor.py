@@ -485,6 +485,10 @@ def linha_feicao(tipo, mapa, p, grupos):
     if tipo == 'coordination_area':
         # a chave ausente (ou não numérica) é o padrão da posição no Web, não o nulo
         linha['text_ratio'] = schema.razao_texto_area(p)
+    if tipo == 'arrow':
+        # as propriedades de cada ramo da seta combinada, que o estilo desenha ramo a ramo
+        ramos = schema.ramos_seta(p, linha)
+        linha['ramos'] = json.dumps(ramos, ensure_ascii=False) if ramos else None
     linha['mapa'] = mapa
     linha['camada_id'] = p.get('layerId') or 'default'
     linha['ebgeo_id'] = p.get('id')

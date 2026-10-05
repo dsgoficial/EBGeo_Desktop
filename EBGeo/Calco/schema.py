@@ -258,7 +258,10 @@ TIPOS = {
                    ('line_width', 'real', 3.0, 'lineWidth'),
                    ('fill_opacity', 'real', 0.8, 'fillOpacity'),
                    ('line_opacity', 'real', 1.0, 'lineOpacity'),
-                   ('geom_desenho', 'str', None, None)],
+                   ('geom_desenho', 'str', None, None),
+                   # Seta combinada do Web: as propriedades de cada ramo (branches[] sem o eixo,
+                   # que é a parte da geometria) e o valor das colunas na importação (ramos_seta)
+                   ('ramos', 'json', None, None)],
     },
     'occupied_front': {
         'balde': 'occupied_fronts', 'tabela': 'occupied_front', 'geometria': 'LineString',
@@ -543,6 +546,29 @@ def razao_texto_area(p):
 def razao_desenhada_area(valor):
     """A razão na borda que o desenho usa para o valor da coluna: nula vale 0, cortada a [0, 1]."""
     return min(1.0, max(0.0, 0.0 if valor is None else float(valor)))
+
+
+# ---------------------------------------------------------------- Seta combinada: ramos
+
+# As propriedades de cada ramo da Seta combinada (BRANCH_GEOMETRIC_PROPS de arrow-merge.js, sem o
+# eixo, que é a parte da geometria).
+RAMO_SETA = ('width', 'showArrowHead', 'doubleHeaded', 'headLengthRatio', 'airmobile', 'airmobilePosition')
+
+
+def ramos_seta(p, linha):
+    """
+    A coluna `ramos` da Seta: {'ramos': [propriedades de cada ramo], 'topo': {chave: valor da coluna}}
+    na seta combinada do Web com mais de um ramo (o Web só desenha ramo a ramo assim,
+    generateMergedGeometry), senão None. 'topo' guarda o valor que as colunas da feição receberam
+    na importação: o estilo (seta_ramo.exp) e o exportador tomam a coluna diferente dele por
+    editada no Desktop, e a editada vale para todos os ramos, como no Web.
+    """
+    ramos = p.get('branches') if p.get('isMerged') else None
+    if not isinstance(ramos, list) or len(ramos) < 2:
+        return None
+    web = mapa_web('arrow')
+    return {'ramos': [{k: r[k] for k in RAMO_SETA if k in r} if isinstance(r, dict) else {} for r in ramos],
+            'topo': {k: linha.get(web[k]) for k in RAMO_SETA}}
 
 
 # ---------------------------------------------------------------- chave ausente no .ebgeo

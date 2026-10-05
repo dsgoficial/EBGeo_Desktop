@@ -70,8 +70,33 @@ def garantir_tabela_tipo(ds, tipo):
     for nome, tp, padrao, _web in schema.campos(tipo):
         if nome not in existentes:
             lyr.CreateField(_campo_ogr(nome, tp, padrao))
+    if tipo == 'arrow' and 'ramos' not in existentes and 'props' in existentes:
+        _ramos_do_calco_antigo(lyr)
     _comentarios(lyr, tipo)
     return lyr
+
+
+def _ramos_do_calco_antigo(lyr):
+    """
+    Calco importado antes da coluna `ramos` da Seta: ela é preenchida a partir do `props` guardado na
+    importação, com o mesmo valor que o importador gravaria (escritor.linha_feicao), e a seta
+    combinada passa a desenhar cada ramo com as propriedades dele.
+    """
+    import json
+    from .importador import escritor
+    lyr.ResetReading()
+    for f in lyr:
+        try:
+            p = json.loads(f.GetField('props') or 'null')
+        except ValueError:
+            continue
+        if not isinstance(p, dict):
+            continue
+        ramos = escritor.linha_feicao('arrow', f.GetField('mapa'), p, None).get('ramos')
+        if ramos:
+            f.SetField('ramos', ramos)
+            lyr.SetFeature(f)
+    lyr.ResetReading()
 
 
 def _comentarios(lyr, tipo):

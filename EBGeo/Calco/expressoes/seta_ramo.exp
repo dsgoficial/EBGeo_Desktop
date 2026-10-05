@@ -1,8 +1,25 @@
 /* Um ramo da seta a partir do eixo @ax: trilhos a +/- largura/2 (offsetGeodesic), cabeça
    no último vértice e, com double_headed, cauda no primeiro (resolveHeadLengths). A ordem
    do anel é a do Web: trilho do lado rumo + 90, cabeça, trilho do lado rumo - 90 de
-   volta, cauda. */
+   volta, cauda.
+   Propriedades do ramo (generateMergedGeometry do Web): o ramo @element da coluna "ramos" (@b)
+   vale enquanto a coluna da feição não foi editada no Desktop (igual ao valor da importação,
+   @tp); editada, ela vale para todos os ramos, como updateFeaturesProperty do Web, que a grava
+   em cada ramo. No Web a largura e a razão da cabeça do ramo caem na da feição quando falsas
+   (branch.width || properties.width || 1000); ponta, ponta dupla, aeromóvel e posição do
+   aeromóvel não caem (branch.showArrowHead !== false, doubleHeaded === true,
+   airmobile || false, airmobilePosition || 0,7). Sem a coluna, ou no ramo além da lista, valem
+   as macros da feição (@w, @hr, @hd, @dh, @am, @ap de seta.exp). */
 @@SEJA@@
+tb := @element <= array_length(@rl)
+b := coalesce(try(CASE WHEN @element <= array_length(@rl) AND map_akeys(@rl[@element - 1]) IS NOT NULL THEN @rl[@element - 1] END), map())
+rw := CASE WHEN @tb AND "width_m" IS @tp['width'] AND coalesce(try(to_real(@b['width'])), 0) <> 0 THEN abs(to_real(@b['width'])) * @k ELSE @w END
+rhr := CASE WHEN @tb AND "head_length_ratio" IS @tp['headLengthRatio'] AND coalesce(try(to_real(@b['headLengthRatio'])), 0) <> 0 THEN to_real(@b['headLengthRatio']) ELSE @hr END
+rhd := CASE WHEN @tb AND "show_arrow_head" IS @tp['showArrowHead'] THEN NOT (@b['showArrowHead'] IS false) ELSE @hd END
+rdh := CASE WHEN @tb AND "double_headed" IS @tp['doubleHeaded'] THEN @b['doubleHeaded'] IS true ELSE @dh END
+ram := CASE WHEN @tb AND "airmobile" IS @tp['airmobile'] THEN @b['airmobile'] IS true ELSE @am END
+rap := CASE WHEN @tb AND "airmobile_position" IS @tp['airmobilePosition'] THEN CASE WHEN coalesce(try(to_real(@b['airmobilePosition'])), 0) <> 0 THEN to_real(@b['airmobilePosition']) ELSE 0.7 END ELSE @ap END
+hb ::= @rw * 2.5
 N ::= num_points(@ax)
 La := length(@ax)
 pd := @@OFFSET_D@@
@@ -11,14 +28,14 @@ azf := azimuth(point_n(@ax, @N - 1), point_n(@ax, @N))
 pl := point_n(@ax, @N)
 azt := azimuth(point_n(@ax, 2), point_n(@ax, 1))
 p1 := point_n(@ax, 1)
-nom ::= @hb * @hr
-hl ::= CASE WHEN @dh AND 2 * @nom > @La THEN @nom * @La / (2 * @nom) ELSE @nom END
+nom ::= @hb * @rhr
+hl ::= CASE WHEN @rdh AND 2 * @nom > @La THEN @nom * @La / (2 * @nom) ELSE @nom END
 cab ::= array(project(@pl, @hb / 2, @azf + pi() / 2), project(@pl, @hl, @azf), project(@pl, @hb / 2, @azf - pi() / 2))
-cau ::= CASE WHEN @dh THEN array(project(@p1, @hb / 2, @azt + pi() / 2), project(@p1, @hl, @azt), project(@p1, @hb / 2, @azt - pi() / 2)) ELSE array() END
+cau ::= CASE WHEN @rdh THEN array(project(@p1, @hb / 2, @azt + pi() / 2), project(@p1, @hl, @azt), project(@p1, @hb / 2, @azt - pi() / 2)) ELSE array() END
 @@EM@@
 CASE
-  WHEN @am THEN @@AEROMOVEL@@
-  WHEN NOT @hd THEN make_polygon(make_line(array_cat(@pd, array_reverse(@pe), array(@pd[0]))))
+  WHEN @ram THEN @@AEROMOVEL@@
+  WHEN NOT @rhd THEN make_polygon(make_line(array_cat(@pd, array_reverse(@pe), array(@pd[0]))))
   ELSE make_polygon(make_line(array_cat(@pd, @cab, array_reverse(@pe), @cau, array(@pd[0]))))
 END
 @@FIM@@

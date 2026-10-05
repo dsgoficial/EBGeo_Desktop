@@ -2,7 +2,10 @@
    há mais de um (a seta combinada do Web é turf.union dos ramos). Porte de
    add_arrow_geometry.js: largura em metros (|width| ou 1000), cabeça de base
    2,5 x largura e comprimento base x head_length_ratio, ponta dupla limitada ao
-   comprimento do eixo, aeromóvel. */
+   comprimento do eixo, aeromóvel. As macros abaixo são as propriedades da FEIÇÃO; cada
+   ramo resolve as suas em seta_ramo.exp, pela coluna "ramos" da seta combinada do Web
+   (generateMergedGeometry): @rl é a lista das propriedades de cada ramo e @tp o valor que as
+   colunas tinham na importação, para saber se a coluna foi editada no Desktop. */
 @@SEJA@@
 @@PROJ@@
 w ::= abs(CASE WHEN coalesce("width_m", 0) <> 0 THEN "width_m" ELSE 1000 END) * @k
@@ -11,8 +14,12 @@ hd ::= coalesce("show_arrow_head", true)
 dh ::= coalesce("double_headed", false)
 am ::= coalesce("airmobile", false)
 ap ::= CASE WHEN coalesce("airmobile_position", 0) <> 0 THEN "airmobile_position" ELSE 0.7 END
-hb ::= @w * 2.5
 ax ::= CASE WHEN is_multipart(@g) THEN geometry_n(@g, @element) ELSE @g END
+/* a coluna JSON chega como mapa na camada do importador e como texto na aberta à mão; from_json
+   de um mapa dá nulo SEM erro, então o mapa é lido como está (test_json_lista.py) */
+rj := coalesce(CASE WHEN try(map_akeys("ramos")) IS NOT NULL THEN "ramos" ELSE try(from_json("ramos")) END, map())
+rl := coalesce(try(CASE WHEN array_length(@rj['ramos']) >= 0 THEN @rj['ramos'] END), array())
+tp := coalesce(try(CASE WHEN map_akeys(@rj['topo']) IS NOT NULL THEN @rj['topo'] END), map())
 @@EM@@
 with_variable('pol0',
   array_foreach(generate_series(1, num_geometries(@g)),

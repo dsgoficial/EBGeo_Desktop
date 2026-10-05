@@ -2,7 +2,7 @@
    de L x airmobile_position, diagonais cruzadas e dois polígonos que se tocam no
    cruzamento @hc. */
 @@SEJA@@
-pom := line_interpolate_point(@ax, @La * @ap)
+pom := line_interpolate_point(@ax, @La * @rap)
 rd := make_line(@pd)
 re := make_line(@pe)
 dd ::= line_locate_point(@rd, @pom)
@@ -16,7 +16,7 @@ hc ::= CASE WHEN @it IS NULL OR is_empty(@it) THEN @pom ELSE point_n(@it, 1) END
 @@EM@@
 collect_geometries(
   make_polygon(make_line(array_cat(array_slice(@l1, 0, -2), array(@hc), array_slice(array_reverse(@r1), 1, -1),
-                                   CASE WHEN @hd THEN @cau ELSE array() END, array(@l1[0])))),
-  make_polygon(make_line(array_cat(array_slice(@l2, 1, -1), CASE WHEN @hd THEN @cab ELSE array() END,
+                                   CASE WHEN @rhd THEN @cau ELSE array() END, array(@l1[0])))),
+  make_polygon(make_line(array_cat(array_slice(@l2, 1, -1), CASE WHEN @rhd THEN @cab ELSE array() END,
                                    array_slice(array_reverse(@r2), 0, -2), array(@hc), array(@l2[1])))))
 @@FIM@@

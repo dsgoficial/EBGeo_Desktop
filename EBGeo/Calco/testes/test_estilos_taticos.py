@@ -745,6 +745,99 @@ def comparar_partes(web_partes, qgis_partes):
     return max(hausdorff_m(a, b) for a, b in zip(web_partes, qgis_partes))
 
 
+def hausdorff_geo_m(a, b):
+    """Hausdorff (m) entre duas QgsGeometry em EPSG:4326, numa Transversa de Mercator local (R do turf)."""
+    c = b.centroid().asPoint()
+    crs = QgsCoordinateReferenceSystem('PROJ:+proj=tmerc +lat_0={} +lon_0={} +R={} +units=m'.format(c.y(), c.x(), R_TURF))
+    tr = QgsCoordinateTransform(QgsCoordinateReferenceSystem('EPSG:4326'), crs, QgsProject.instance())
+    a, b = QgsGeometry(a), QgsGeometry(b)
+    a.transform(tr)
+    b.transform(tr)
+    return a.hausdorffDistance(b)
+
+
+def geometria_geojson(g):
+    from osgeo import ogr
+    return QgsGeometry.fromWkt(ogr.CreateGeometryFromJson(json.dumps(g)).ExportToIsoWkt())
+
+
+class TestSetaCombinada(unittest.TestCase):
+    """
+    K1: a Seta combinada do Web desenha cada ramo com as propriedades dele (generateMergedGeometry de
+    add_arrow_geometry.js). A mesma seta, importada como o importador a grava (as colunas da feição e
+    a coluna `ramos`, escritor.linha_feicao), é desenhada pelo estilo do calco e comparada com o
+    polígono do próprio Web em node. Casos: os ramos da fixture 06 (ponta dupla num, aeromóvel
+    noutro), larguras e cabeças diferentes com um ramo sem ponta, um ramo sem propriedades sob a
+    feição sem ponta (no Web o ramo não herda a ponta da feição) e a largura da feição editada no
+    Desktop (no Web, updateFeaturesProperty a grava em cada ramo). Pior caso: o desenho sem a coluna
+    `ramos` (todos os ramos com as colunas da feição, o estilo de antes) e, na edição, o desenho que
+    ignora a coluna editada.
+    """
+    R = ([(-47.95, -15.80), (-47.90, -15.805), (-47.85, -15.79)],
+         [(-47.95, -15.79), (-47.90, -15.79), (-47.85, -15.79)],
+         [(-47.95, -15.78), (-47.90, -15.776), (-47.85, -15.79)])
+    _B = {'width': 400, 'showArrowHead': True, 'doubleHeaded': False, 'headLengthRatio': 1.5, 'airmobile': False,
+          'airmobilePosition': 0.7}
+    CASOS = (
+        ('ramos da fixture 06', [_B, dict(_B, doubleHeaded=True), dict(_B, airmobile=True, airmobilePosition=0.5)],
+         dict(_B), None),
+        ('larguras e cabeças diferentes', [{'width': 300, 'headLengthRatio': 1.0}, {'width': 700, 'showArrowHead': False},
+                                           {'width': 500, 'headLengthRatio': 2.0, 'doubleHeaded': True}],
+         {'width': 300, 'headLengthRatio': 1.0}, None),
+        ('ramo vazio sob a feição sem ponta', [{}, {'width': 500}, {'width': 500, 'showArrowHead': False}],
+         {'width': 600, 'showArrowHead': False}, None),
+        ('largura da feição editada no Desktop', [_B, dict(_B, doubleHeaded=True), dict(_B, width=250)],
+         dict(_B), 650.0),
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        from Calco.importador import escritor
+        cls.casos, cls.web_casos = [], []
+        for nome, ramos, topo, editada in cls.CASOS:
+            p = dict(topo, isMerged=True, baseCoordinates=cls.R[0],
+                     branches=[dict(r, baseCoordinates=c) for r, c in zip(ramos, cls.R)])
+            linha = escritor.linha_feicao('arrow', 'Principal', p, None)
+            cols = {c: linha[c] for c, _tp, _pd, w in schema.TIPOS['arrow']['campos'] if w}
+            cols['ramos'] = json.loads(linha['ramos'])
+            pior = dict(cols, ramos=None)
+            web = p
+            if editada is not None:
+                pior = dict(cols)          # a coluna editada ignorada: o ramo segue com a dele
+                cols['width_m'] = editada
+                web = dict(p, width=editada, branches=[dict(b, width=editada) for b in p['branches']])
+            cls.casos.append((nome, cols, pior))
+            cls.web_casos.append(dict(tipo='arrow', coords=cls.R[0], props=web))
+        cls.web, cls.motivo = rodar_web(cls.web_casos)
+
+    def setUp(self):
+        if self.web is None:
+            self.skipTest(self.motivo)
+
+    def _desenho(self, cols):
+        vl, f = nova_feicao('arrow', list(self.R), **cols)
+        return avaliar(et.expr_seta(), vl, f)
+
+    def test_cada_ramo_como_o_web(self):
+        for (nome, cols, pior), web in zip(self.casos, self.web):
+            with self.subTest(caso=nome):
+                w = geometria_geojson(web['geom'])
+                d = hausdorff_geo_m(self._desenho(cols), w)
+                dp = hausdorff_geo_m(self._desenho(pior), w)
+                medir('Seta combinada, {}: Web x QGIS {:.2f} m (pior caso {:.0f} m)'.format(nome, d, dp))
+                self.assertLess(d, LIMITE_DESVIO_M)
+                self.assertGreater(dp, 50)
+
+    def test_coluna_em_texto(self):
+        """A coluna em texto (a camada de memória do exportador, a aberta à mão) desenha o mesmo."""
+        from Calco.exportador import desenho
+        for (nome, cols, _), web in zip(self.casos, self.web):
+            with self.subTest(caso=nome):
+                geo = {'type': 'MultiLineString', 'coordinates': [[list(p) for p in r] for r in self.R]}
+                g, _ = desenho.GeradorDesenho()._avaliar('arrow', dict(cols), geo)
+                self.assertLess(hausdorff_geo_m(g, geometria_geojson(web['geom'])), LIMITE_DESVIO_M)
+
+
 class TestContraWeb(unittest.TestCase):
     """Mesma linha no código do Web (node) e na expressão do QGIS: posições comparadas."""
 
