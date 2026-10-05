@@ -30,7 +30,7 @@ about=
 	- Medição na aquisição vetorial
 	- Mosaicar
 	- Sombreamento do terreno
-	- Criação de pontos por azimute/distância
+	- Azimute e Distância (construção polar nos três nortes, como no EBGeo Web)
 	- Alcance do armamento
 	- Geração de azimutes e distâncias 
 	- Plano de chamada 
@@ -53,7 +53,7 @@ about=
 	- In-digitize measure tool
 	- Make Mosaic
 	- Terrain Shading
-	- Point creation by distance and azimuth
+	- Azimuth and Distance (polar construction in the three norths, as in EBGeo Web)
 	- Gun range tool
 	- Azimuth and distance generator
 	- Rendezvous tool

@@ -101,6 +101,8 @@ class EBGeo(QObject):
 			self.iface.actionToggleEditing().triggered.disconnect(tool.setToolEnabled)
 		if getattr(self, 'calco', None) is not None:
 			self.calco.unload()
+		if getattr(self, 'azimuteDistancia', None) is not None:
+			self.azimuteDistancia.unload()
 		QgsApplication.processingRegistry().removeProvider(self.provider)
 		for action in self.actions:
 			self.iface.removePluginMenu(u'EBGeo',	action)
@@ -176,17 +178,27 @@ class EBGeo(QObject):
 			add_to_toolbar=False)
 		self.ebGeo.addAction(self.nd_action)
 
+		# Azimute e Distância do EBGeo Web (Calco/azimute): construção polar com os três nortes,
+		# gravada no calco. Substituiu em 2026-10-04 a criação de pontos por azimute e distância.
 		self.az_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'azimuth.png'),
-			text=u'Criação de pontos por azimute e distância',
-			callback=self.loadAzimuthTool,
+			text=u'Azimute e Distância',
+			callback=self.loadAzimuteDistancia,
 			parent=self.ebGeo,
 			add_to_menu=False,
 			add_to_toolbar=False)
 		self.az_action.setCheckable(True)
 		self.ebGeo.addAction(self.az_action)
-		from .AzimuthDistance.azimuthTool import AzimuthTool as Main_AzimuthTool
-		self.mainAzimuthTool = Main_AzimuthTool(iface)
+		self.azimuteDistancia = None
+		try:
+			from .Calco.azimute.ferramenta import AzimuteDistancia
+			self.azimuteDistancia = AzimuteDistancia(
+				self.iface, garantir_calco=lambda: self.calco._garantir_calco() if getattr(self, 'calco', None) else None)
+			self.azimuteDistancia.initGui(self.az_action)
+		except Exception as e:
+			self.az_action.setEnabled(False)
+			QgsApplication.messageLog().logMessage(
+				f"Azimute e Distância não carregou: {e}", "EBGeo", Qgis.MessageLevel.Critical)
 
 		self.mv_action = self.add_action(
 			os.path.join(os.path.dirname(__file__), 'icons', 'numericalvertexedit.png'),
@@ -529,14 +541,11 @@ class EBGeo(QObject):
 		if self.mainShaderTool.isOpen == False:
 			self.mainShaderTool.initGui()
 
-	def loadAzimuthTool(self):
+	def loadAzimuteDistancia(self):
 		"""
-        Adds icons to toolbar for creating points from given point, distance and azymuth
-        """
-		if self.az_action.isChecked():
-			self.mainAzimuthTool.initGui(self.az_action)
-		else:
-			self.mainAzimuthTool.unload()
+		Azimute e Distância do EBGeo Web: abre o painel e a ferramenta do ponto de referência
+		"""
+		self.azimuteDistancia.ativar()
 			
 	def loadAreaRange(self):
 		"""

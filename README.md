@@ -11,7 +11,7 @@ O EBGeo tem a finalidade facilitar o uso da geoinformação digital pelas OM de 
 1. **BDGEx** - Carrega camadas do BDGEx para o QGIS como imagem (serviço)
 2. **Simbologia Militar** - Cria ou carrega banco de dados com simbologia militar prevista no manual MD33-M-02. Visa substituir o calco impresso pelos planos de informação do QGIS. (Ferramenta ainda em desenvolvimento, nem todos os símbolos previstos estão implementados).
 3. **Criação de pontos por coordenadas** - Cria um ponto num arquivo existente, a partir de suas coordenadas.
-4. **Criação de pontos por azimute/distância** - Permite criar novas feições pontuais em camadas vetoriais de pontos a partir de um ponto predefinido e um azimute e distância a partir do mesmo.
+4. **Azimute e Distância** - A caderneta de campanha do EBGeo Web: a partir de um ponto de referência clicado no mapa, pernas de azimute e distância digitadas no norte magnético, de quadrícula ou verdadeiro (declinação pelo WMM2025 e convergência do fuso calculadas no ponto), com saída em ponto, linha ou polígono gravada no calco e reaberta para editar as pernas.
 5. **Movimentação de pontos por coordenadas** - Ao selecionar um ponto existente, movê-lo para outra posição a partir das coordenadas da nova posição.
 6. **Quadro Auxiliar de Navegação (QAN)** - Seleciona-se vários pontos, ou uma linha ou um polígono e é gerado uma tabela com as coordenadas do primeiro ponto e o azimute e distância para os demais pontos.
 7. **Alcance do armamento** - Gera buffers de alcance de armamento com base em valor definido pelo usuário, valendo-se também de um azimute de tiro e uma angulação de visada/atuação da peça.
