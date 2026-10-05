@@ -20,7 +20,16 @@ todas as expressões das camadas de símbolo que desenham (a regra que casa e a 
 Sem N (a coluna que o estilo não lê, ou o zoom de criação que o estilo das formas trata como
 "sem âncora" por `IS NOT NULL`), não há número que o desenho use: o dock mostra "Não definido".
 
-Lido do estilo da camada, e não de uma tabela escrita à mão, o valor segue o estilo que de fato
+A caixa de marcar da coluna lógica nula segue a mesma regra, com as formas lógicas:
+
+    coalesce("c", true|false)                               nulo vale o literal
+    if("c" IS NULL, true|false, "c")                        idem (o "mostrar no mapa" do importador)
+    "c" IS NOT NULL AND NOT "c"                             só o falso gravado desliga: nulo vale verdadeiro
+
+e, sem forma no estilo, a caixa fica no terceiro estado, "Não definido".
+
+O filtro da camada (subsetString) entra no texto lido: é por ele que o importador esconde a
+feição com "visivel" falso nas camadas sem regras. Lido do estilo da camada, e não de uma tabela escrita à mão, o valor segue o estilo que de fato
 desenha, inclusive o personalizado. A régua é testes/test_dock_nulos.py: em todo tipo com
 especificação e em todo campo numérico, a feição com o nulo e a feição com o valor que o dock
 mostra desenham os mesmos pixels.
@@ -43,12 +52,19 @@ _FORMAS = (
 )
 
 
+_FORMAS_LOGICAS = (
+    (r'coalesce\(\s*{c}\s*,\s*(true|false)\s*\)', None),
+    (r'if\(\s*{c}\s+IS\s+NULL\s*,\s*(true|false)\s*,\s*{c}\s*\)', None),
+    (r'{c}\s+IS\s+NOT\s+NULL\s+AND\s+NOT\s+{c}', True),
+)
+
+
 def texto_do_estilo(layer):
-    """O QML da simbologia e dos rótulos da camada, com as entidades do XML desfeitas."""
+    """O QML da simbologia e dos rótulos da camada, com as entidades do XML desfeitas, e o filtro dela."""
     doc = QDomDocument()
     layer.exportNamedStyle(doc, QgsReadWriteContext(),
                            QgsMapLayer.StyleCategory.Symbology | QgsMapLayer.StyleCategory.Labeling)
-    return html.unescape(doc.toString())
+    return html.unescape(doc.toString()) + '\n' + layer.subsetString()
 
 
 def candidatos(texto, coluna):
@@ -59,6 +75,17 @@ def candidatos(texto, coluna):
         padrao = forma.format(c=c, n=_NUMERO)
         achados += [float(x) for x in re.findall(padrao, texto)]
         texto = re.sub(padrao, ' ', texto)
+    return achados
+
+
+def candidatos_logicos(texto, coluna):
+    """Os valores lógicos que o estilo dá à coluna nula, na ordem em que aparecem (com repetição)."""
+    c = re.escape('"{}"'.format(coluna))
+    achados = []
+    for forma, fixo in _FORMAS_LOGICAS:
+        padrao = forma.format(c=c)
+        for m in re.finditer(padrao, texto, re.IGNORECASE):
+            achados.append(fixo if fixo is not None else m.group(1).lower() == 'true')
     return achados
 
 
@@ -163,18 +190,19 @@ class PadroesDoEstilo:
         self._texto = None
         self._por_coluna = {}
 
-    def candidatos(self, coluna):
-        if coluna not in self._por_coluna:
+    def candidatos(self, coluna, logico=False):
+        chave = (coluna, logico)
+        if chave not in self._por_coluna:
             if self._texto is None:
                 self._texto = texto_do_estilo(self.layer)
-            achados = candidatos(self._texto, coluna)
+            achados = (candidatos_logicos if logico else candidatos)(self._texto, coluna)
             # o mais frequente primeiro: decide o empate de desempatar()
-            self._por_coluna[coluna] = sorted(set(achados), key=lambda n: (-achados.count(n), achados.index(n)))
-        return self._por_coluna[coluna]
+            self._por_coluna[chave] = sorted(set(achados), key=lambda n: (-achados.count(n), achados.index(n)))
+        return self._por_coluna[chave]
 
-    def valor(self, coluna, feicao):
-        """O número que o estilo desenha para a coluna nula nesta feição, ou None (não há)."""
-        valores = self.candidatos(coluna)
+    def valor(self, coluna, feicao, logico=False):
+        """O número (ou o lógico) que o estilo desenha para a coluna nula nesta feição, ou None (não há)."""
+        valores = self.candidatos(coluna, logico)
         if not valores:
             return None
         if len(valores) == 1:

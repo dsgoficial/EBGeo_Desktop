@@ -16,6 +16,9 @@ aeromóvel, fundo do texto, Setor de Tiro). O pior caso é a saída REAL de ante
 que a régua tem de reprovar. Abrir a feição no dock não grava nada, e salvar só o nome pelo dock
 não muda coluna nem pixel.
 
+TesteDockLogicosNulos faz o mesmo com as caixas de marcar das colunas lógicas: a nula mostra o estado
+que o estilo desenha, ou o terceiro estado, "Não definido", quando o estilo não a lê.
+
 Rodar com o Python do QGIS 4, da raiz do repositório:
     python-qgis.bat EBGeo/Calco/testes/test_dock_nulos.py
 Variáveis: EBGEO_TESTE_SAIDA (capturas do dock; padrão: temporária).
@@ -36,7 +39,7 @@ from qgis.core import (  # noqa: E402
     QgsExpressionContextUtils, QgsGeometry, QgsMapRendererSequentialJob, QgsMapSettings, QgsPointXY,
     QgsProject, QgsReadWriteContext, QgsRectangle, QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSize  # noqa: E402
+from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSize, Qt  # noqa: E402
 from qgis.PyQt.QtGui import QColor, QImage  # noqa: E402
 from qgis.PyQt.QtXml import QDomDocument  # noqa: E402
 
@@ -181,27 +184,52 @@ def _nulo(v):
     return v is None or (hasattr(v, 'isNull') and v.isNull())
 
 
+def _expandir(painel):
+    """Abre os grupos recolhidos do dock para a captura (ele recolhe a Correção de Zoom na volta ao laço)."""
+    import time
+    from qgis.gui import QgsCollapsibleGroupBoxBasic
+    for _ in range(10):
+        _app.processEvents()
+        caixas = painel.form_host.findChildren(QgsCollapsibleGroupBoxBasic)
+        for caixa in caixas:
+            caixa.setCollapsed(False)
+        _app.processEvents()
+        if all(not c.isCollapsed() for c in caixas):
+            return
+        time.sleep(0.05)
+
+
+def _montar(cls, nome):
+    """
+    O calco com uma camada por tipo, estilizada como o importador a deixa (o estilo do tipo e a regra
+    de "visivel" do atlas, arvore.esconder_por_regra), e o dock solto e à mostra.
+    """
+    from Calco.importador import arvore
+    cls.caminho = os.path.join(TMP, nome + '.gpkg')
+    gpkg.criar_calco(cls.caminho, TIPOS)
+    cls.camadas, cls.qml = {}, {}
+    for tipo in TIPOS:
+        vl = QgsVectorLayer(gpkg.uri_camada(cls.caminho, tipo), schema.TIPOS[tipo]['nome_pt'], 'ogr')
+        vl.setCustomProperty(PROP_CAMINHO, cls.caminho)
+        vl.setCustomProperty(PROP_TIPO, tipo)
+        assert C.aplicar_estilo(vl, tipo), tipo
+        arvore.esconder_por_regra(vl, arvore.COND_VISIVEL)
+        C.aplicar_formulario(vl, tipo)
+        QgsProject.instance().addMapLayer(vl)
+        cls.camadas[tipo] = vl
+        doc = QDomDocument()
+        vl.exportNamedStyle(doc, QgsReadWriteContext())
+        cls.qml[tipo] = doc
+    cls.painel = P.PainelCalco(get_iface())
+    cls.painel.setParent(None)
+    cls.painel.resize(440, 980)
+    cls.painel.show()
+
+
 class TesteDockNulos(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.caminho = os.path.join(TMP, 'dock_nulos.gpkg')
-        gpkg.criar_calco(cls.caminho, TIPOS)
-        cls.camadas, cls.qml = {}, {}
-        for tipo in TIPOS:
-            vl = QgsVectorLayer(gpkg.uri_camada(cls.caminho, tipo), schema.TIPOS[tipo]['nome_pt'], 'ogr')
-            vl.setCustomProperty(PROP_CAMINHO, cls.caminho)
-            vl.setCustomProperty(PROP_TIPO, tipo)
-            assert C.aplicar_estilo(vl, tipo), tipo
-            C.aplicar_formulario(vl, tipo)
-            QgsProject.instance().addMapLayer(vl)
-            cls.camadas[tipo] = vl
-            doc = QDomDocument()
-            vl.exportNamedStyle(doc, QgsReadWriteContext())
-            cls.qml[tipo] = doc
-        cls.painel = P.PainelCalco(get_iface())
-        cls.painel.setParent(None)
-        cls.painel.resize(440, 980)
-        cls.painel.show()
+        _montar(cls, 'dock_nulos')
         cls.resultados = cls._medir_todos()
 
     @classmethod
@@ -416,10 +444,7 @@ class TesteDockNulos(unittest.TestCase):
             from Calco.ui.blocos.previa import esperar
             from qgis.gui import QgsCollapsibleGroupBoxBasic
             self.painel.resize(440, 1500)
-            _app.processEvents()            # o dock recolhe a Correção de Zoom na volta ao laço
-            for caixa in self.painel.form_host.findChildren(QgsCollapsibleGroupBoxBasic):
-                caixa.setCollapsed(False)
-            _app.processEvents()
+            _expandir(self.painel)
             esperar(self.painel)
             self.painel.grab().save(os.path.join(SAIDA, arquivo))
             self.painel.resize(440, 980)
@@ -427,6 +452,177 @@ class TesteDockNulos(unittest.TestCase):
                 if col in self.painel.widgets:
                     w = getattr(self.painel.widgets[col], 'spin', self.painel.widgets[col])
                     self.assertNotEqual(w.text(), '', col)
+
+
+# Configurações a mais de um campo lógico: (rótulo, colunas)
+EXTRAS_LOGICOS = {
+    ('coordination_area', 'text_north_facing'): [('150000 sobre a borda', dict(
+        symbol_code='150000', text_position='borda', tipo='Obj', identificacao='BAGRE', hatch_type='none',
+        hatch_enabled=False))],
+    ('coordination_area', 'portoes_ocultos'): [('170999-01 com portão', dict(
+        symbol_code='170999-01', tipo='VAB', identificacao='CONDOR', hatch_type='none', hatch_enabled=False,
+        portoes='[{"ratio": 0.3, "nome": "PORTÃO ALFA"}]'))],
+}
+
+
+def casos_logicos():
+    """(tipo, coluna, rótulo da configuração, atributos de base) de todo campo lógico que o dock edita."""
+    out = []
+    for tipo in TIPOS:
+        tps = {c: tp for c, tp, _p, _w in schema.campos(tipo)}
+        for campo in esp.formulario(tipo).campos():
+            if tps.get(campo.coluna) != 'bool' or campo.somente_leitura:
+                continue
+            base = dict(schema.padroes(tipo))
+            base.update(ATIVADORES.get(tipo, {}))
+            if tipo == 'image':
+                base['bitmap_b64'] = _png_b64()
+            # a correção de zoom só desenha com um zoom de referência longe do zoom da janela (~13)
+            if campo.coluna == 'zoom_corr' and 'created_zoom' in tps:
+                base['created_zoom'] = 10.0
+            if campo.coluna == 'label_zoom_corr':
+                base['label_created_zoom'] = 10.0
+            confs = [('', base)] + [(r, dict(base, **x)) for r, x in EXTRAS_LOGICOS.get((tipo, campo.coluna), [])]
+            out += [(tipo, campo.coluna, rot, a) for rot, a in confs]
+    return out
+
+
+class TesteDockLogicosNulos(unittest.TestCase):
+    """
+    A caixa de marcar da coluna lógica NULA mostra o que o estilo desenha, sem gravar (o
+    "mostrar no mapa" nulo é mostrar, a Correção de Zoom nula é corrigir, o texto da Área nulo fica
+    para o norte), lido do próprio estilo (ui/padrao_estilo.py); sem forma no estilo, o terceiro
+    estado, "Não definido". Antes a caixa nula aparecia desmarcada (salvo o "mostrar no mapa" e as
+    caixas da Seta, do Limite e da Frente, que liam o padrão do .exp). Mesma régua dos números:
+    nulo e estado mostrado desenham os mesmos pixels, o outro estado desenha outros, e o desmarcado
+    de antes é reprovado onde o estilo desenha o nulo como marcado.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        _montar(cls, 'dock_logicos_nulos')
+        cls.resultados = []
+        for tipo, col, rot, base in casos_logicos():
+            a = dict(base, nome='nulo')
+            a[col] = None
+            eid = cls._nova(tipo, a)
+            lyr = cls.camadas[tipo]
+            cls._anular(lyr, eid, col)
+            cls._abrir(tipo, eid)
+            w = cls.painel.widgets[col]
+            estado = w.checkState()
+            v = None if estado == Qt.CheckState.PartiallyChecked else estado == Qt.CheckState.Checked
+            if v is None:
+                assert w.text() == TEXTO_NULO, (tipo, col)
+            f = next(lyr.getFeatures('"ebgeo_id" = \'{}\''.format(eid)))
+            r = dict(tipo=tipo, col=col, conf=rot, mostrado=v, visivel=col in cls.painel.campos_visiveis(),
+                     gravou=not _nulo(f[col]) or lyr.isEditable())
+            img = renderizar(lyr, cls.qml[tipo], eid)
+            for chave, x in (('dif_verdadeiro', True), ('dif_falso', False)):
+                e = cls._nova(tipo, dict(base, nome=chave, **{col: x}))
+                r[chave] = pixels_diferentes(img, renderizar(lyr, cls.qml[tipo], e))
+            cls.resultados.append(r)
+
+    @staticmethod
+    def _anular(lyr, eid, col):
+        """A coluna nula no disco: a gravação da Seta põe falso nas caixas nulas (o calco antigo as tem nulas)."""
+        filtro = '"ebgeo_id" = \'{}\''.format(eid)
+        f = next(lyr.getFeatures(filtro))
+        if not _nulo(f[col]):
+            assert lyr.dataProvider().changeAttributeValues({f.id(): {lyr.fields().indexOf(col): None}})
+            lyr.reload()
+        assert _nulo(next(lyr.getFeatures(filtro))[col]), col
+
+    _nova = TesteDockNulos.__dict__['_nova']  # o classmethod, ligado a esta classe
+    _abrir = TesteDockNulos.__dict__['_abrir']
+
+    def _nome(self, r):
+        return '{} {} {}'.format(r['tipo'], r['col'], r['conf']).strip()
+
+    def test_a_caixa_mostra_o_que_o_estilo_desenha(self):
+        erros, nao_definidos = [], []
+        for r in self.resultados:
+            self.assertFalse(r['gravou'], self._nome(r) + ': abrir no dock gravou')
+            if r['mostrado'] is None:
+                nao_definidos.append(self._nome(r))
+                continue
+            d = r['dif_verdadeiro'] if r['mostrado'] else r['dif_falso']
+            if d:
+                erros.append((self._nome(r), r['mostrado'], d))
+        MEDIDAS.append('{} campos lógicos em {} tipos ({} configurações): {} com o estado do estilo, {} "Não definido" ({})'.format(
+            len({(r['tipo'], r['col']) for r in self.resultados}), len({r['tipo'] for r in self.resultados}),
+            len(self.resultados), len(self.resultados) - len(nao_definidos), len(nao_definidos), ', '.join(nao_definidos)))
+        self.assertEqual(erros, [])
+
+    def test_cada_campo_exercitado(self):
+        """O outro estado desenha outra coisa em ao menos uma configuração; fora disso, só o que o estilo não lê."""
+        exercitados = {(r['tipo'], r['col']) for r in self.resultados if r['dif_verdadeiro'] or r['dif_falso']}
+        sem_leitura = {(r['tipo'], r['col']) for r in self.resultados
+                       if r['mostrado'] is None and not (r['dif_verdadeiro'] or r['dif_falso'])}
+        faltam = sorted({(r['tipo'], r['col']) for r in self.resultados} - exercitados - sem_leitura)
+        self.assertEqual(faltam, [])
+        # "Não definido" só onde nenhum estado desenha como o nulo, ou nenhum desenha diferente
+        for r in self.resultados:
+            if r['mostrado'] is None:
+                self.assertTrue((r['dif_verdadeiro'] and r['dif_falso']) or not (r['dif_verdadeiro'] or r['dif_falso']), r)
+        MEDIDAS.append('lógicos exercitados: {}; o estilo não lê: {}'.format(
+            len(exercitados), ', '.join(' '.join(x) for x in sorted(sem_leitura))))
+
+    def test_regua_reprova_o_desmarcado_de_antes(self):
+        """
+        Pior caso, a saída REAL de antes: a caixa nula desmarcada (o "mostrar no mapa" marcado). A
+        régua a reprova onde o estilo desenha o nulo como marcado.
+        """
+        reprovados = sorted({'{} {}'.format(r['tipo'], r['col']) for r in self.resultados
+                             if (r['dif_verdadeiro'] if r['col'] == 'visivel' else r['dif_falso'])})
+        MEDIDAS.append('a caixa de antes desenharia outra coisa em: ' + ', '.join(reprovados))
+        for esperado in ['military_symbol zoom_corr', 'coordination_measure zoom_corr', 'engineering_symbol zoom_corr',
+                         'magnetic_declination zoom_corr', 'coordination_line zoom_corr',
+                         'coordination_area zoom_corr', 'coordination_area text_north_facing']:
+            self.assertIn(esperado, reprovados)
+
+    def test_terceiro_estado_grava_nulo(self):
+        tipo = 'point'
+        lyr = self.camadas[tipo]
+        a = dict(schema.padroes(tipo), nome='caixa')
+        a['label_zoom_corr'] = None
+        eid = self._nova(tipo, a)
+        self._abrir(tipo, eid)
+        w = self.painel.widgets['label_zoom_corr']
+        self.assertEqual((w.checkState(), w.text()), (Qt.CheckState.PartiallyChecked, TEXTO_NULO))
+        w.setCheckState(Qt.CheckState.Checked)
+        self.painel._gravar_pendentes()
+        self.assertIs(lyr.getFeature(self.painel.fid)['label_zoom_corr'], True)
+        self.assertEqual(w.text(), '')
+        w.setCheckState(Qt.CheckState.PartiallyChecked)
+        self.painel._gravar_pendentes()
+        self.assertTrue(_nulo(lyr.getFeature(self.painel.fid)['label_zoom_corr']))
+        self.assertTrue(self.painel.descartar())
+
+    def test_captura(self):
+        """
+        O Ponto com as caixas nulas: "Mostrar no mapa" marcada (a regra do atlas mostra a nula), a
+        Correção de Zoom do marcador desmarcada (o estilo das formas lê a nula como falsa) e a do
+        rótulo "Não definido" (o estilo não a lê).
+        """
+        tipo = 'point'
+        a = dict(schema.padroes(tipo), nome='caixas nulas', zoom_corr=None, label_zoom_corr=None, visivel=None,
+                 created_zoom=10.0)
+        a.update(ATIVADORES[tipo])
+        eid = self._nova(tipo, a)
+        for col in ('zoom_corr', 'label_zoom_corr', 'visivel'):
+            self._anular(self.camadas[tipo], eid, col)
+        self._abrir(tipo, eid)
+        from Calco.ui.blocos.previa import esperar
+        from qgis.gui import QgsCollapsibleGroupBoxBasic
+        self.painel.resize(440, 1500)
+        _expandir(self.painel)
+        esperar(self.painel)
+        self.painel.grab().save(os.path.join(SAIDA, 'dock_nulos_ponto_caixas.png'))
+        self.painel.resize(440, 980)
+        self.assertEqual(self.painel.widgets['zoom_corr'].checkState(), Qt.CheckState.Unchecked)
+        self.assertEqual(self.painel.widgets['visivel'].checkState(), Qt.CheckState.Checked)
+        self.assertEqual(self.painel.widgets['label_zoom_corr'].checkState(), Qt.CheckState.PartiallyChecked)
 
 
 def tearDownModule():

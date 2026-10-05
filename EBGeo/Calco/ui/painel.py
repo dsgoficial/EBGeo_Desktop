@@ -16,7 +16,7 @@ from qgis.core import (
     QgsVectorLayer, QgsGeometry,
 )
 from qgis.gui import QgsCollapsibleGroupBoxBasic, QgsColorButton
-from qgis.PyQt.QtCore import QTimer
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QCheckBox, QComboBox, QDockWidget, QDoubleSpinBox, QFormLayout, QHBoxLayout,
@@ -155,6 +155,25 @@ class PainelCalco(QDockWidget):
             w.setRange(min(w.minimum(), n), max(w.maximum(), n))
         w.setValue(n)
 
+    def _mostrar_logico_nulo(self, col, w):
+        """
+        A caixa da coluna lógica nula mostra o que o desenho usa (o "mostrar no mapa" nulo é
+        mostrar, a Correção de Zoom nula é corrigir), sem gravar; sem forma no estilo, o terceiro
+        estado, "Não definido", que grava nulo se o operador voltar a ele.
+        """
+        v = None
+        if self.layer is not None and self.fid is not None:
+            if self._padroes is None:
+                from .padrao_estilo import PadroesDoEstilo
+                self._padroes = PadroesDoEstilo(self.layer)
+            v = self._padroes.valor(col, self.layer.getFeature(self.fid), logico=True)
+        if v is None:
+            w.setTristate(True)  # o terceiro estado é o nulo, a que o operador pode voltar
+            w.setCheckState(Qt.CheckState.PartiallyChecked)
+        else:
+            w.setCheckState(Qt.CheckState.Checked if v else Qt.CheckState.Unchecked)
+        _texto_da_caixa(w)
+
     def mostrar_feicao(self, layer, ebgeo_id):
         """Seleciona e mostra a feição recém-criada."""
         if self.iface.activeLayer() is not layer:
@@ -247,8 +266,11 @@ class PainelCalco(QDockWidget):
             w.valueChanged.connect(lambda v, c=col, w=w: self._mudou(c, _valor_do_spin(w, v, 1000.0)))
         elif kind == 'bool':
             w = QCheckBox()
-            w.setChecked(False if nulo else bool(valor))
-            w.toggled.connect(lambda v, c=col: self._mudou(c, v))
+            if nulo:
+                self._mostrar_logico_nulo(col, w)
+            else:
+                w.setChecked(bool(valor))
+            w.stateChanged.connect(lambda _s, c=col, w=w: self._mudou(c, _valor_da_caixa(w)))
         elif kind == 'combo':
             w = QComboBox()
             imagens = spec[2] if len(spec) > 2 else {}
@@ -502,8 +524,6 @@ class PainelCalco(QDockWidget):
         if w is None:
             return
         altura_uniforme(w)
-        if el.coluna == 'visivel' and esp._nulo(attrs[el.coluna]):
-            w.setChecked(True)  # nulo vale "mostrar", como no estilo e no Web
         rotulo = QLabel(el.rotulo_para(attrs, rico=bool(el.rico)))
         dica = el.dica_para(attrs)
         if dica:  # a dica do Web, no rótulo e no campo
@@ -605,7 +625,11 @@ class PainelCalco(QDockWidget):
             else:
                 w.setValue(float(valor) * 1000.0)
         elif kind == 'bool':
-            w.setChecked(False if nulo else bool(valor))
+            if nulo:
+                self._mostrar_logico_nulo(col, w)
+            else:
+                w.setCheckState(Qt.CheckState.Checked if bool(valor) else Qt.CheckState.Unchecked)
+                _texto_da_caixa(w)
         elif kind == 'combo':
             i = w.findData(None if nulo else str(valor))
             if i >= 0:
@@ -781,6 +805,20 @@ def _rotulo_engenharia(codigo):
     except Exception:
         pass
     return str(codigo or '')
+
+
+def _valor_da_caixa(w):
+    """O valor da caixa de marcar; o terceiro estado ("Não definido") é nulo."""
+    _texto_da_caixa(w)
+    estado = w.checkState()
+    if estado == Qt.CheckState.PartiallyChecked:
+        return None
+    return estado == Qt.CheckState.Checked
+
+
+def _texto_da_caixa(w):
+    from .padrao_estilo import TEXTO_NULO
+    w.setText(TEXTO_NULO if w.checkState() == Qt.CheckState.PartiallyChecked else '')
 
 
 def _abrir_nulo(w):
