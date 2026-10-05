@@ -89,6 +89,7 @@ class PainelCalco(QDockWidget):
         self._linhas = []       # (elemento, condições, layout, widget, rótulo) do painel da especificação
         self._secoes = []       # (caixa, condições, layout pai)
         self._expressoes = {}
+        self._padroes = None    # o número que o estilo da camada desenha na coluna nula (padrao_estilo.py)
         self._gravar_timer = QTimer(self)
         self._gravar_timer.setSingleShot(True)
         self._gravar_timer.setInterval(350)
@@ -101,7 +102,9 @@ class PainelCalco(QDockWidget):
     def _camada_mudou(self, layer):
         if self.layer is not None:
             for sinal, slot in ((self.layer.selectionChanged, self._selecao_mudou),
-                                (self.layer.editingStopped, self._edicao_parou)):
+                                (self.layer.editingStopped, self._edicao_parou),
+                                (self.layer.rendererChanged, self._estilo_mudou),
+                                (self.layer.styleChanged, self._estilo_mudou)):
                 try:
                     sinal.disconnect(slot)
                 except (TypeError, RuntimeError):
@@ -109,14 +112,48 @@ class PainelCalco(QDockWidget):
         # a expressão avaliada guarda o índice da coluna da camada em que foi preparada: a mesma
         # condição ("show_label" ligado) na camada de outro tipo leria outra coluna
         self._expressoes = {}
+        self._padroes = None
         self.layer = layer if isinstance(layer, QgsVectorLayer) else None
         self.tipo = tipo_da_camada(self.layer)
         if self.layer is not None and self.tipo in esp.TIPOS_COM_FORMULARIO:
             self.layer.selectionChanged.connect(self._selecao_mudou)
             self.layer.editingStopped.connect(self._edicao_parou)
+            self.layer.rendererChanged.connect(self._estilo_mudou)
+            self.layer.styleChanged.connect(self._estilo_mudou)
             from .. import guardiao
             guardiao.garantir(self.layer, self.tipo)
         self._selecao_mudou()
+
+    def _estilo_mudou(self, *args):
+        self._padroes = None
+
+    def padrao_do_estilo(self, col):
+        """
+        O número que o estilo da camada desenha com a coluna nula, para a feição do dock, ou None
+        quando o estilo não dá número ao nulo (padrao_estilo.py). O dock o mostra, sem gravar.
+        """
+        if self.layer is None or self.fid is None:
+            return None
+        if self._padroes is None:
+            from .padrao_estilo import PadroesDoEstilo
+            self._padroes = PadroesDoEstilo(self.layer)
+        return self._padroes.valor(col, self.layer.getFeature(self.fid))
+
+    def _mostrar_nulo(self, col, w, fator=1.0):
+        """
+        A caixa giratória da coluna nula mostra o que o desenho usa: o número do estilo (a faixa se
+        abre para ele, se preciso) ou, sem número, "Não definido" um passo abaixo da faixa, que
+        grava nulo se o operador o escolher.
+        """
+        n = self.padrao_do_estilo(col)
+        if n is None:
+            _abrir_nulo(w)
+            w.setValue(w.minimum())
+            return
+        n *= fator
+        if not w.minimum() <= n <= w.maximum():
+            w.setRange(min(w.minimum(), n), max(w.maximum(), n))
+        w.setValue(n)
 
     def mostrar_feicao(self, layer, ebgeo_id):
         """Seleciona e mostra a feição recém-criada."""
@@ -192,16 +229,22 @@ class PainelCalco(QDockWidget):
             w.setDecimals(spec[4])
             if len(spec) > 5 and spec[5]:
                 w.setSuffix(spec[5])
-            w.setValue(spec[1] if nulo else float(valor))
-            w.valueChanged.connect(lambda v, c=col: self._mudou(c, v))
+            if nulo:
+                self._mostrar_nulo(col, w)
+            else:
+                w.setValue(float(valor))
+            w.valueChanged.connect(lambda v, c=col, w=w: self._mudou(c, _valor_do_spin(w, v)))
         elif kind == 'km_em_m':
             w = QDoubleSpinBox()
             w.setRange(spec[1], spec[2])
             w.setSingleStep(spec[3])
             w.setDecimals(0)
             w.setSuffix(' m')
-            w.setValue(spec[1] if nulo else float(valor) * 1000.0)
-            w.valueChanged.connect(lambda v, c=col: self._mudou(c, v / 1000.0))
+            if nulo:
+                self._mostrar_nulo(col, w, 1000.0)
+            else:
+                w.setValue(float(valor) * 1000.0)
+            w.valueChanged.connect(lambda v, c=col, w=w: self._mudou(c, _valor_do_spin(w, v, 1000.0)))
         elif kind == 'bool':
             w = QCheckBox()
             w.setChecked(False if nulo else bool(valor))
@@ -263,7 +306,7 @@ class PainelCalco(QDockWidget):
             b.clicked.connect(self._seletor_engenharia)
             h.addWidget(b)
         elif kind == 'azimute':
-            w = _spin_azimute(0 if nulo else valor)
+            w = _spin_azimute(self.padrao_do_estilo(col) if nulo else valor)
             w.valueChanged.connect(lambda v, c=col: self._mudou(c, float(v)))
         elif kind in ('dir_principal', 'dir_secundaria'):
             i = 0 if kind == 'dir_principal' else 1
@@ -552,9 +595,15 @@ class PainelCalco(QDockWidget):
         w, kind = self.widgets.get(col), self._tipos_widget.get(col)
         nulo = esp._nulo(valor)
         if kind == 'num':
-            w.setValue(w.minimum() if nulo else float(valor))
+            if nulo:
+                self._mostrar_nulo(col, w)
+            else:
+                w.setValue(float(valor))
         elif kind == 'km_em_m':
-            w.setValue(w.minimum() if nulo else float(valor) * 1000.0)
+            if nulo:
+                self._mostrar_nulo(col, w, 1000.0)
+            else:
+                w.setValue(float(valor) * 1000.0)
         elif kind == 'bool':
             w.setChecked(False if nulo else bool(valor))
         elif kind == 'combo':
@@ -732,6 +781,22 @@ def _rotulo_engenharia(codigo):
     except Exception:
         pass
     return str(codigo or '')
+
+
+def _abrir_nulo(w):
+    """Um passo abaixo da faixa, a caixa giratória mostra "Não definido" e vale nulo."""
+    from .padrao_estilo import TEXTO_NULO
+    if not w.property('ebgeo_nulo'):
+        w.setMinimum(w.minimum() - w.singleStep())
+        w.setSpecialValueText(TEXTO_NULO)
+        w.setProperty('ebgeo_nulo', True)
+
+
+def _valor_do_spin(w, v, fator=1.0):
+    """O valor da caixa giratória na unidade da coluna; "Não definido" é nulo."""
+    if w.property('ebgeo_nulo') and v == w.minimum():
+        return None
+    return v / fator
 
 
 def _numero_finito(v):
