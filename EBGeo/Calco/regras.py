@@ -324,8 +324,12 @@ def _area_coordenacao(anterior, mudadas):
         ligada = hachura_ligada(tipo_hachura)
         if valor(anterior.get('hatch_enabled')) != ligada:
             extra['hatch_enabled'] = ligada
-    from .estilos_area import HACHURAS_DESENHADAS
-    extra.update(opacidade_ao_ligar_hachura(anterior, mudadas, extra, HACHURAS_DESENHADAS))
+    # só quando a edição troca o tipo da hachura (ou o símbolo, que traz o dele): hatch_enabled
+    # não tem widget na Área, e o valor padrão na atualização o liga ao salvar QUALQUER mudança
+    # da área com tipo e caixa em desacordo; salvar só o nome não pode mudar a opacidade
+    if 'hatch_type' in extra or mudou(anterior, mudadas, 'hatch_type'):
+        from .estilos_area import HACHURAS_DESENHADAS
+        extra.update(opacidade_ao_ligar_hachura(anterior, mudadas, extra, HACHURAS_DESENHADAS))
     return extra
 
 

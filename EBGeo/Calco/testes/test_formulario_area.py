@@ -1300,6 +1300,9 @@ class TesteHachuraVisivelArea(unittest.TestCase):
         com = dict(ant, hatch_type='cross', hatch_enabled=True)
         self.assertEqual(am(com, {'hatch_type': 'dots'}), {})   # já tinha hachura: a área existente não muda
         self.assertEqual(am(com, {'nome': 'x'}), {})
+        # tipo e caixa em desacordo (cross desligada): o valor padrão liga a caixa ao salvar o nome, e a
+        # opacidade não muda; só a troca do tipo é escolha de hachura
+        self.assertEqual(am(dict(ant, hatch_type='cross'), {'nome': 'x', 'hatch_enabled': True}), {})
         # a troca para um tipo com hachura leva os padrões do tipo, opacidade 1 inclusive
         self.assertEqual(am(ant, {'symbol_code': '151100'})['opacity'], 1.0)
         # a opacidade no DEFAULT da coluna chega como "não definido" e vale o DEFAULT
@@ -1335,6 +1338,16 @@ class TesteHachuraVisivelArea(unittest.TestCase):
         pela_tabela(vl, fid, 'hatch_type', 'dots')
         f = vl.getFeature(fid)
         self.assertEqual((f['nome'], f['hatch_type'], f['opacity']), ('outro nome', 'dots', 0.0))
+        vl.rollBack()
+
+    def test_salvar_o_nome_em_desacordo_nao_muda_a_opacidade(self):
+        """Área com tipo cross e caixa desligada: salvar só o nome pelo nativo liga a caixa (valor padrão), não a opacidade."""
+        from test_guardiao import pelo_formulario
+        vl, fid = self._camada('desacordo', hatch_type='cross', hatch_enabled=False, opacity=0.0)
+        vl.startEditing()
+        pelo_formulario(vl, fid, {'nome': 'outro nome'})
+        f = vl.getFeature(fid)
+        self.assertEqual((f['nome'], f['hatch_enabled'], f['opacity']), ('outro nome', True, 0.0))
         vl.rollBack()
 
     def test_pior_caso_sem_a_regra_a_hachura_some(self):
