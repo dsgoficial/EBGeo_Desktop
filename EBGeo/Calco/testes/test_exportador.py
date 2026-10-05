@@ -442,6 +442,72 @@ def _wkt(g):
     return ogr.CreateGeometryFromJson(json.dumps(g)).ExportToIsoWkt()
 
 
+def _hausdorff_m(a, b):
+    """Hausdorff (m) entre duas geometrias GeoJSON, numa Transversa de Mercator local (R do turf)."""
+    from qgis.core import QgsCoordinateTransform
+    ga, gb = QgsGeometry.fromWkt(_wkt(a)), QgsGeometry.fromWkt(_wkt(b))
+    c = ga.centroid().asPoint()
+    crs = QgsCoordinateReferenceSystem('PROJ:+proj=tmerc +lat_0={} +lon_0={} +R=6371008.8 +units=m'.format(c.y(), c.x()))
+    tr = QgsCoordinateTransform(QgsCoordinateReferenceSystem('EPSG:4326'), crs, QgsProject.instance())
+    ga.transform(tr)
+    gb.transform(tr)
+    return ga.hausdorffDistance(gb)
+
+
+@unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
+class TestLimiteDeCirculo(unittest.TestCase):
+    """
+    K2: o Limite de escalão em círculo ('o', 'oo', 'ooo') criado no Desktop vai ao .ebgeo com o vão em
+    volta do símbolo, como o Web o grava (createLineWithGaps de add_boundary_geometry.js). Os três da
+    fixture 06 viram feições do Desktop (id novo, sem props) e o desenho exportado é comparado com a
+    geometria que o próprio Web gravou neles: o mesmo número de trechos e o desvio da paridade do Limite.
+    """
+
+    ESCALOES = ('o', 'oo', 'ooo')
+
+    @classmethod
+    def setUpClass(cls):
+        import uuid
+        cam = copia_06('limite_circulo')
+        l = _camada(cam, 'boundary')
+        cls.web = {}
+        l.startEditing()
+        for f in l.getFeatures():
+            if f['echelon'] in cls.ESCALOES:
+                novo = str(uuid.uuid4())
+                cls.web[novo] = f['echelon']
+                l.changeAttributeValue(f.id(), l.fields().indexOf('ebgeo_id'), novo)
+                l.changeAttributeValue(f.id(), l.fields().indexOf('props'), None)
+        assert l.commitChanges(), l.commitErrors()
+        orig = leitor.abrir(FIXTURE_06)
+        cls.gravado = {}
+        for k, f in feicoes_2d(orig.data).items():
+            if k[1] == 'boundarys' and f['properties'].get('echelon') in cls.ESCALOES:
+                cls.gravado[f['properties']['echelon']] = f['geometry']
+        cls.doc, cls.exp = exportar(cam)
+
+    def test_vao_como_o_web(self):
+        self.assertEqual(sorted(self.web.values()), sorted(self.ESCALOES))
+        saida = {k[2]: f for k, f in feicoes_2d(self.doc.data).items() if k[2] in self.web}
+        self.assertEqual(set(saida), set(self.web))
+        for eid, ech in self.web.items():
+            g, w = saida[eid]['geometry'], self.gravado[ech]
+            d = _hausdorff_m(w, g)
+            print('\nLimite {!r} criado no Desktop: {} trechos (Web {}), Hausdorff {:.2f} m'.format(
+                ech, len(g['coordinates']), len(w['coordinates']), d))
+            self.assertEqual((g['type'], len(g['coordinates'])), (w['type'], len(w['coordinates'])), ech)
+            self.assertLess(d, 1.5, ech)
+        self.assertEqual([a for a in self.exp.relatorio.avisos if 'Limite' in a], [])
+
+    def test_regua_reprova_eixo_inteiro(self):
+        """Pior caso: o eixo inteiro (a reserva de antes) tem um trecho só e passa longe do vão."""
+        for eid, ech in self.web.items():
+            p = next(f for k, f in feicoes_2d(self.doc.data).items() if k[2] == eid)['properties']
+            eixo = {'type': 'MultiLineString', 'coordinates': [p['baseCoordinates']]}
+            w = self.gravado[ech]
+            self.assertTrue(len(eixo['coordinates']) != len(w['coordinates']) or _hausdorff_m(w, eixo) >= 1.5, ech)
+
+
 @unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
 class TestArvore(unittest.TestCase):
     """O atlas no projeto: estado das camadas, mapa atual e a feição desenhada numa camada dele."""

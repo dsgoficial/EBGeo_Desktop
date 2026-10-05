@@ -511,6 +511,28 @@ class TestLimite(unittest.TestCase):
         raio = hav_m(centro_partes(partes(c)[0]), partes(c)[0][0])
         self.assertAlmostEqual(raio, 500 / 4, delta=1)
 
+    def test_escalao_so_de_circulos(self):
+        """
+        K2: 'o', 'oo' e 'ooo' não têm traço, e o eixo com os vãos tem de sair assim mesmo. Antes, a
+        instância sem traço dava a geometria nula, o collect do eixo com ela dava nulo, e o Limite
+        não desenhava eixo nenhum no QGIS (só os círculos) nem ia ao .ebgeo com o vão.
+        """
+        reta = [(-47.95, -15.80), (-47.76, -15.80)]
+        L = comprimento_km(reta)
+        for ech in ('o', 'oo', 'ooo'):
+            with self.subTest(ech=ech):
+                vl, f, g, c = self._limite(reta, echelon=ech, symbol_size_km=1.0,
+                                           symbol_instances='[{"ratio": 0.3}, {"ratio": 0.7}]')
+                self.assertTrue(g is not None and not g.isNull(), ech)
+                eixo = eixo_de_referencia(vl, f)
+                no_eixo = [p for p in partes(g) if not fora_do_eixo(p, eixo)]
+                self.assertEqual(len(no_eixo), 3)                      # dois vãos
+                self.assertEqual(len(partes(g)), 3)                    # e nenhum traço
+                s = min(1.0, L * 0.5 / (2 * len(ech) * 1.8))          # teto do tamanho (maxSymbolSizeForLine)
+                vao = len(ech) * s * 1.5 * 1.2
+                self.assertAlmostEqual(comprimento_partes_km(no_eixo), L - 2 * vao, delta=0.005)
+                self.assertEqual(len(partes(c)), 2 * len(ech))
+
     def test_rotulos(self):
         reta = [(-47.95, -15.80), (-47.76, -15.80)]       # rumo 90 (leste)
         vl, f = nova_feicao('boundary', reta, echelon='XX', symbol_size_km=1.0, text_top='NORTE',

@@ -10,14 +10,6 @@ Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `
 
 **Conserto sugerido.** Guardar as propriedades por ramo numa coluna JSON e fazer a expressão escolher, por parte da geometria (`@geometry_part_num`), as propriedades daquele ramo.
 
-## K2 Linha de Limite com escalão em círculo vai ao `.ebgeo` sem o vão
-
-**Sintoma.** Um Limite com escalão `o`, `oo` ou `ooo` criado ou editado no Desktop sai no `.ebgeo` com o eixo inteiro, sem o vão em volta do símbolo; o Web só o redesenha quando a ferramenta de Limite carrega.
-
-**Onde.** `EBGeo/Calco/exportador/desenho.py`, que calcula o desenho dos táticos a partir do estilo.
-
-**Conserto sugerido.** Recortar o vão no desenho exportado como o Web faz (`add_boundary_geometry.js` do Web), conferindo contra a geometria gravada pelo Web numa fixture.
-
 ## K3 Desenho num atlas importado, num tipo que o mapa ainda não tem
 
 **Sintoma.** Sem uma camada daquele tipo selecionada, a ferramenta cria o grupo "Calco: nome" fora da árvore do atlas, e a feição nova não fica no mapa e na camada do EBGeo esperados.

@@ -1,6 +1,9 @@
 /* Os glifos do escalão de cada instância (createEchelonSymbol): glifos espaçados
    1,5 x tamanho ao longo do rumo local, o conjunto centrado em L x ratio.
-   @@FORMA@@ dá a geometria do caractere @ch centrado em @ci. */
+   @@FORMA@@ dá a geometria do caractere @ch centrado em @ci. A instância sem nenhum traço
+   (o escalão só de círculos, 'o', 'oo', 'ooo', nas linhas) dá collect_geometries de uma lista
+   vazia, que é a geometria NULA e não o valor nulo: o filtro a tira, senão o collect do eixo
+   com ela dá nulo e o Limite inteiro some (o desenho e o .ebgeo exportado). */
 array_filter(array_foreach(generate_series(0, @ni - 1),
   @@SEJA@@
   @@INSTANCIA:I=@element@@
@@ -18,4 +21,4 @@ array_filter(array_foreach(generate_series(0, @ni - 1),
       @@FIM@@), @element IS NOT NULL))
   END
   @@FIM@@),
-  @element IS NOT NULL)
+  NOT is_empty_or_null(@element))
