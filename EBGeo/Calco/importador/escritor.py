@@ -613,6 +613,7 @@ def gravar_documento(doc, caminho_gpkg, log=None, sobrescrever=True, feedback=No
     rel.colunas_atributos = colunas_attr
     tipos_apoio = {n: dict(cols) for n, cols in schema.TABELAS_APOIO.items()}
     renderizar = None
+    guardadas = set()  # ids de images/ que alguma tabela guardou; o resto vai para ebgeo_imagem
     ordem = leitor.ordem_mapas(data)
     atual = leitor.mapa_atual(data)
     total_feicoes = sum(len(l) for m in data['maps'].values() for l in (m.get('features') or {}).values()) or 1
@@ -632,6 +633,7 @@ def gravar_documento(doc, caminho_gpkg, log=None, sobrescrever=True, feedback=No
         for ic in data.get('customIcons') or []:
             blob = doc.imagens.get(ic.get('id'))
             if blob:
+                guardadas.add(ic.get('id'))
                 mime, b64 = blob[1], base64.b64encode(blob[0]).decode('ascii')
             else:
                 mime, b64 = _data_url(ic.get('thumbnail'))
@@ -732,6 +734,7 @@ def gravar_documento(doc, caminho_gpkg, log=None, sobrescrever=True, feedback=No
                     if tem_bitmap:
                         blob = doc.imagens.get(p.get('id'))
                         if blob:
+                            guardadas.add(p.get('id'))
                             linha['bitmap_b64'] = base64.b64encode(blob[0]).decode('ascii')
                             linha['bitmap_mime'] = blob[1]
                         elif tipo == 'image':
@@ -753,9 +756,17 @@ def gravar_documento(doc, caminho_gpkg, log=None, sobrescrever=True, feedback=No
                     lyr.CreateFeature(feat)
                     rel.contagem[tipo] = rel.contagem.get(tipo, 0) + 1
 
-                    _gravar_fotos(ds, doc, p, tipos_apoio['ebgeo_foto'], rel, log, nome)
+                    guardadas.update(_gravar_fotos(ds, doc, p, tipos_apoio['ebgeo_foto'], rel, log, nome))
                     if feedback and feitas % 50 == 0:
                         feedback(min(1.0, feitas / total_feicoes))
+
+        # imagens sem dono no 2D (3D, 360, slides, feição descartada): guardadas para o exportador
+        lyr = ds.GetLayerByName('ebgeo_imagem')
+        for ident, (b, mime) in doc.imagens.items():
+            if ident not in guardadas:
+                lyr.CreateFeature(_novo_registro(lyr, {
+                    'imagem_id': ident, 'mime': mime, 'bitmap_b64': base64.b64encode(b).decode('ascii')},
+                    tipos_apoio['ebgeo_imagem']))
         ds.CommitTransaction()
     except Exception:
         try:
@@ -774,9 +785,11 @@ def gravar_documento(doc, caminho_gpkg, log=None, sobrescrever=True, feedback=No
 
 
 def _gravar_fotos(ds, doc, p, tipos, rel, log, mapa):
+    """Grava as fotos anexas da feição em ebgeo_foto. Devolve os ids de images/ que usou."""
+    usados = set()
     fotos = p.get('images')
     if not isinstance(fotos, list) or not fotos:
-        return
+        return usados
     lyr = ds.GetLayerByName('ebgeo_foto')
     for f in fotos:
         if isinstance(f, str):
@@ -787,6 +800,7 @@ def _gravar_fotos(ds, doc, p, tipos, rel, log, mapa):
         if b64 is None and f.get('id') in doc.imagens:
             b, mime = doc.imagens[f['id']]
             b64 = base64.b64encode(b).decode('ascii')
+            usados.add(f['id'])
         _mt, mini = _data_url(f.get('thumbnail'))
         if b64 is None:
             msg = 'mapa "{}": foto {} ({}) da feição {} sem bytes no arquivo: perda'.format(
@@ -796,6 +810,7 @@ def _gravar_fotos(ds, doc, p, tipos, rel, log, mapa):
         lyr.CreateFeature(_novo_registro(lyr, {
             'ebgeo_id': p.get('id'), 'foto_id': f.get('id'), 'nome': f.get('name'),
             'mime': mime or f.get('type'), 'bitmap_b64': b64, 'miniatura_b64': mini}, tipos))
+    return usados
 
 
 # ---------------------------------------------------------------- releitura (conferência)

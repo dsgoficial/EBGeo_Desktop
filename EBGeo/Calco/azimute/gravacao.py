@@ -147,7 +147,14 @@ def criar(calco, estado, zoom=None):
     for geo, p in itens:
         p['id'] = str(uuid.uuid4())
         f = QgsFeature(lyr.fields())
-        for nome, valor in _linha(tipo, p).items():
+        from ..ferramentas import mapa_e_camada
+        alvo = mapa_e_camada(lyr)
+        linha = _linha(tipo, p, alvo.get('mapa', 'Principal'))
+        if 'camada_id' in alvo:
+            linha['camada_id'] = alvo['camada_id']
+            p['layerId'] = alvo['camada_id']
+            linha['props'] = json.dumps(p, ensure_ascii=False)
+        for nome, valor in linha.items():
             i = lyr.fields().indexOf(nome)
             if i >= 0:
                 f.setAttribute(i, _para_qgis(lyr, nome, valor))

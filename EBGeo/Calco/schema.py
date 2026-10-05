@@ -380,6 +380,9 @@ TABELAS_APOIO = {
     'ebgeo_icone': [('icone_id', 'str'), ('nome', 'str'), ('mime', 'str'), ('bitmap_b64', 'str')],
     'ebgeo_foto': [('ebgeo_id', 'str'), ('foto_id', 'str'), ('nome', 'str'), ('mime', 'str'),
                    ('bitmap_b64', 'str'), ('miniatura_b64', 'str')],
+    # As imagens do arquivo que nenhuma tabela acima guardou (fotos de itens 3D e 360, figuras de
+    # slide, bitmap de feição descartada): o exportador as devolve em images/ (ida e volta sem perda).
+    'ebgeo_imagem': [('imagem_id', 'str'), ('mime', 'str'), ('bitmap_b64', 'str')],
 }
 
 

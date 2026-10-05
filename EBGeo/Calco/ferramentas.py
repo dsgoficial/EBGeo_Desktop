@@ -74,6 +74,23 @@ def atributos_iniciais(tipo, canvas):
     return attrs
 
 
+def mapa_e_camada(layer):
+    """
+    {'mapa', 'camada_id'} da camada de um atlas importado (propriedades ebgeo/mapa e
+    ebgeo/camada_id que a árvore grava), ou {} na camada do calco comum. Sem isso a feição
+    desenhada nascia com os padrões do esquema ('Principal', 'default'): saía do filtro da
+    camada em que foi desenhada e ia ao mapa errado na exportação.
+    """
+    from .importador.arvore import PROP_MAPA, PROP_CAMADA
+    out = {}
+    mapa, camada = layer.customProperty(PROP_MAPA), layer.customProperty(PROP_CAMADA)
+    if mapa:
+        out['mapa'] = str(mapa)
+    if camada:
+        out['camada_id'] = str(camada)
+    return out
+
+
 def gravar_feicao(layer, tipo, geometria_wgs84, atributos):
     """
     Grava a feição na camada. Tipos de símbolo pontual recebem o SVG gerado pelo motor.
@@ -81,6 +98,7 @@ def gravar_feicao(layer, tipo, geometria_wgs84, atributos):
     Devolve o ebgeo_id gravado (ou None em falha).
     """
     attrs = dict(atributos)
+    attrs.update(mapa_e_camada(layer))
     if schema.TIPOS[tipo]['desenho'] == 'svg':
         try:
             from . import simbolos
@@ -125,6 +143,12 @@ class _Base(QgsMapTool):
             if self.iface:
                 self.iface.messageBar().pushWarning('EBGeo', 'Crie ou abra um calco antes de desenhar.')
             return None
+        # a camada selecionada, quando é deste calco e deste tipo: num atlas importado é ela que
+        # diz o mapa e a camada EBGeo em que o operador está desenhando
+        ativa = self.iface.activeLayer() if self.iface else None
+        from .calco import PROP_CAMINHO, PROP_TIPO
+        if ativa is not None and ativa.customProperty(PROP_CAMINHO) == c.caminho                 and ativa.customProperty(PROP_TIPO) == self.tipo:
+            return ativa
         return c.camada(self.tipo)
 
     def _wgs(self, ponto_mapa):

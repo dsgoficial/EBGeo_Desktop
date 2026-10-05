@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Barra "Simbologia Militar" e submenu do EBGeo: criar/abrir calco, as 8 ferramentas
-do EBGeo Web, o painel de propriedades e a importação do .ebgeo.
+do EBGeo Web, o painel de propriedades, a importação e a exportação do .ebgeo.
 """
 import os
 
@@ -57,6 +57,7 @@ class GerenciadorCalco:
         self._acao('calco_novo.svg', 'Novo calco...', self.novo_calco)
         self._acao('calco_abrir.svg', 'Abrir calco...', self.abrir_calco)
         self._acao('importar_ebgeo.svg', 'Importar arquivo .ebgeo...', self.importar_ebgeo)
+        self._acao('exportar_ebgeo.svg', 'Exportar arquivo .ebgeo...', self.exportar_ebgeo)
         self.toolbar.addSeparator()
         self.menu.addSeparator()
 
@@ -259,6 +260,53 @@ class GerenciadorCalco:
             processing.execAlgorithmDialog('EBGeoProvider:importarebgeo')
         except Exception as e:
             self.iface.messageBar().pushCritical('EBGeo', 'Importador indisponível: {}'.format(e))
+
+    def calco_para_exportar(self):
+        """O GeoPackage da camada selecionada, se for de um calco ou atlas; senão, o do calco ativo."""
+        from .calco import PROP_CAMINHO
+        ativa = self.iface.activeLayer()
+        caminho = ativa.customProperty(PROP_CAMINHO) if ativa is not None else None
+        if isinstance(caminho, str) and os.path.exists(caminho):
+            return caminho
+        c = calco_ativo()
+        return c.caminho if c is not None else None
+
+    def exportar_ebgeo(self, *_args, perguntar=None):
+        """
+        Abre o diálogo do algoritmo "Exportar arquivo .ebgeo" com o calco preenchido. O arquivo sai
+        do que está GRAVADO no GeoPackage: com edição pendente, pergunta se salva antes.
+        `perguntar` substitui a caixa de mensagem (testes).
+        """
+        from qgis import processing
+        from qgis.PyQt.QtWidgets import QMessageBox
+        from .exportador.desenho import edicoes_pendentes
+        caminho = self.calco_para_exportar()
+        if caminho:
+            pendentes = edicoes_pendentes(caminho, QgsProject.instance())
+            if pendentes:
+                texto = ('Há edições não salvas em {}.\n\nO arquivo .ebgeo sai do que está gravado no '
+                         'GeoPackage. Salvar as edições antes de exportar?').format(
+                    ', '.join(sorted({l.name() for l in pendentes})))
+                botoes = QMessageBox.StandardButton
+                if perguntar is not None:
+                    r = perguntar(texto)
+                else:
+                    r = QMessageBox.question(self.iface.mainWindow(), 'Exportar arquivo .ebgeo', texto,
+                                             botoes.Save | botoes.Ignore | botoes.Cancel, botoes.Save)
+                if r == botoes.Cancel:
+                    return None
+                if r == botoes.Save:
+                    for l in pendentes:
+                        if not l.commitChanges(False):
+                            self.iface.messageBar().pushCritical(
+                                'EBGeo', 'Não foi possível salvar {}: {}'.format(l.name(), '; '.join(l.commitErrors())))
+                            return None
+        try:
+            return processing.execAlgorithmDialog('EBGeoProvider:exportarebgeo',
+                                                  {'CALCO': caminho} if caminho else {})
+        except Exception as e:
+            self.iface.messageBar().pushCritical('EBGeo', 'Exportador indisponível: {}'.format(e))
+            return None
 
     # ---------- quadro de convenções ----------
     def _designer_aberto(self, designer):
