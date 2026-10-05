@@ -21,6 +21,9 @@ Formulário das feições comuns do mapa 2D (formulario/tipos/comuns.py), da aba
   - Dock: os mesmos campos que a especificação, a seção Fotos lida do GeoPackage (miniaturas,
     Abrir sem apagar nada), o resumo do Azimute e o "Editar pernas..." que abre o painel do
     Azimute em edição, e Salvar e Descartar no buffer.
+  - Hachura das formas (decisão do chefe, 2026-10-05): espaçamento e espessura só aparecem quando
+    o estilo desenha a hachura (caixa marcada e um tipo das camadas de padrão), conferido contra o
+    estilo da camada em todas as combinações, ao vivo no nativo sem o plugin e no dock.
 
 Capturas do formulário nativo (com e sem o plugin) e do dock em EBGEO_TESTE_SAIDA (padrão:
 temporária); com QT_QPA_PLATFORM=offscreen, o texto só sai legível com QT_QPA_FONTDIR apontando
@@ -62,6 +65,8 @@ from Calco.calco import Calco, PROP_CAMINHO, PROP_TIPO, definir_calco_ativo  # n
 from Calco.formulario import especificacao as esp, fotos as F  # noqa: E402
 from Calco.formulario import nativo  # noqa: E402,F401 (carregado já: o estilizar o importa sob demanda)
 from Calco.formulario.tipos import comuns as CM  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_formulario_sem_plugin as tfs  # noqa: E402  (a régua da hachura lida do estilo e os passos ao vivo)
 
 FIXTURES = os.path.abspath(os.environ.get('EBGEO_FIXTURES') or os.path.join(RAIZ_REPO, '..', '_ebgeo_dados_teste'))
 FIXTURE_06 = os.path.join(FIXTURES, '06-completo-3.0.ebgeo')
@@ -539,22 +544,26 @@ class TesteEspecificacao(unittest.TestCase):
     def test_condicoes_python_iguais_a_expressao(self):
         campos = QgsFields()
         for n, t in (('show_label', QMetaType.Type.Bool), ('hatch_enabled', QMetaType.Type.Bool),
-                     ('show_background', QMetaType.Type.Bool), (CM.COLUNA_AZIMUTE, QMetaType.Type.QString)):
+                     ('show_background', QMetaType.Type.Bool), (CM.COLUNA_AZIMUTE, QMetaType.Type.QString),
+                     ('hatch_type', QMetaType.Type.QString)):
             campos.append(QgsField(n, t))
         conds = [CM.Ligado('show_label'), CM.Ligado('hatch_enabled'), CM.Ligado('show_background'),
-                 CM.Preenchida(CM.COLUNA_AZIMUTE)]
+                 CM.Preenchida(CM.COLUNA_AZIMUTE), CM.com_hachura(), esp.formulario('polygon').campo('hatch_spacing').condicao]
         n = 0
         for v in (True, False, None):
             for az in ('{"legs": []}', None):
-                f = QgsFeature(campos)
-                f.setAttributes([v, v, v, az])
-                attrs = {'show_label': v, 'hatch_enabled': v, 'show_background': v, CM.COLUNA_AZIMUTE: az}
-                ctx = QgsExpressionContext()
-                ctx.setFeature(f)
-                for c in conds:
-                    e = QgsExpression(c.expressao())
-                    self.assertEqual(bool(e.evaluate(ctx)), c.avaliar(attrs), (c, v, az))
-                    n += 1
+                for tipo_h in VALORES_HACHURA:
+                    f = QgsFeature(campos)
+                    f.setAttributes([v, v, v, az, tipo_h])
+                    attrs = {'show_label': v, 'hatch_enabled': v, 'show_background': v, CM.COLUNA_AZIMUTE: az,
+                             'hatch_type': tipo_h}
+                    ctx = QgsExpressionContext()
+                    ctx.setFeature(f)
+                    for c in conds:
+                        e = QgsExpression(c.expressao())
+                        self.assertEqual(bool(e.evaluate(ctx)), c.avaliar(attrs), (c, v, az, tipo_h))
+                        self.assertFalse(e.hasEvalError(), e.evalErrorString())
+                        n += 1
         MEDIDAS.append('condições próprias: {} avaliações, Python igual à expressão QGIS'.format(n))
 
     def test_expressoes_dos_textos_se_leem(self):
@@ -566,6 +575,69 @@ class TesteEspecificacao(unittest.TestCase):
                     self.assertFalse(e.hasParserError(), (tipo, el.nome, e.parserErrorString()))
                 for c in conds:
                     self.assertFalse(QgsExpression(c.expressao()).hasParserError(), (tipo, c))
+
+
+# ---------------------------------------------------------------------------------------------
+# Hachura das formas: só com hachura (decisão do chefe, 2026-10-05)
+# ---------------------------------------------------------------------------------------------
+
+SO_COM_HACHURA = ('hatch_line_width', 'hatch_spacing')
+# as opções da lista, o nulo, o vazio e um tipo desconhecido (o estilo não desenha os três últimos)
+VALORES_HACHURA = [v for v, _r in CM.HACHURAS] + [None, '', 'desconhecida']
+
+
+def divergencias_hachura(spec, desenha):
+    """[(hatch_type, hatch_enabled, coluna, mostra, esperado)] contra o estilo da camada."""
+    erros = []
+    for tipo_h in VALORES_HACHURA:
+        for ligada in (True, False, None):
+            attrs = {'hatch_type': tipo_h, 'hatch_enabled': ligada}
+            d = desenha(attrs)
+            for col in SO_COM_HACHURA:
+                if spec.visivel(col, attrs) != d:
+                    erros.append((tipo_h, ligada, col, spec.visivel(col, attrs), d))
+            if spec.visivel('hatch_type', attrs) != bool(ligada):  # o padrão aparece com a caixa marcada
+                erros.append((tipo_h, ligada, 'hatch_type', spec.visivel('hatch_type', attrs), bool(ligada)))
+    return erros
+
+
+class TesteHachuraFormas(unittest.TestCase):
+    """A régua é o estilo de cada forma (tfs.hachura_desenhada), em 11 tipos de hachura x 3 estados da caixa."""
+    @classmethod
+    def setUpClass(cls):
+        from Calco import calco as C, gpkg
+        cls.desenha = {}
+        for tipo in CM.FORMAS:
+            caminho = os.path.join(TMP, 'hachura_{}.gpkg'.format(tipo))
+            gpkg.criar_calco(caminho, [tipo])
+            vl = QgsVectorLayer('{}|layername={}'.format(caminho, schema.TIPOS[tipo]['tabela']), tipo, 'ogr')
+            C.aplicar_estilo(vl, tipo)
+            cls.desenha[tipo] = tfs.hachura_desenhada(vl)
+
+    def test_campos_da_hachura_so_quando_o_estilo_desenha(self):
+        for tipo in CM.FORMAS:
+            self.assertEqual(divergencias_hachura(esp.formulario(tipo), self.desenha[tipo]), [], tipo)
+        d = self.desenha['polygon']
+        com = sum(1 for t in VALORES_HACHURA for e in (True, False, None) if d({'hatch_type': t, 'hatch_enabled': e}))
+        MEDIDAS.append('hachura das {} formas: {} combinações de tipo e caixa por forma conferidas com o estilo; '
+                       '{} desenham e mostram espaçamento e espessura'.format(len(CM.FORMAS), len(VALORES_HACHURA) * 3, com))
+
+    def test_pior_caso_condicoes_degradadas_reprovam(self):
+        from Calco.estilos_formas import HACHURAS_DESENHADAS
+        casos = {
+            'só a caixa marcada (o código de antes)': CM.Ligado('hatch_enabled'),
+            'sem condição': None,
+            "caixa marcada e tipo diferente de 'none' (mostra no nulo, no vazio e no desconhecido)":
+                esp.Todas((CM.Ligado('hatch_enabled'), esp.Condicao('hatch_type', frozenset({'none'}), negar=True))),
+            'só o tipo (mostra com a caixa desmarcada)': esp.Condicao('hatch_type', HACHURAS_DESENHADAS),
+        }
+        for nome, cond in casos.items():
+            spec = esp.formulario('polygon')
+            for col in SO_COM_HACHURA:
+                spec.campo(col).condicao = cond
+            erros = divergencias_hachura(spec, self.desenha['polygon'])
+            MEDIDAS.append('pior caso da hachura do polígono, {}: {} divergências'.format(nome, len(erros)))
+            self.assertTrue(erros, nome)
 
 
 @unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06-completo-3.0.ebgeo ausente')
@@ -716,6 +788,66 @@ class TesteNativoSemPlugin(unittest.TestCase):
         dif = _pixels_diferentes(ia, ip)
         MEDIDAS.append('pior caso do desenho (borda de 2 para 9 px num polígono): {} pixels diferentes'.format(dif))
         self.assertGreater(dif, 0)
+
+    PASSOS_HACHURA = (('hatch_type', 'cross', 'nativo_polygon_com_hachura_sem_plugin.png'),
+                      ('hatch_type', 'none', 'nativo_polygon_hachura_nenhuma_sem_plugin.png'),
+                      ('hatch_type', 'dots', ''),
+                      ('hatch_enabled', False, 'nativo_polygon_sem_hachura_sem_plugin.png'),
+                      ('hatch_enabled', True, ''))
+
+    def _hachura_ao_vivo(self, caminho, pasta=''):
+        """O operador mexe na hachura do polígono 'Hachura cross' no nativo sem o plugin; erros contra o estilo."""
+        vl = QgsVectorLayer('{}|layername=polygon'.format(caminho), 'polygon', 'ogr')
+        desenha = tfs.hachura_desenhada(vl)
+        f = next(vl.getFeatures("\"nome\" = 'Hachura cross'"))
+        estado = {'hatch_type': f['hatch_type'], 'hatch_enabled': f['hatch_enabled']}
+        res, codigo = tfs.rodar_passos(caminho, 'polygon', 'Hachura cross', 'Aparência',
+                                       ('hatch_enabled', 'hatch_type') + SO_COM_HACHURA, self.PASSOS_HACHURA, pasta)
+        erros = [] if codigo == 0 and res.get('etapa') == 'fim' else ['processo saiu com {} na etapa {}'.format(
+            codigo, res.get('etapa'))]
+        estados = [dict(estado)]
+        for col, valor, _arq in self.PASSOS_HACHURA:
+            estado[col] = valor
+            estados.append(dict(estado))
+        if len(res.get('passos') or []) != len(estados):
+            erros.append('passos {}'.format(res.get('passos')))
+        for st, passo in zip(estados, res.get('passos') or []):
+            esperado_ = {'hatch_enabled'} | ({'hatch_type'} if st['hatch_enabled'] else set()) | \
+                (set(SO_COM_HACHURA) if desenha(st) else set())
+            if set(passo['visiveis']) != esperado_:
+                erros.append('{}: à mostra {}, esperado {}'.format(passo['passo'], passo['visiveis'], sorted(esperado_)))
+        if res.get('modulos_ebgeo'):
+            erros.append('o plugin estava carregado')
+        return res, erros
+
+    def test_hachura_ao_vivo_sem_plugin(self):
+        copia = os.path.join(TMP, 'hachura_ao_vivo.gpkg')
+        shutil.copy(self.importado, copia)
+        res, erros = self._hachura_ao_vivo(copia, SAIDA)
+        self.assertEqual(erros, [], erros)
+        MEDIDAS.append('hachura do polígono ao vivo no nativo sem o plugin: ' + '; '.join(
+            '{} -> {}'.format(p['passo'], p['visiveis']) for p in res['passos']))
+
+    def test_pior_caso_hachura_so_pela_caixa_reprova(self):
+        """O estilo real com a condição do espaçamento de antes (só a caixa): 'Nenhuma' ainda o mostra."""
+        def degrada(vl):
+            fc = vl.editFormConfig()
+            achados = []
+
+            def andar(cont):
+                for el in cont.children():
+                    if hasattr(el, 'children'):
+                        if any(x.name() == 'hatch_spacing' for x in el.children()) and el.visibilityExpression().enabled():
+                            el.setVisibilityExpression(QgsOptionalExpression(QgsExpression(CM.Ligado('hatch_enabled').expressao())))
+                            achados.append(el.name())
+                        andar(el)
+            andar(fc.invisibleRootContainer())
+            self.assertEqual(len(achados), 1, achados)
+            vl.setEditFormConfig(fc)
+        caminho = _degradar(self.importado, 'hachura_caixa', 'polygon', degrada)
+        _res, erros = self._hachura_ao_vivo(caminho)
+        MEDIDAS.append('pior caso da hachura do polígono ao vivo, só pela caixa: {}'.format(erros))
+        self.assertTrue(any(e.startswith('hatch_type = none:') and 'hatch_spacing' in e for e in erros), erros)
 
     def test_retrato_de_antes_reprova(self):
         """O código de 86f7d3b (formulário autogerado) não passa na régua."""
@@ -1002,6 +1134,35 @@ class TesteDock(unittest.TestCase):
         _app.processEvents()
         self.assertFalse(vl.isEditable())
         self.assertTrue(next(vl.getFeatures("\"ebgeo_id\" = '{}'".format(eid)))['hatch_enabled'])
+
+    def test_hachura_no_dock_so_com_hachura(self):
+        """No dock: 'Nenhuma' ou a caixa desmarcada escondem espaçamento e espessura (no buffer; Descartar volta)."""
+        vl, eid = self._mostrar('polygon', 'Hachura cross')
+        desenha = tfs.hachura_desenhada(vl)
+        vistos = []
+        for col, valor, arquivo in (('hatch_type', 'none', 'dock_polygon_hachura_nenhuma.png'), ('hatch_type', 'dots', ''),
+                                    ('hatch_enabled', False, 'dock_polygon_sem_hachura.png'), ('hatch_enabled', True, '')):
+            w = self.painel.widgets[col]
+            if col == 'hatch_type':
+                w.setCurrentIndex(w.findData(valor))
+            else:
+                w.setChecked(valor)
+            self.painel._gravar_pendentes()
+            _app.processEvents()
+            f = vl.getFeature(self.painel.fid)
+            d = desenha({'hatch_type': f['hatch_type'], 'hatch_enabled': f['hatch_enabled']})
+            vis = self.painel.campos_visiveis()
+            self.assertEqual(set(SO_COM_HACHURA) & vis, set(SO_COM_HACHURA) if d else set(), (col, valor))
+            self.assertEqual('hatch_type' in vis, bool(f['hatch_enabled']), (col, valor))
+            for c in SO_COM_HACHURA:
+                self.assertEqual(self.painel.widgets[c].isHidden(), not d, (col, valor, c))
+            vistos.append('{} = {} -> {}'.format(col, valor, sorted(set(SO_COM_HACHURA) & vis)))
+            if arquivo:
+                self._capturar(arquivo)
+        MEDIDAS.append('hachura do polígono no dock: ' + '; '.join(vistos))
+        self.assertTrue(self.painel.descartar())
+        _app.processEvents()
+        self.assertEqual(next(vl.getFeatures("\"ebgeo_id\" = '{}'".format(eid)))['hatch_type'], 'cross')
 
     def test_guardiao_reverte_a_bloqueada_editada_pela_tabela(self):
         from Calco import guardiao

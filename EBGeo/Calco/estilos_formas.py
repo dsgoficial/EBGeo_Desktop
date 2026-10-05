@@ -358,6 +358,10 @@ _HACHURAS = [  # (ângulo QGIS, tipos que o ligam)
     (90, ('vertical', 'cross')),
 ]
 COND_HACHURA = "coalesce(\"hatch_enabled\", false) AND coalesce(\"hatch_type\", 'none') <> 'none'"
+HACHURA_PONTOS = 'dots'  # a única desenhada por padrão de pontos (QgsPointPatternFillSymbolLayer)
+# Os tipos que o estilo desenha, lidos das camadas de padrão abaixo: o formulário mostra o
+# espaçamento e a espessura da hachura só com um deles (formulario/tipos/comuns.py).
+HACHURAS_DESENHADAS = frozenset(t for _a, tipos in _HACHURAS for t in tipos) | {HACHURA_PONTOS}
 
 
 def _estilo_forma(layer):
@@ -399,7 +403,7 @@ def _estilo_forma(layer):
     dot.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p(cor_h))
     msub.appendSymbolLayer(dot)
     pp.setSubSymbol(msub)
-    pp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p("{} AND \"hatch_type\" = 'dots'".format(COND_HACHURA)))
+    pp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p("{} AND \"hatch_type\" = '{}'".format(COND_HACHURA, HACHURA_PONTOS)))
     s.appendSymbolLayer(pp)
     # contorno com opacidade 1 (polygon.layers.js:117)
     for sl in _linhas_com_traco("coalesce(\"line_color\", '#3388ff')", 'coalesce("line_width", 2)'):

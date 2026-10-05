@@ -80,6 +80,8 @@ TODAS_ANTIGAS = frozenset().union(*RETRATO_DOCK.values())
 ESCALAO_NO_ROTULO = {c: c == '151203' for c in RETRATO_DOCK}
 # o que a especificação acrescenta ao dock de antes, em todo tipo
 NOVAS_SEMPRE = frozenset({'visivel', 'ebgeo_id', 'mapa', 'camada_id', 'criado_em', 'atualizado_em', 'bloqueado'})
+# decisão do chefe (2026-10-05): o que só vale com hachura some sem ela (o dock de antes os mostrava sempre)
+SO_COM_HACHURA = frozenset({'hatch_spacing', 'hatch_line_width'})
 
 
 def colunas_do_dock(spec, attrs):
@@ -96,15 +98,44 @@ def divergencias(spec):
     """[(código, esperado, obtido)] onde a especificação discorda do retrato do dock de antes."""
     erros = []
     for codigo, antigas in RETRATO_DOCK.items():
-        attrs = {'symbol_code': codigo}
-        vistas = colunas_do_dock(spec, attrs)
-        if vistas & TODAS_ANTIGAS != antigas:
-            erros.append((codigo, sorted(antigas - vistas), sorted((vistas & TODAS_ANTIGAS) - antigas)))
-        if not NOVAS_SEMPRE <= vistas:
-            erros.append((codigo, 'novas', sorted(NOVAS_SEMPRE - vistas)))
-        rot = spec.campo('text_ratio').rotulo_para(attrs)
-        if ('escalão' in rot) != ESCALAO_NO_ROTULO[codigo]:
-            erros.append((codigo, 'rótulo', rot))
+        for hachura in ('none', 'cross'):
+            attrs = {'symbol_code': codigo, 'hatch_type': hachura, 'hatch_enabled': hachura != 'none'}
+            esperadas = antigas if hachura != 'none' else antigas - SO_COM_HACHURA
+            vistas = colunas_do_dock(spec, attrs)
+            if vistas & TODAS_ANTIGAS != esperadas:
+                erros.append((codigo, sorted(esperadas - vistas), sorted((vistas & TODAS_ANTIGAS) - esperadas)))
+            if not NOVAS_SEMPRE <= vistas:
+                erros.append((codigo, 'novas', sorted(NOVAS_SEMPRE - vistas)))
+            rot = spec.campo('text_ratio').rotulo_para(attrs)
+            if ('escalão' in rot) != ESCALAO_NO_ROTULO[codigo]:
+                erros.append((codigo, 'rótulo', rot))
+    return erros
+
+
+# Os valores de hatch_type que a régua da hachura percorre: as opções da lista, o nulo, o vazio e
+# um tipo desconhecido (o estilo não desenha os três últimos).
+VALORES_HACHURA = [v for v, _r in ea.HACHURAS] + [None, '', 'desconhecida']
+
+
+def divergencias_hachura(spec, desenha, sincronizar):
+    """
+    [(hatch_type, hatch_enabled, coluna, mostra, desenha)] onde o formulário mostra o campo da
+    hachura e o estilo não a desenha, ou o contrário. `sincronizar(attrs)` dá a feição como o
+    salvar a deixa (na Área, hatch_enabled sai do valor padrão aplicado na atualização); o
+    formulário é avaliado na feição como ABRE, porque hatch_enabled não tem widget e o nativo não
+    o renova antes de salvar (medido: tipos/area.py).
+    """
+    erros = []
+    for tipo_h in VALORES_HACHURA:
+        for ligada in (True, False, None):
+            attrs = {'symbol_code': '150000', 'hatch_type': tipo_h, 'hatch_enabled': ligada}
+            d = desenha(sincronizar(attrs))
+            for col in sorted(SO_COM_HACHURA):
+                m = spec.visivel(col, attrs)
+                if m != d:
+                    erros.append((tipo_h, ligada, col, m, d))
+            if not spec.visivel('hatch_type', attrs):
+                erros.append((tipo_h, ligada, 'hatch_type', False, d))
     return erros
 
 
@@ -484,7 +515,7 @@ class TesteEspecificacaoArea(unittest.TestCase):
         ruim = copy.deepcopy(self.spec)
         c = ruim.campo('outras_info')
         c.condicao = esp.Condicao(c.condicao.coluna, c.condicao.valores, not c.condicao.negar)
-        self.assertEqual(len(divergencias(ruim)), len(RETRATO_DOCK))
+        self.assertEqual({e[0] for e in divergencias(ruim)}, set(RETRATO_DOCK))
         # pior caso 3: o grupo dos portões sem condição mostra o editor em todos os tipos
         ruim = copy.deepcopy(self.spec)
         for el in ruim.abas[0].filhos:
@@ -495,24 +526,31 @@ class TesteEspecificacaoArea(unittest.TestCase):
         ruim = copy.deepcopy(self.spec)
         ruim.campo('text_ratio').rotulo_se = None
         self.assertTrue(any(e[0] == '151203' for e in divergencias(ruim)))
+        # pior caso 5: o espaçamento da hachura sem condição (o código de antes da decisão)
+        ruim = copy.deepcopy(self.spec)
+        ruim.campo('hatch_spacing').condicao = None
+        self.assertTrue(any(e[2] == ['hatch_spacing'] for e in divergencias(ruim)), divergencias(ruim))
 
     def test_expressao_qgis_igual_a_regra_python(self):
         conds = condicoes(self.spec)
-        self.assertGreaterEqual(len(conds), 6)
+        self.assertGreaterEqual(len(conds), 7)
         campos = QgsFields()
         campos.append(QgsField('symbol_code', QMetaType.Type.QString))
         campos.append(QgsField('bloqueado', QMetaType.Type.Bool))
+        campos.append(QgsField('hatch_type', QMetaType.Type.QString))
         for cond in conds:
             for codigo in list(RETRATO_DOCK) + ['']:
                 for bloq in (None, False, True):
-                    f = QgsFeature(campos)
-                    f.setAttributes([codigo, bloq])
-                    ctx = QgsExpressionContext()
-                    ctx.setFeature(f)
-                    e = QgsExpression(cond.expressao())
-                    qg = bool(e.evaluate(ctx))
-                    self.assertFalse(e.hasEvalError(), e.evalErrorString())
-                    self.assertEqual(qg, cond.avaliar({'symbol_code': codigo, 'bloqueado': bloq}), (cond.expressao(), codigo))
+                    for tipo_h in VALORES_HACHURA:
+                        f = QgsFeature(campos)
+                        f.setAttributes([codigo, bloq, tipo_h])
+                        ctx = QgsExpressionContext()
+                        ctx.setFeature(f)
+                        e = QgsExpression(cond.expressao())
+                        qg = bool(e.evaluate(ctx))
+                        self.assertFalse(e.hasEvalError(), e.evalErrorString())
+                        attrs = {'symbol_code': codigo, 'bloqueado': bloq, 'hatch_type': tipo_h}
+                        self.assertEqual(qg, cond.avaliar(attrs), (cond.expressao(), codigo, tipo_h))
 
     def test_toda_coluna_no_formulario_ou_oculta_e_so_nativos(self):
         nas_abas = [c.coluna for c in self.spec.campos()]
@@ -549,6 +587,67 @@ class TesteEspecificacaoArea(unittest.TestCase):
             p = QgsExpression(fa.expr_resumo_portoes(expr_lista_json('portoes'))).evaluate(ctx)
             m = QgsExpression(fa.expr_resumo_minas(expr_lista_json('minas'), ea.TIPOS_MINA)).evaluate(ctx)
             self.assertEqual((p, m), (esp_p, esp_m), (portoes, minas))
+
+
+class TesteHachuraArea(unittest.TestCase):
+    """
+    Decisão do chefe (2026-10-05): espaçamento e espessura da hachura só aparecem com hachura. A
+    régua é o estilo da camada (testes/test_formulario_sem_plugin.hachura_desenhada), em todos os
+    tipos de hachura, no nulo, no vazio e no desconhecido, com hatch_enabled ligado, desligado e nulo.
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.spec = esp.formulario('coordination_area')
+        caminho = os.path.join(TMP, 'calco_hachura.gpkg')
+        gpkg.criar_calco(caminho, ['coordination_area'])
+        cls.vl = QgsVectorLayer(gpkg.uri_camada(caminho, 'coordination_area'), 'Área de Coordenação', 'ogr')
+        C.aplicar_estilo(cls.vl, 'coordination_area')
+        cls.desenha = staticmethod(tfs.hachura_desenhada(cls.vl))
+        # o salvar põe em hatch_enabled o valor padrão aplicado na atualização, lido da camada
+        d = cls.vl.defaultValueDefinition(cls.vl.fields().indexOf('hatch_enabled'))
+        assert d.applyOnUpdate(), 'hatch_enabled sem o valor padrão na atualização'
+        padrao = QgsExpression(d.expression())
+        campos = cls.vl.fields()
+
+        def sincronizar(attrs):
+            f = QgsFeature(campos)
+            f.setAttribute(campos.indexOf('hatch_type'), attrs.get('hatch_type'))
+            ctx = QgsExpressionContext()
+            ctx.setFeature(f)
+            return dict(attrs, hatch_enabled=bool(padrao.evaluate(ctx)))
+        cls.sincronizar = staticmethod(sincronizar)
+
+    def test_campos_da_hachura_so_quando_o_estilo_desenha(self):
+        erros = divergencias_hachura(self.spec, self.desenha, self.sincronizar)
+        self.assertEqual(erros, [])
+        com = sum(1 for t in VALORES_HACHURA if self.desenha(self.sincronizar({'hatch_type': t})))
+        MEDIDAS.append('hachura da área: {} combinações de tipo e ligada conferidas com o estilo ({} camadas de padrão); '
+                       '{} dos {} valores de tipo desenham e mostram espaçamento e espessura'.format(
+                           len(VALORES_HACHURA) * 3, len(self.desenha.expressoes), com, len(VALORES_HACHURA)))
+
+    def test_pior_caso_condicoes_degradadas_reprovam(self):
+        casos = {
+            'sem condição (o código de antes)': None,
+            "tipo diferente de 'none' (mostra no nulo, no vazio e no desconhecido)":
+                esp.Condicao('hatch_type', frozenset({'none'}), negar=True),
+            'as duas colunas do estilo (hatch_enabled sem widget não se renova antes de salvar)':
+                esp.Todas((esp.Ligado('hatch_enabled'), esp.Condicao('hatch_type', ea.HACHURAS_DESENHADAS))),
+        }
+        for nome, cond in casos.items():
+            ruim = copy.deepcopy(self.spec)
+            for col in SO_COM_HACHURA:
+                ruim.campo(col).condicao = cond
+            erros = divergencias_hachura(ruim, self.desenha, self.sincronizar)
+            MEDIDAS.append('pior caso da hachura da área, {}: {} divergências'.format(nome, len(erros)))
+            self.assertTrue(erros, nome)
+
+    def test_regua_le_o_estilo(self):
+        """A régua lida do estilo separa ligada e desligada, e os tipos desenhados são as opções menos 'none'."""
+        self.assertTrue(self.desenha({'hatch_type': 'dots', 'hatch_enabled': True}))
+        self.assertFalse(self.desenha({'hatch_type': 'dots', 'hatch_enabled': False}))
+        self.assertFalse(self.desenha({'hatch_type': 'cross', 'hatch_enabled': None}))
+        self.assertFalse(self.desenha({'hatch_type': 'desconhecida', 'hatch_enabled': True}))
+        self.assertEqual(ea.HACHURAS_DESENHADAS, frozenset(v for v, _r in ea.HACHURAS) - {'none'})
 
 
 class TesteNativoArea(unittest.TestCase):
@@ -611,6 +710,72 @@ class TesteNativoArea(unittest.TestCase):
             iguais += dif == 0
         MEDIDAS.append('capturas da área com e sem o plugin: {} de {} idênticas abaixo do cabeçalho'.format(iguais, len(CAPTURAS)))
         self.assertEqual(iguais, len(CAPTURAS))
+
+    PASSOS_HACHURA = (('hatch_type', 'cross', 'nativo_area_com_hachura_sem_plugin.png'), ('hatch_type', 'dots', ''),
+                      ('hatch_type', 'none', 'nativo_area_sem_hachura_sem_plugin.png'))
+
+    def _hachura_ao_vivo(self, caminho, pasta=''):
+        """O operador troca a hachura no nativo sem o plugin: (resultado, código, erros contra o estilo)."""
+        res, codigo = tfs.rodar_passos(caminho, 'coordination_area', '150000', 'Aparência',
+                                       sorted(SO_COM_HACHURA | {'hatch_type'}), self.PASSOS_HACHURA, pasta)
+        erros = [] if codigo == 0 and res.get('etapa') == 'fim' else ['processo saiu com {} na etapa {}'.format(
+            codigo, res.get('etapa'))]
+        tipos = ['none'] + [v for _c, v, _a in self.PASSOS_HACHURA]
+        for tipo_h, passo in zip(tipos, res.get('passos') or []):
+            esperado_ = {'hatch_type'} | (SO_COM_HACHURA if tipo_h in ea.HACHURAS_DESENHADAS else set())
+            if set(passo['visiveis']) != esperado_:
+                erros.append('{}: à mostra {}, esperado {}'.format(passo['passo'], passo['visiveis'], sorted(esperado_)))
+        if len(res.get('passos') or []) != len(tipos):
+            erros.append('passos {}'.format(res.get('passos')))
+        if res.get('modulos_ebgeo'):
+            erros.append('o plugin estava carregado')
+        return res, codigo, erros
+
+    def test_hachura_ao_vivo_sem_plugin(self):
+        """Escolher a hachura no nativo mostra espaçamento e espessura na hora; 'Nenhuma' os esconde."""
+        import shutil
+        copia = os.path.join(TMP, 'hachura_ao_vivo.gpkg')
+        shutil.copy(self.caminho, copia)
+        res, _codigo, erros = self._hachura_ao_vivo(copia, SAIDA)
+        self.assertEqual(erros, [], erros)
+        MEDIDAS.append('hachura ao vivo no nativo sem o plugin: ' + '; '.join(
+            '{} -> {}'.format(p['passo'], p['visiveis']) for p in res['passos']))
+
+    def test_pior_caso_hachura_pela_coluna_sem_widget_reprova(self):
+        """
+        O mesmo estilo com a condição do espaçamento escrita pelas duas colunas do desenho
+        (COND_HACHURA): hatch_enabled não tem widget, o nativo só o renova ao salvar, e escolher a
+        hachura não mostra o espaçamento. E o estilo sem a condição (o de antes) o mostra sem hachura.
+        """
+        import shutil
+        from qgis.core import QgsOptionalExpression
+
+        def degradar(nome, expressao):
+            destino = os.path.join(TMP, 'pior_hachura_{}.gpkg'.format(nome))
+            shutil.copy(self.caminho, destino)
+            vl = QgsVectorLayer(gpkg.uri_camada(destino, 'coordination_area'), 'Área de Coordenação', 'ogr')
+            fc = vl.editFormConfig()
+            achados = []
+
+            def andar(cont):
+                for el in cont.children():
+                    if hasattr(el, 'children'):
+                        if any(x.name() == 'hatch_spacing' for x in el.children()) and el.visibilityExpression().enabled():
+                            el.setVisibilityExpression(QgsOptionalExpression(QgsExpression(expressao))
+                                                       if expressao else QgsOptionalExpression())
+                            achados.append(el.name())
+                        andar(el)
+            andar(fc.invisibleRootContainer())
+            self.assertEqual(len(achados), 1, achados)
+            vl.setEditFormConfig(fc)
+            vl.saveStyleToDatabaseV2(vl.name(), 'pior caso', True, '')
+            return destino
+        for nome, expressao, passo in (('duas_colunas', ea.COND_HACHURA, 'hatch_type = cross'),
+                                       ('sem_condicao', '', 'abrir')):
+            _res, codigo, erros = self._hachura_ao_vivo(degradar(nome, expressao))
+            MEDIDAS.append('pior caso da hachura ao vivo, {}: {}'.format(nome, erros))
+            self.assertEqual(codigo, 0)
+            self.assertTrue(any(e.startswith(passo + ':') and 'hatch_spacing' in e for e in erros), erros)
 
     def test_pior_caso_caixa_sem_nulo_reprova(self):
         """O mesmo estilo com a Correção de Zoom sem o estado nulo: salvar o nome grava False na nula."""
@@ -707,17 +872,24 @@ class TestePainelArea(unittest.TestCase):
         self.painel.grab().save(os.path.join(SAIDA, nome))
 
     def _divergencias_dock(self):
+        """Por código, sem e com hachura (a régua do estilo confere que a feição de teste desenha como pedido)."""
         erros = []
+        desenha = tfs.hachura_desenhada(self.lyr)
         for codigo, antigas in RETRATO_DOCK.items():
-            extra = {'portoes': PORTOES} if codigo == '170999-01' else {}
-            self._nova(symbol_code=codigo, **extra)
-            vis = self.painel.campos_visiveis()
-            if vis & TODAS_ANTIGAS != antigas:
-                erros.append((codigo, sorted(antigas - vis), sorted((vis & TODAS_ANTIGAS) - antigas)))
-            for col in TODAS_ANTIGAS - antigas:
-                w = self.painel.widgets.get(col)
-                if w is not None and not w.isHidden():
-                    erros.append((codigo, 'à mostra', col))
+            for hachura in ('none', 'diagonal-left'):
+                extra = {'portoes': PORTOES} if codigo == '170999-01' else {}
+                self._nova(symbol_code=codigo, hatch_type=hachura, hatch_enabled=hachura != 'none', **extra)
+                f = self.lyr.getFeature(self.painel.fid)
+                if desenha({'hatch_type': f['hatch_type'], 'hatch_enabled': f['hatch_enabled']}) != (hachura != 'none'):
+                    erros.append((codigo, hachura, 'a feição de teste não desenha como pedido'))
+                esperadas = antigas if hachura != 'none' else antigas - SO_COM_HACHURA
+                vis = self.painel.campos_visiveis()
+                if vis & TODAS_ANTIGAS != esperadas:
+                    erros.append((codigo, sorted(esperadas - vis), sorted((vis & TODAS_ANTIGAS) - esperadas)))
+                for col in TODAS_ANTIGAS - esperadas:
+                    w = self.painel.widgets.get(col)
+                    if w is not None and not w.isHidden():
+                        erros.append((codigo, 'à mostra', col))
         return erros
 
     def test_campos_e_editores_conforme_o_dock_de_antes(self):
@@ -805,6 +977,33 @@ class TestePainelArea(unittest.TestCase):
         cb.setCurrentIndex(cb.findData('cross'))
         self.painel._gravar_pendentes()
         self.assertTrue(self.lyr.getFeature(self.painel.fid)['hatch_enabled'])
+
+    def test_hachura_no_dock_so_com_hachura(self):
+        """Escolher a hachura no dock mostra espaçamento e espessura; 'Nenhuma' os esconde (no buffer)."""
+        desenha = tfs.hachura_desenhada(self.lyr)
+        self._nova(symbol_code='150000')
+        self.assertTrue(SO_COM_HACHURA.isdisjoint(self.painel.campos_visiveis()))
+        self.assertIn('hatch_type', self.painel.campos_visiveis())
+        self._capturar('dock_area_sem_hachura.png')
+        cb = self.painel.widgets['hatch_type']
+        vistos = []
+        for tipo_h in ('cross', 'dots', 'none', 'diagonal-right'):
+            cb.setCurrentIndex(cb.findData(tipo_h))
+            self.painel._gravar_pendentes()
+            _app.processEvents()
+            f = self.lyr.getFeature(self.painel.fid)
+            d = desenha({'hatch_type': f['hatch_type'], 'hatch_enabled': f['hatch_enabled']})
+            self.assertEqual(d, tipo_h != 'none', tipo_h)
+            vis = self.painel.campos_visiveis()
+            self.assertEqual(SO_COM_HACHURA & vis, SO_COM_HACHURA if d else set(), tipo_h)
+            for col in SO_COM_HACHURA:
+                self.assertEqual(self.painel.widgets[col].isHidden(), not d, (tipo_h, col))
+            vistos.append('{} -> {}'.format(tipo_h, sorted(SO_COM_HACHURA & vis)))
+            if tipo_h == 'cross':
+                self._capturar('dock_area_com_hachura.png')
+        MEDIDAS.append('hachura no dock da área: ' + '; '.join(vistos))
+        self.assertTrue(self.painel.descartar())
+        _app.processEvents()
 
     def test_bloqueada_so_leitura(self):
         self._nova(symbol_code='170999-01', bloqueado=True, portoes=PORTOES)

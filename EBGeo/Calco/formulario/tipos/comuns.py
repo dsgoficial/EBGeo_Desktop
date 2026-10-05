@@ -229,6 +229,17 @@ def linha():
     return _formulario('line', [aba, aba_azimute()], (COLUNA_AZIMUTE,))
 
 
+def com_hachura():
+    """
+    O estilo das formas desenha a hachura com a caixa marcada E um dos tipos das camadas de padrão
+    (estilos_formas.COND_HACHURA e HACHURAS_DESENHADAS): só então o espaçamento e a espessura
+    valem (decisão do chefe, 2026-10-05). As duas colunas têm widget aqui, e o nativo renova a
+    condição a cada mudança delas.
+    """
+    from ...estilos_formas import HACHURAS_DESENHADAS
+    return esp.Todas((Ligado('hatch_enabled'), esp.Condicao('hatch_type', HACHURAS_DESENHADAS)))
+
+
 def forma(tipo):
     """Polígono, Círculo, Elipse, Retângulo e Setor (_FORMA do esquema)."""
     aparencia = esp.Aba('Aparência', [
@@ -241,6 +252,7 @@ def forma(tipo):
         # exige as duas colunas, e sem o plugin nada as sincroniza: as duas ficam à mão
         esp.Grupo('Hachura', [esp.Campo('hatch_enabled', 'Com hachura', esp.caixa())] + _se(Ligado('hatch_enabled'), [
             esp.Campo('hatch_type', 'Padrão da hachura', esp.lista(HACHURAS)),
+        ]) + _se(com_hachura(), [
             esp.Campo('hatch_spacing', 'Espaçamento da Hachura', numero(1, 50, 1, 0, ' px')),
             esp.Campo('hatch_line_width', 'Espessura da Hachura', numero(0.5, 10, 0.5, 1, ' px')),
         ])),

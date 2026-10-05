@@ -98,6 +98,11 @@ _HACHURAS = [
     (90, 2.0, ('vertical', 'cross')),
 ]
 COND_HACHURA = "coalesce(\"hatch_enabled\", false) AND coalesce(\"hatch_type\", 'none') <> 'none'"
+HACHURA_PONTOS = 'dots'  # a única desenhada por padrão de pontos (QgsPointPatternFillSymbolLayer)
+# Os tipos que o estilo desenha, lidos das camadas de padrão abaixo: o formulário mostra o
+# espaçamento e a espessura da hachura só com um deles (formulario/tipos/area.py). Nulo, vazio,
+# 'none' e tipo desconhecido não desenham.
+HACHURAS_DESENHADAS = frozenset(t for _a, _f, tipos in _HACHURAS for t in tipos) | {HACHURA_PONTOS}
 
 
 def posicao_padrao(codigo):
@@ -322,7 +327,7 @@ def simbolo_base():
     dot.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor, _p(cor_h))
     msub.appendSymbolLayer(dot)
     pp.setSubSymbol(msub)
-    pp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p("{} AND \"hatch_type\" = 'dots'".format(COND_HACHURA)))
+    pp.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p("{} AND \"hatch_type\" = '{}'".format(COND_HACHURA, HACHURA_PONTOS)))
     sym.appendSymbolLayer(pp)
     # contorno, menos onde a decoração é a borda (elos, borda minada): no Web a camada do
     # contorno fica com opacidade zero nesses tipos

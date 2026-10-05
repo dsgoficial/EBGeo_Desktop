@@ -7,7 +7,8 @@ Abas Símbolo, Textos, Aparência, Atributos e Avançado. O que depende do tipo 
 escalão só no Ponto Forte, portões e altitudes só no Volume de aproximação de base, minas só na
 Área minada, "Outras informações" fora do VAB, estilo da borda fora da Zona fortificada (a borda
 dela são os elos) e o rótulo da posição na borda, que no Ponto Forte é a do escalão. É o mesmo
-recorte que o dock mostrava antes da especificação (testes/test_formulario_area.py).
+recorte que o dock mostrava antes da especificação (testes/test_formulario_area.py), menos o
+espaçamento e a espessura da hachura, que só aparecem com um tipo de hachura que o estilo desenha.
 
 Portões e minas são listas JSON. No formulário nativo, cada uma vira um RESUMO só de leitura
 (elemento de texto com expressão, que o QGIS avalia sem o plugin) e a coluna fica oculta: nenhum
@@ -58,8 +59,8 @@ def expr_resumo_minas(lista, tipos):
 
 def formulario():
     from ...estilos_area import (
-        CATALOGO_AREA, ESCALOES, ESTILOS_TRACO, HACHURAS, POSICOES_TEXTO, SIMBOLO_PADRAO, TIPOS_MINA,
-        expr_lista_json, rotulo_escalao,
+        CATALOGO_AREA, ESCALOES, ESTILOS_TRACO, HACHURAS, HACHURAS_DESENHADAS, POSICOES_TEXTO, SIMBOLO_PADRAO,
+        TIPOS_MINA, expr_lista_json, rotulo_escalao,
     )
 
     def cond(predicado):
@@ -68,6 +69,11 @@ def formulario():
     vab = cond(lambda s: bool(s.get('portoes')))
     minada = cond(lambda s: bool(s.get('minas')))
     ponto_forte = cond(lambda s: bool(s.get('escalao')))
+    # Espaçamento e espessura só com hachura (decisão do chefe, 2026-10-05): o tipo é um dos que o
+    # estilo desenha. O estilo pede também hatch_enabled, mas ele não tem widget e segue o tipo pelo
+    # valor padrão aplicado ao salvar (hachura_acompanha_o_tipo), e o nativo não o renova antes:
+    # condição nele não mostraria o espaçamento ao escolher a hachura (medido no QGIS 4.0.0).
+    com_hachura = esp.Condicao('hatch_type', HACHURAS_DESENHADAS)
 
     resumo_portoes = Resumo(
         'resumo_portoes', 'Portões: [% {} %]. {}'.format(expr_resumo_portoes(expr_lista_json('portoes')),
@@ -116,8 +122,8 @@ def formulario():
         esp.Campo('fill_color', 'Preenchimento', esp.cor()),
         esp.Campo('opacity', 'Opacidade do Preenchimento', esp.numero(0, 1, 0.05, 2)),
         esp.Campo('hatch_type', 'Hachura', esp.lista(HACHURAS)),
-        esp.Campo('hatch_spacing', 'Espaçamento da Hachura', esp.numero(2, 40, 1, 0, ' px')),
-        esp.Campo('hatch_line_width', 'Espessura da Hachura', esp.numero(0.5, 10, 0.5, 1, ' px')),
+        esp.Campo('hatch_spacing', 'Espaçamento da Hachura', esp.numero(2, 40, 1, 0, ' px'), condicao=com_hachura),
+        esp.Campo('hatch_line_width', 'Espessura da Hachura', esp.numero(0.5, 10, 0.5, 1, ' px'), condicao=com_hachura),
     ])
     cabecalho = esp.cabecalho()
     abas = [simbolo, textos, aparencia, esp.aba_atributos(), esp.aba_avancado()]

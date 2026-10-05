@@ -184,6 +184,100 @@ def rodar_sem_plugin(caminho, capturas=(), pasta='', com_plugin=False, timeout=1
     return res, codigo
 
 
+def hachura_desenhada(layer):
+    """
+    A régua da hachura lida do ESTILO da camada: devolve f(atributos) -> o estilo desenha hachura.
+    Junta a expressão "camada ligada" das camadas de padrão (linhas e pontos) de todos os símbolos
+    do renderer e a avalia numa feição com os atributos dados (os demais nulos).
+    """
+    from qgis.core import (QgsExpression, QgsExpressionContext, QgsLinePatternFillSymbolLayer,
+                           QgsPointPatternFillSymbolLayer, QgsRenderContext, QgsSymbolLayer)
+    exprs = []
+    for sym in layer.renderer().symbols(QgsRenderContext()):
+        for sl in sym.symbolLayers():
+            if isinstance(sl, (QgsLinePatternFillSymbolLayer, QgsPointPatternFillSymbolLayer)):
+                p = sl.dataDefinedProperties().property(QgsSymbolLayer.Property.LayerEnabled)
+                exprs.append(p.expressionString() if p.isActive() else 'TRUE')
+    if not exprs:
+        raise AssertionError('o estilo de {} não tem camada de hachura'.format(layer.name()))
+    expressao = QgsExpression(' OR '.join('({})'.format(e) for e in exprs))
+    campos = layer.fields()
+
+    def desenha(atributos):
+        f = QgsFeature(campos)
+        for col, v in atributos.items():
+            if campos.indexOf(col) >= 0:
+                f.setAttribute(campos.indexOf(col), v)
+        ctx = QgsExpressionContext()
+        ctx.setFeature(f)
+        v = expressao.evaluate(ctx)
+        assert not expressao.hasEvalError(), expressao.evalErrorString()
+        return bool(v)
+    desenha.expressoes = exprs
+    return desenha
+
+
+# Passos ao vivo no formulário nativo, num processo novo SEM o plugin: abre a feição de nome dado,
+# muda as colunas passo a passo pelo widget (como o operador) e anota, a cada passo, quais das
+# colunas observadas estão à mostra na aba; captura a aba nos passos pedidos.
+# argv: gpkg, json de saída, pasta; EBGEO_PASSOS no ambiente (json).
+SCRIPT_PASSOS = r'''
+import sys, os, json
+gp, saida, pasta = sys.argv[1:4]
+cfg = json.loads(os.environ['EBGEO_PASSOS'])
+res = {'etapa': 'inicio', 'passos': []}
+def gravar():
+    with open(saida, 'w', encoding='utf-8') as fh:
+        json.dump(res, fh, ensure_ascii=False)
+from qgis.core import QgsApplication, QgsVectorLayer
+app = QgsApplication([], True); app.initQgis()
+from qgis.gui import QgsGui, QgsAttributeForm, QgsEditorWidgetWrapper, QgsAttributeEditorContext
+from qgis.PyQt.QtWidgets import QTabWidget
+QgsGui.editorWidgetRegistry().initEditors()
+L = QgsVectorLayer(gp + '|layername=' + cfg['camada'], cfg['camada'], 'ogr')
+L.startEditing()
+f = next(L.getFeatures('"nome" = \'{}\''.format(cfg['nome'])))
+form = QgsAttributeForm(L, f)
+form.setMode(QgsAttributeEditorContext.Mode.SingleEditMode)
+form.resize(470, 640); form.show(); app.processEvents()
+tw = form.findChildren(QTabWidget)[0]
+for k in range(tw.count()):
+    if tw.tabText(k) == cfg['aba']:
+        tw.setCurrentIndex(k)
+app.processEvents()
+wrappers = {L.fields().at(wr.fieldIdx()).name(): wr for wr in form.findChildren(QgsEditorWidgetWrapper)}
+def vistos():
+    return sorted(c for c in cfg['observar'] if c in wrappers and wrappers[c].widget().isVisibleTo(form))
+res['passos'].append({'passo': 'abrir', 'visiveis': vistos()})
+for k, (col, valor, captura) in enumerate(cfg['passos']):
+    res['etapa'] = 'passo {}'.format(k)
+    gravar()
+    wrappers[col].setValues(valor, []); wrappers[col].emitValueChanged()
+    app.processEvents()
+    res['passos'].append({'passo': '{} = {}'.format(col, valor), 'visiveis': vistos()})
+    if captura and pasta:
+        form.grab().save(os.path.join(pasta, captura))
+res['modulos_ebgeo'] = sorted(m for m in sys.modules if m.split('.')[0] in ('Calco', 'EBGeo'))
+L.rollBack()
+res['etapa'] = 'fim'
+gravar()
+'''
+
+
+def rodar_passos(caminho, camada, nome, aba, observar, passos, pasta='', timeout=120):
+    """Roda o SCRIPT_PASSOS sem o plugin. passos: [(coluna, valor, arquivo da captura ou '')]."""
+    global SCRIPT
+    original = SCRIPT
+    SCRIPT = SCRIPT_PASSOS
+    os.environ['EBGEO_PASSOS'] = json.dumps({'camada': camada, 'nome': nome, 'aba': aba, 'observar': list(observar),
+                                             'passos': [list(p) for p in passos]}, ensure_ascii=False)
+    try:
+        return rodar_sem_plugin(caminho, (), pasta, timeout=timeout)
+    finally:
+        SCRIPT = original
+        os.environ.pop('EBGEO_PASSOS', None)
+
+
 def esperado(spec, chave, proprias):
     """Campos visíveis e rótulos que a especificação manda mostrar para a feição da chave."""
     attrs = {'symbol_code': '290199' if chave == 'bloqueada' else chave, 'bloqueado': chave == 'bloqueada'}

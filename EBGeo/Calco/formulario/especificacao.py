@@ -31,6 +31,8 @@ Contrato (o que cada consumidor pode supor):
         com `negar`); nulo, vazio e código desconhecido valem como o código padrão do catálogo,
         que é como o estilo desenha. `expressao()` dá a expressão QGIS que o formulário nativo e
         o dock avaliam; `avaliar(atributos)` é a mesma regra em Python, para os testes.
+  Ligado(coluna, padrao): a caixa marcada (nula vale o padrão do estilo); Todas(condicoes): a
+        conjunção, no mesmo contrato.
   Bloqueada(): a feição travada no EBGeo Web (`bloqueado`). Todo campo editável ganha a
         propriedade "editável" por dados EXPRESSAO_EDITAVEL.
 
@@ -157,6 +159,21 @@ class Ligado:
     def avaliar(self, atributos):
         v = atributos.get(self.coluna)
         return self.padrao if _nulo(v) else bool(v)
+
+
+@dataclass(frozen=True)
+class Todas:
+    """
+    Vale quando todas as condições valem (a hachura do Polígono desenha com a caixa marcada E um
+    tipo desenhado). O contêiner Row do nativo só leva uma expressão, então a conjunção vai nela.
+    """
+    condicoes: tuple
+
+    def expressao(self):
+        return ' AND '.join('({})'.format(c.expressao()) for c in self.condicoes)
+
+    def avaliar(self, atributos):
+        return all(c.avaliar(atributos) for c in self.condicoes)
 
 
 @dataclass(frozen=True)
