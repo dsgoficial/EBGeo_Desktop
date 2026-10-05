@@ -421,29 +421,121 @@ def _materializar(g, projeto, apoio, log):
         for tipo in pilha_de_cima:
             if not n_tipo.get(tipo):
                 continue
-            d = schema.TIPOS[tipo]
-            lyr = QgsVectorLayer(gpkg.uri_camada(caminho, tipo, mapa, c['camada_id']), d['nome_pt'], 'ogr')
-            if not lyr.isValid():
-                log.warning('camada %s de "%s"/"%s" inválida', tipo, mapa, c['nome'])
-                continue
-            for k, v in ((PROP_CAMINHO, caminho), (PROP_TIPO, tipo), (PROP_MAPA, mapa),
-                         (PROP_CAMADA, c['camada_id']), (PROP_ORDEM_MAPA, ordem_mapa),
-                         (PROP_ORDEM_CAMADA, oc)):
-                lyr.setCustomProperty(k, v)
-            estilizar(lyr, tipo, log, _CACHE_ESTILO.setdefault(caminho, {}))
-            esconder_por_regra(lyr, cond)
-            op = c['opacidade']
-            lyr.setOpacity(1.0 if op is None else max(0.0, min(1.0, float(op))))
-            if c['bloqueada'] not in (0, False, None):
-                lyr.setReadOnly(True)
-            projeto.addMapLayer(lyr, False)
-            no = sub.addLayer(lyr)
-            if tipo in TIPOS_DESLIGADOS:
-                no.setItemVisibilityChecked(False)
-            criadas += 1
+            if _criar_camada_tipo(sub, tipo, caminho, mapa, c, ordem_mapa, oc, cond, projeto, log) is not None:
+                criadas += 1
     g.removeCustomProperty(PROP_PENDENTE)
     g.setName(mapa)
     return criadas
+
+
+def _criar_camada_tipo(sub, tipo, caminho, mapa, c, ordem_mapa, ordem_camada, cond, projeto, log):
+    """
+    A camada do tipo no subgrupo da camada EBGeo `c` (linha de ebgeo_camada): filtro de mapa e
+    camada, as propriedades que a ferramenta e o exportador leem, o estilo, a regra de exibição,
+    a opacidade e o somente-leitura da camada do Web, na posição da pilha de desenho do Web.
+    """
+    d = schema.TIPOS[tipo]
+    lyr = QgsVectorLayer(gpkg.uri_camada(caminho, tipo, mapa, c['camada_id']), d['nome_pt'], 'ogr')
+    if not lyr.isValid():
+        log.warning('camada %s de "%s"/"%s" inválida', tipo, mapa, c['nome'])
+        return None
+    for k, v in ((PROP_CAMINHO, caminho), (PROP_TIPO, tipo), (PROP_MAPA, mapa),
+                 (PROP_CAMADA, c['camada_id']), (PROP_ORDEM_MAPA, ordem_mapa),
+                 (PROP_ORDEM_CAMADA, ordem_camada)):
+        lyr.setCustomProperty(k, v)
+    estilizar(lyr, tipo, log, _CACHE_ESTILO.setdefault(caminho, {}))
+    esconder_por_regra(lyr, cond)
+    op = c['opacidade']
+    lyr.setOpacity(1.0 if op is None else max(0.0, min(1.0, float(op))))
+    if c['bloqueada'] not in (0, False, None):
+        lyr.setReadOnly(True)
+    projeto.addMapLayer(lyr, False)
+    # de cima para baixo, o inverso da pilha de desenho do Web
+    pilha_de_cima = list(reversed(schema.PILHA_DESENHO))
+    acima = sum(1 for n in sub.children() if hasattr(n, 'layer') and n.layer() is not None
+                and n.layer().customProperty(PROP_TIPO) in pilha_de_cima
+                and pilha_de_cima.index(n.layer().customProperty(PROP_TIPO)) < pilha_de_cima.index(tipo))
+    no = sub.insertLayer(acima, lyr)
+    if tipo in TIPOS_DESLIGADOS:
+        no.setItemVisibilityChecked(False)
+    return lyr
+
+
+# ---------------------------------------------------------------- desenho num atlas importado
+
+def _grupo_do_atlas(caminho, projeto):
+    """O grupo do atlas de `caminho` na árvore (o de cima, que guarda os mapas), ou None."""
+    caminho = os.path.normcase(os.path.abspath(caminho))
+    for g in projeto.layerTreeRoot().findGroups(True):
+        valor = g.customProperty(PROP_ATLAS)
+        if valor and os.path.normcase(os.path.abspath(str(valor))) == caminho and g.customProperty(PROP_MAPA) is None \
+                and not (isinstance(g.parent(), QgsLayerTreeGroup) and g.parent().customProperty(PROP_ATLAS)):
+            return g
+    return None
+
+
+def camada_para_desenho(caminho, tipo, no=None, projeto=None, log=None):
+    """
+    Num atlas importado, a camada do tipo em que a ferramenta grava: a do mapa e da camada do
+    EBGeo do nó ativo da árvore (`no`: uma camada, o subgrupo da camada EBGeo ou o grupo do
+    mapa), criada no subgrupo quando o tipo ainda não tem camada ali, com as propriedades, o
+    estilo e a ordem que o importador daria (_criar_camada_tipo). Sem nó dentro do atlas, vale o
+    mapa ligado; sem subgrupo escolhido, o primeiro do mapa. None quando `caminho` não é um
+    atlas na árvore (o calco comum) ou o mapa não tem camada do EBGeo.
+    """
+    log = log or _log
+    projeto = projeto or QgsProject.instance()
+    atlas = _grupo_do_atlas(caminho, projeto)
+    if atlas is None:
+        return None
+    grupo_mapa = sub = None
+    n = no
+    while n is not None and n is not atlas:
+        if isinstance(n, QgsLayerTreeGroup):
+            if sub is None and n.customProperty(PROP_CAMADA) is not None:
+                sub = n
+            if n.customProperty(PROP_MAPA) is not None and n.parent() is atlas:
+                grupo_mapa = n
+        n = n.parent()
+    if n is not atlas:  # o nó ativo é de fora do atlas
+        grupo_mapa = sub = None
+    if grupo_mapa is None:
+        mapas = [g for g in atlas.children()
+                 if isinstance(g, QgsLayerTreeGroup) and g.customProperty(PROP_MAPA) is not None]
+        ligados = [g for g in mapas if g.itemVisibilityChecked()]
+        grupo_mapa = (ligados or mapas or [None])[0]
+        sub = None
+    if grupo_mapa is None:
+        return None
+    if grupo_mapa.customProperty(PROP_PENDENTE):
+        materializar_mapa(grupo_mapa, projeto, log)
+    subs = [g for g in grupo_mapa.children()
+            if isinstance(g, QgsLayerTreeGroup) and g.customProperty(PROP_CAMADA) is not None]
+    if sub not in subs:
+        sub = subs[0] if subs else None
+    if sub is None:
+        return None
+    for filho in sub.findLayers():
+        if filho.layer() is not None and filho.layer().customProperty(PROP_TIPO) == tipo:
+            return filho.layer()
+    caminho = str(atlas.customProperty(PROP_ATLAS))
+    mapa, camada_id = str(grupo_mapa.customProperty(PROP_MAPA)), str(sub.customProperty(PROP_CAMADA))
+    apoio = ler_apoio(caminho)
+    lista = apoio['camadas'].get(mapa, [])
+    oc = next((i for i, c in enumerate(lista) if c['camada_id'] == camada_id), len(lista))
+    c = lista[oc] if oc < len(lista) else {'camada_id': camada_id, 'nome': sub.name(), 'opacidade': None,
+                                          'bloqueada': None}
+    # a opacidade e o somente-leitura da camada EBGeo como estão no projeto (as irmãs os guardam)
+    irma = next((f.layer() for f in sub.findLayers() if f.layer() is not None), None)
+    if irma is not None:
+        c = dict(c, opacidade=irma.opacity(), bloqueada=irma.readOnly())
+    cond = condicao_exibir(apoio['grupos_ocultos'].get(mapa, []))
+    lyr = _criar_camada_tipo(sub, tipo, caminho, mapa, c, int(grupo_mapa.customProperty(PROP_ORDEM_MAPA) or 0), oc,
+                             cond, projeto, log)
+    if lyr is not None:
+        relacionar_fotos(lyr, projeto)
+        reordenar(projeto)
+    return lyr
 
 
 def materializar_mapa(grupo_mapa, projeto=None, log=None):

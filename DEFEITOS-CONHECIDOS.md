@@ -2,14 +2,6 @@
 
 Lista de 2026-10-05 dos defeitos conhecidos do EBGeo Desktop no QGIS 4 (branch `qgis4`), achados durante a implementação do Calco, do formulário das feições, do exportador `.ebgeo` e da visibilidade sem GRASS. Cada item diz o sintoma, onde mora e o conserto sugerido. A arquitetura está em `EBGeo/Calco/ARQUITETURA.md`; o par do EBGeo Web tem a sua própria lista.
 
-## K3 Desenho num atlas importado, num tipo que o mapa ainda não tem
-
-**Sintoma.** Sem uma camada daquele tipo selecionada, a ferramenta cria o grupo "Calco: nome" fora da árvore do atlas, e a feição nova não fica no mapa e na camada do EBGeo esperados.
-
-**Onde.** `EBGeo/Calco/ferramentas.py` (`mapa_e_camada`) e a árvore do importador (`EBGeo/Calco/importador/arvore.py`).
-
-**Conserto sugerido.** Quando o calco ativo é um atlas importado, criar a camada do tipo dentro do mapa e da camada do EBGeo ativos na árvore.
-
 ## K5 Sem o plugin, trocar o tipo no formulário nativo não aplica os padrões
 
 **Sintoma.** Num QGIS sem o plugin, trocar o símbolo da Área de Coordenação, da Linha de Coordenação ou da Medida pelo formulário nativo grava só o código; a cor padrão, as minas e os demais padrões do tipo novo não são aplicados.

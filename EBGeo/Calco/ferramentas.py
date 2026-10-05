@@ -149,7 +149,21 @@ class _Base(QgsMapTool):
         from .calco import PROP_CAMINHO, PROP_TIPO
         if ativa is not None and ativa.customProperty(PROP_CAMINHO) == c.caminho                 and ativa.customProperty(PROP_TIPO) == self.tipo:
             return ativa
+        # atlas importado sem camada do tipo selecionada: a do mapa e da camada do EBGeo ativos na
+        # árvore, criada no subgrupo quando o mapa ainda não tem o tipo (c.camada criaria o grupo
+        # "Calco: nome" fora do atlas, sem o filtro de mapa e camada)
+        from .importador.arvore import camada_para_desenho
+        lyr = camada_para_desenho(c.caminho, self.tipo, self._no_ativo())
+        if lyr is not None:
+            return lyr
         return c.camada(self.tipo)
+
+    def _no_ativo(self):
+        """O nó selecionado no painel de camadas (camada ou grupo), ou None."""
+        try:
+            return self.iface.layerTreeView().currentNode() if self.iface else None
+        except (AttributeError, RuntimeError):
+            return None
 
     def _wgs(self, ponto_mapa):
         crs = self.canvas().mapSettings().destinationCrs()
