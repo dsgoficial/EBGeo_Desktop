@@ -253,8 +253,23 @@ def montar_variantes(doc, literais_por_tipo):
 
 # ---------------------------------------------------------------- o Desktop
 
+def _filtro_ids(vids):
+    return '"ebgeo_id" IN ({})'.format(', '.join("'{}'".format(v.replace("'", "''")) for v in vids))
+
+
 def desktop_assinaturas(caminho_gpkg, mapa_ids):
-    """{id: hash dos pixels} de cada variante desenhada sozinha com o estilo do importador."""
+    """{id: hash dos pixels} de cada variante desenhada sozinha com o estilo do importador.
+
+    Memória: cada troca do filtro de uma camada OGR abre um dataset novo no pool de conexões do
+    QGIS, que só o solta depois de 60 s ociosos, num QTimer; sem laço de eventos nada é solto.
+    Com duas trocas por variante (a extensão e o desenho), a suíte crescia até 16 GB privados e,
+    rodando junto de outras suítes, morria em silêncio por falta de memória (medido em 2026-10-05:
+    1,7 MB por troca no polígono, 5,2 MB na Área). A extensão sai de uma consulta só, sem trocar o
+    filtro, e o laço de eventos roda a cada desenho: a fase dos desenhos fica plana em 3 GB, e a
+    suíte inteira tem pico de 5,4 GB.
+    """
+    from qgis.core import QgsFeatureRequest
+    from qgis.PyQt.QtCore import QCoreApplication
     out = {}
     por_tipo = {}
     for vid, (tipo, base_id, *_r) in mapa_ids.items():
@@ -264,17 +279,17 @@ def desktop_assinaturas(caminho_gpkg, mapa_ids):
         assert vl.isValid(), tipo
         for base_id, vids in porbase.items():
             ext = None
-            for vid in vids:
-                vl.setSubsetString('"ebgeo_id" = \'{}\''.format(vid.replace("'", "''")))
-                for f in vl.getFeatures():
-                    bb = f.geometry().boundingBox()
-                    if ext is None:
-                        ext = QgsRectangle(bb)
-                    else:
-                        ext.combineExtentWith(bb)
+            vl.setSubsetString('')
+            for f in vl.getFeatures(QgsFeatureRequest().setFilterExpression(_filtro_ids(vids))):
+                bb = f.geometry().boundingBox()
+                if ext is None:
+                    ext = QgsRectangle(bb)
+                else:
+                    ext.combineExtentWith(bb)
             for vid in vids:
                 vl.setSubsetString('"ebgeo_id" = \'{}\''.format(vid.replace("'", "''")))
                 out[vid] = _hash(_render(vl, ext))
+                QCoreApplication.processEvents()
         vl.setSubsetString('')
     return out
 
