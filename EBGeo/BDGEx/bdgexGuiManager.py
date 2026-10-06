@@ -46,11 +46,10 @@ class BDGExGuiManager(QObject):
         self.toolbar = toolbar
         self.BDGExRequestHandler = BDGExRequestHandler()
         self.menu = self.manager.addMenu("bdgex", self.tr("BDGEx"), "eb.png")
-        self.iconBasePath = ":/plugins/DsgTools/icons/"
         self.availableServices = {
             "topocharts": [
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("Multi scale mosaic"),
                     "layers": ["ctm25", "ctm50", "ctm100", "ctm250"],
                     "service": "mapcache",
@@ -58,28 +57,28 @@ class BDGExGuiManager(QObject):
                     "separator": True,
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:250,000"),
                     "layers": ["ctm250"],
                     "service": "mapcache",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:100,000"),
                     "layers": ["ctm100"],
                     "service": "mapcache",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:50,000"),
                     "layers": ["ctm50"],
                     "service": "mapcache",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:25,000"),
                     "layers": ["ctm25"],
                     "service": "mapcache",
@@ -88,21 +87,21 @@ class BDGExGuiManager(QObject):
             ],
             "coverage": [
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("Rapideye Imagery (2013 mosaic)"),
                     "layers": ["rapideye"],
                     "service": "mapcache",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("Landsat 7 Imagery (2000 mosaic)"),
                     "layers": ["landsat7"],
                     "service": "mapcache",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Orthorectified True Color Imagery compatible with 1:25,000 scale"
                     ),
@@ -111,7 +110,7 @@ class BDGExGuiManager(QObject):
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Artificial SAR Imagery compatible with 1:50,000 scale"
                     ),
@@ -120,7 +119,7 @@ class BDGExGuiManager(QObject):
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Artificial SAR Imagery compatible with 1:25,000 scale"
                     ),
@@ -131,7 +130,7 @@ class BDGExGuiManager(QObject):
             ],
             "terrain": [
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Surface Digital Model compatible with scale 1:25,000"
                     ),
@@ -140,7 +139,7 @@ class BDGExGuiManager(QObject):
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Contour lines compatible with scale 1:25,000"
                     ),
@@ -150,7 +149,7 @@ class BDGExGuiManager(QObject):
                     "separator": True,
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Surface Digital Model compatible with scale 1:50,000"
                     ),
@@ -159,7 +158,7 @@ class BDGExGuiManager(QObject):
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Contour lines compatible with scale 1:50,000"
                     ),
@@ -169,7 +168,7 @@ class BDGExGuiManager(QObject):
                     "separator": True,
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Contour lines compatible with scale 1:100,000"
                     ),
@@ -178,7 +177,7 @@ class BDGExGuiManager(QObject):
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Surface Digital Model compatible with scale 1:250,000 (SRTM)"
                     ),
@@ -187,7 +186,7 @@ class BDGExGuiManager(QObject):
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr(
                         "Contour lines compatible with scale 1:250,000"
                     ),
@@ -198,7 +197,7 @@ class BDGExGuiManager(QObject):
             ],
             "aux_layers": [
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("Brazilian Political Information"),
                     "layers": ["municipios", "estados", "capitais"],
                     "service": "mapcache",
@@ -206,21 +205,21 @@ class BDGExGuiManager(QObject):
                     "separator": True,
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("Brazilian Cities"),
                     "layers": ["municipios"],
                     "service": "auxlayers",
                     "service_type": "WFS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("Brazilian States"),
                     "layers": ["estados"],
                     "service": "auxlayers",
                     "service_type": "WFS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("Brazilian State Capitals"),
                     "layers": ["capitais"],
                     "service": "auxlayers",
@@ -229,28 +228,28 @@ class BDGExGuiManager(QObject):
             ],
             "raster_mapindex": [
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:250,000"),
                     "layers": ["F250_WGS84_MATRICIAL"],
                     "service": "mapindex",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:100,000"),
                     "layers": ["F100_WGS84_MATRICIAL"],
                     "service": "mapindex",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:50,000"),
                     "layers": ["F50_WGS84_MATRICIAL"],
                     "service": "mapindex",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:25,000"),
                     "layers": ["F25_WGS84_MATRICIAL"],
                     "service": "mapindex",
@@ -259,28 +258,28 @@ class BDGExGuiManager(QObject):
             ],
             "vector_mapindex": [
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:250,000"),
                     "layers": ["F250_WGS84_VETORIAL"],
                     "service": "mapindex",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:100,000"),
                     "layers": ["F100_WGS84_VETORIAL"],
                     "service": "mapindex",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:50,000"),
                     "layers": ["F50_WGS84_VETORIAL"],
                     "service": "mapindex",
                     "service_type": "WMS",
                 },
                 {
-                    "icon": ":/plugins/DsgTools/icons/eb.png",
+                    "icon": ":/plugins/EBGeo/icons/eb.png",
                     "menu_entry": self.tr("1:25,000"),
                     "layers": ["F25_WGS84_VETORIAL"],
                     "service": "mapindex",

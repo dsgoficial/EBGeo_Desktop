@@ -7,7 +7,7 @@
 
 
 # -*- coding: utf-8 -*-
-from qgis.PyQt.QtWidgets import QToolButton, QMenu, QMessageBox
+from qgis.PyQt.QtWidgets import QToolButton, QMenu
 from qgis.PyQt.QtGui import QAction, QIcon
 from qgis.core import *
 from qgis.gui import *
@@ -36,7 +36,6 @@ class Main:
         pass
        
     def initVariables(self):
-        self.msgBox = QMessageBox()
         self.canvas = self.iface.mapCanvas()
         self.auxiliar = AuxiliarDeclConv(self.iface)
         self.dockWindow = Interface(self.canvas, self.auxiliar)
@@ -78,14 +77,5 @@ class Main:
     def closeWindow(self, e):
         pass
 
-    def showMessage(self, text):
-        self.msgBox.setIcon(QMessageBox.Icon.Critical)
-        self.msgBox.setWindowTitle("Erro")
-        self.msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
-        self.msgBox.setText(text)
-        self.msgBox.exec()
-            
-    def closeMsgBox(self, b):
-        self.msgBox.close()
         
     

@@ -13,9 +13,11 @@ O instrumento independente é o filtro (subset) da camada, que o importador mont
 camada do EBGeo, e a posição do grupo e do subgrupo na árvore.
 
 TestDesenhoNoAtlas: a ferramenta de desenho num atlas importado, num tipo que o mapa ainda não
-tem (K3 dos defeitos conhecidos). A camada do tipo nasce no subgrupo da camada do EBGeo ativa na
+tem (K3). A camada do tipo nasce no subgrupo da camada do EBGeo ativa na
 árvore, com as propriedades e a ordem do importador, e a feição desenhada sai do exportador no
-mapa e na camada do EBGeo certos. O instrumento é o .ebgeo exportado, relido pelo leitor.
+mapa e na camada do EBGeo certos. O Azimute e Distância passa pelo mesmo caminho
+(`ferramentas.camada_para_gravar`; antes pedia `calco.camada(tipo)`). O instrumento é o .ebgeo
+exportado, relido pelo leitor.
 
 Rodar com o Python do QGIS 4:
     python-qgis.bat EBGeo/Calco/testes/test_arvore_propriedades.py
@@ -192,17 +194,18 @@ class TestDesenhoNoAtlas(unittest.TestCase):
 
     PONTUAIS = ('military_symbol', 'coordination_measure', 'engineering_symbol', 'magnetic_declination')
 
-    def _alvo(self, evitar=()):
+    def _alvo(self, evitar=(), candidatos=PONTUAIS):
         """
         (grupo do mapa, subgrupo, camada irmã, tipo): uma camada do EBGeo com alguma camada e sem a
-        de um tipo pontual, no mapa ligado ou, sem ela, no primeiro mapa já carregado que a tenha.
+        de um dos `candidatos` (os tipos pontuais), no mapa ligado ou, sem ela, no primeiro mapa já
+        carregado que a tenha.
         """
         mapas = sorted(self._mapas(), key=lambda g: not g.itemVisibilityChecked())
         for g in mapas:
             arvore.materializar_mapa(g, self.proj)  # o mapa ainda "(carregar)" carrega; o carregado fica
             for sub in g.children():
                 tipos = {n.layer().customProperty(arvore.PROP_TIPO): n.layer() for n in sub.findLayers()}
-                for tipo in self.PONTUAIS:
+                for tipo in candidatos:
                     if tipos and tipo not in tipos and (sub, tipo) not in evitar:
                         return g, sub, next(iter(tipos.values())), tipo
         return None, None, None, None
@@ -219,6 +222,22 @@ class TestDesenhoNoAtlas(unittest.TestCase):
         ft.canvasReleaseEvent(ev)
         self.assertEqual(len(criadas), 1)
         return criadas[0]
+
+    def _azimute(self, tipo, iface):
+        """A construção do Azimute e Distância gravada pela ferramenta: (camada, ebgeo_id)."""
+        from Calco import zoom
+        from Calco.azimute import geometria as G, gravacao
+        from Calco.azimute.painel import estado_inicial
+        from Calco.calco import calco_ativo
+        e = estado_inicial()
+        e['outputMode'] = gravacao.MODO_DO_TIPO[tipo]
+        e['referencePoint'] = [-43.2, -22.875]
+        e['meridianConvergence'] = 0.0
+        e['legs'] = [{'azimuth': az, 'distance': 800, 'observation': ''} for az in (0, 120, 240)]
+        z, _lat = zoom.zoom_do_canvas(self.canvas)
+        lyr, ids = gravacao.criar(calco_ativo(), e, z, iface)
+        self.assertTrue(ids)
+        return lyr, ids[0]
 
     def _exportado(self):
         """{ebgeo_id: (mapa, balde, layerId)} do .ebgeo exportado do calco e relido pelo leitor."""
@@ -290,6 +309,41 @@ class TestDesenhoNoAtlas(unittest.TestCase):
         self.assertIs(no.parent(), sub)
         self.assertEqual(do_filtro(lyr), (mapa, sub.customProperty(arvore.PROP_CAMADA)))
         self.assertEqual(self._exportado()[eid], (mapa, schema.TIPOS[tipo]['balde'], sub.customProperty(arvore.PROP_CAMADA)))
+
+    LINEARES = ('line', 'polygon', 'point')
+
+    def test_azimute_e_distancia_no_subgrupo_ativo(self):
+        """O Azimute e Distância grava no mapa e na camada do EBGeo ativos, como as ferramentas militares."""
+        mapa_atual, sub, irma, tipo = self._alvo(candidatos=self.LINEARES)
+        self.assertIsNotNone(sub, 'nenhuma camada do EBGeo carregada sem a linha, o polígono ou o ponto')
+        lyr, eid = self._azimute(tipo, _Iface(ativa=irma, no=self.proj.layerTreeRoot().findLayer(irma.id())))
+        self.assertIsNone(self.proj.layerTreeRoot().findGroup('Calco: k3'))
+        self._conferir_camada(lyr, mapa_atual, sub, tipo)
+        f = next(lyr.getFeatures('"ebgeo_id" = \'{}\''.format(eid)))
+        self.assertEqual((f['mapa'], f['camada_id']), (mapa_atual.customProperty(arvore.PROP_MAPA), sub.customProperty(arvore.PROP_CAMADA)))
+        self.assertEqual(self._exportado()[eid], (mapa_atual.customProperty(arvore.PROP_MAPA), schema.TIPOS[tipo]['balde'],
+                                                  sub.customProperty(arvore.PROP_CAMADA)))
+
+    def test_azimute_pior_caso_o_caminho_de_antes_reprova(self):
+        """Com a camada pedida a `calco.camada(tipo)` (o código de antes), a régua acusa o mapa e a camada errados."""
+        from unittest import mock
+        from Calco import ferramentas
+        mapa_atual, sub, irma, tipo = self._alvo(candidatos=self.LINEARES)
+        self.assertIsNotNone(sub)
+        with mock.patch.object(ferramentas, 'camada_para_gravar', lambda calco, t, iface=None: calco.camada(t)):
+            lyr, eid = self._azimute(tipo, _Iface(ativa=irma, no=self.proj.layerTreeRoot().findLayer(irma.id())))
+        try:
+            esperado = (mapa_atual.customProperty(arvore.PROP_MAPA), schema.TIPOS[tipo]['balde'],
+                        sub.customProperty(arvore.PROP_CAMADA))
+            self.assertNotEqual(self._exportado()[eid], esperado)
+            self.assertIsNot(self.proj.layerTreeRoot().findLayer(lyr.id()).parent(), sub)
+        finally:
+            g = self.proj.layerTreeRoot().findGroup('Calco: k3')
+            ids = [n.layer().id() for n in g.findLayers()] if g is not None else []
+            if g is not None:
+                g.parent().removeChildNode(g)
+            self.proj.removeMapLayers(ids)
+            lyr = None
 
     def test_pior_caso_o_caminho_de_antes_reprova(self):
         """Sem camada_para_desenho (o código de antes), a régua acusa o mapa e a camada errados."""

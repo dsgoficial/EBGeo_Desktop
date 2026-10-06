@@ -828,6 +828,50 @@ class TestSetaCombinada(unittest.TestCase):
                 self.assertLess(d, LIMITE_DESVIO_M)
                 self.assertGreater(dp, 50)
 
+    def test_ramo_editado_no_dock_como_o_web(self):
+        """
+        O editor dos ramos do dock (regras.editar_ramo) muda só o ramo, como _updateBranchProperty do
+        painel do Web: a largura de um ramo; a ponta dupla do ramo 0 (o Web a espelha no topo); e a
+        largura de um ramo depois da largura da feição editada no Desktop (que valia para todos: cada
+        ramo fica com ela e o ramo editado com a sua). O desenho do estilo com a coluna nova é o
+        polígono do Web com o ramo mudado; o pior caso é o desenho da coluna de antes.
+        """
+        from Calco import regras
+        _nome, cols0, _p = self.casos[0]
+        _nome, cols3, _p = self.casos[3]
+        edicoes = (('largura do ramo 2', cols0, 1, 'width', 650.0),
+                   ('ponta dupla do ramo 1', cols0, 0, 'doubleHeaded', True),
+                   ('largura do ramo 3 com a da feição editada', cols3, 2, 'width', 300.0))
+        web_casos, novos = [], []
+        for nome, cols, i, chave, valor in edicoes:
+            ramos, regravar = regras.editar_ramo(cols['ramos'], cols, 3, i, chave, valor)
+            novo = dict(cols, ramos=ramos, **regravar)
+            novos.append((nome, cols, novo))
+            # o Web: as propriedades que desenha antes da edição (ramos_desenhados) e o ramo mudado
+            antes = regras.ramos_desenhados(cols['ramos'], cols, 3)
+            lista, _topo = regras.ler_ramos_seta(cols['ramos'])
+            branches = [dict(lista[j], **antes[j], baseCoordinates=self.R[j]) for j in range(3)]
+            branches[i][chave] = valor
+            props = dict(isMerged=True, baseCoordinates=self.R[0], branches=branches, width=cols['width_m'])
+            if i == 0:
+                props[chave] = valor
+            web_casos.append(dict(tipo='arrow', coords=self.R[0], props=props))
+        web, motivo = rodar_web(web_casos)
+        if web is None:
+            self.skipTest(motivo)
+        for (nome, cols, novo), w in zip(novos, web):
+            with self.subTest(caso=nome):
+                w = geometria_geojson(w['geom'])
+                d = hausdorff_geo_m(self._desenho(novo), w)
+                dp = hausdorff_geo_m(self._desenho(cols), w)
+                medir('Seta combinada, ramo editado no dock, {}: Web x QGIS {:.2f} m (a coluna de antes {:.0f} m)'.format(
+                    nome, d, dp))
+                self.assertLess(d, LIMITE_DESVIO_M)
+                self.assertGreater(dp, 50)
+        # a largura da feição editada volta à da importação: senão valeria para todos os ramos
+        self.assertEqual(regras.editar_ramo(cols3['ramos'], cols3, 3, 2, 'width', 300.0)[1],
+                         {'width_m': regras.ler_ramos_seta(cols3['ramos'])[1]['width']})
+
     def test_coluna_em_texto(self):
         """A coluna em texto (a camada de memória do exportador, a aberta à mão) desenha o mesmo."""
         from Calco.exportador import desenho

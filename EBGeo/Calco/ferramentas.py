@@ -91,6 +91,34 @@ def mapa_e_camada(layer):
     return out
 
 
+def no_ativo(iface):
+    """O nó selecionado no painel de camadas (camada ou grupo), ou None."""
+    try:
+        return iface.layerTreeView().currentNode() if iface else None
+    except (AttributeError, RuntimeError):
+        return None
+
+
+def camada_para_gravar(calco, tipo, iface=None):
+    """
+    A camada do tipo em que uma ferramenta grava no calco: a selecionada, quando é deste calco e
+    deste tipo (num atlas importado é ela que diz o mapa e a camada do EBGeo em que o operador está
+    desenhando); sem ela, a do mapa e da camada do EBGeo ativos na árvore do atlas, criada no
+    subgrupo quando o mapa ainda não tem o tipo; no calco comum, `calco.camada(tipo)`, que num
+    atlas criaria o grupo "Calco: nome" fora dele, sem o filtro de mapa e camada.
+    """
+    ativa = iface.activeLayer() if iface else None
+    from .calco import PROP_CAMINHO, PROP_TIPO
+    if (ativa is not None and ativa.customProperty(PROP_CAMINHO) == calco.caminho
+            and ativa.customProperty(PROP_TIPO) == tipo):
+        return ativa
+    from .importador.arvore import camada_para_desenho
+    lyr = camada_para_desenho(calco.caminho, tipo, no_ativo(iface))
+    if lyr is not None:
+        return lyr
+    return calco.camada(tipo)
+
+
 def gravar_feicao(layer, tipo, geometria_wgs84, atributos):
     """
     Grava a feição na camada. Tipos de símbolo pontual recebem o SVG gerado pelo motor.
@@ -143,27 +171,7 @@ class _Base(QgsMapTool):
             if self.iface:
                 self.iface.messageBar().pushWarning('EBGeo', 'Crie ou abra um calco antes de desenhar.')
             return None
-        # a camada selecionada, quando é deste calco e deste tipo: num atlas importado é ela que
-        # diz o mapa e a camada EBGeo em que o operador está desenhando
-        ativa = self.iface.activeLayer() if self.iface else None
-        from .calco import PROP_CAMINHO, PROP_TIPO
-        if ativa is not None and ativa.customProperty(PROP_CAMINHO) == c.caminho                 and ativa.customProperty(PROP_TIPO) == self.tipo:
-            return ativa
-        # atlas importado sem camada do tipo selecionada: a do mapa e da camada do EBGeo ativos na
-        # árvore, criada no subgrupo quando o mapa ainda não tem o tipo (c.camada criaria o grupo
-        # "Calco: nome" fora do atlas, sem o filtro de mapa e camada)
-        from .importador.arvore import camada_para_desenho
-        lyr = camada_para_desenho(c.caminho, self.tipo, self._no_ativo())
-        if lyr is not None:
-            return lyr
-        return c.camada(self.tipo)
-
-    def _no_ativo(self):
-        """O nó selecionado no painel de camadas (camada ou grupo), ou None."""
-        try:
-            return self.iface.layerTreeView().currentNode() if self.iface else None
-        except (AttributeError, RuntimeError):
-            return None
+        return camada_para_gravar(c, self.tipo, self.iface)
 
     def _wgs(self, ponto_mapa):
         crs = self.canvas().mapSettings().destinationCrs()

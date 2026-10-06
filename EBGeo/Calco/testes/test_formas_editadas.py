@@ -15,8 +15,16 @@ O que cada classe prova:
                         fixam a tolerância (formas.TOL_PISO_M, formas.TOL_FRACAO) são impressas;
     TestExportador      a fixture 06 importada, com as formas escaladas pelo QGIS (QgsGeometry, na camada em
                         EPSG:4326, como a ferramenta Escalar), sai com os parâmetros novos e a geometria que
-                        o Web gera para eles, sem aviso; a forma com um vértice puxado sai como desenhada,
-                        com o aviso e o desvio; o código de antes (só a translação) reprova.
+                        o Web gera para eles, sem aviso; a forma girada em graus (a ferramenta Girar, sem o
+                        plugin) sai como a forma girada no terreno, com o giro dado e um aviso; a forma com
+                        um vértice puxado sai como desenhada, com o aviso e o desvio; o código de antes (só
+                        a translação) reprova, e o exportador sem o reconhecimento do giro também;
+    TestGiroEmGraus     a forma girada em graus deixa de ser a forma (fora do equador), e giro_em_graus a
+                        devolve girada no terreno: o ajuste a reconhece com o giro dado; a girada e puxada
+                        não é reconhecida;
+    TestGuardiao        com o plugin, girar a forma na camada (o comando de edição do Girar) a troca, no
+                        comando do guardião, pela forma girada no terreno, que o ajuste reconhece no plano;
+                        o Ctrl+Z volta ao desenho do Girar; sem o guardião, fica achatada.
 """
 import copy
 import json
@@ -256,6 +264,59 @@ class TestAjuste(unittest.TestCase):
         self.assertAlmostEqual(q['bearing'], 50, delta=0.05)
 
 
+def girar_em_graus(anel, graus=30):
+    """O anel girado como a ferramenta Girar do QGIS na camada em EPSG:4326 (horário, no centro do envolvente)."""
+    g = QgsGeometry.fromPolygonXY([[QgsPointXY(*v) for v in anel]])
+    g.rotate(graus, g.boundingBox().center())
+    return [[v.x(), v.y()] for v in g.asPolygon()[0]]
+
+
+def _giro_esperado(t, p0, q, graus):
+    """O giro do rumo, em graus, além do esperado, reduzido à simetria da forma (meia volta na elipse e no retângulo)."""
+    d = (q['bearing'] - (p0.get('bearing') or 0) - graus + 180) % 360 - 180
+    return (d + 90) % 180 - 90 if t != 'sector' else d
+
+
+@unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
+class TestGiroEmGraus(unittest.TestCase):
+    """formas.giro_em_graus sobre as formas da fixture 06 (de 15 a 24 graus de latitude sul)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.formas = formas_06()
+
+    def test_girada_em_graus_volta_girada_no_terreno(self):
+        achatadas, pior = 0, 0.0
+        for t, p, anel in self.formas:
+            with self.subTest(tipo=t, nome=p.get('nome')):
+                girado = girar_em_graus(anel, 30)
+                r = formas.ajustar(t, p, anel, girado)
+                achatadas += t != 'circle' and (r is None or r[2] > r[3])
+                novo, giro = formas.giro_em_graus(anel, girado, t)
+                self.assertAlmostEqual(giro, -30, delta=1e-6)   # anti-horário: o Girar do QGIS é horário
+                q, _a, desvio, tol = formas.ajustar(t, p, anel, novo)
+                self.assertLessEqual(desvio, tol)
+                pior = max(pior, desvio / formas.tamanho(t, q))
+                if t != 'circle':
+                    self.assertAlmostEqual(_giro_esperado(t, p, q, 30), 0, delta=0.05)
+                for k in ('radius', 'majorRadius', 'minorRadius', 'width', 'height', 'aperture'):
+                    if k in formas._LIVRES[t]:
+                        self.assertAlmostEqual(q[k] / p[k], 1, delta=1e-3)
+        n = sum(1 for t, _p, _a in self.formas if t != 'circle')
+        print('\ngiro em graus: {} de {} formas que não são círculo deixam de ser a forma; giradas no terreno, '
+              'voltam a até {:.3f} % do tamanho'.format(achatadas, n, 100 * pior))
+        # a esta latitude, as que não são círculo ficam achatadas, o que o giro em graus conserta; só o
+        # "Retângulo girado 30°", girado mais 30 graus, fica a 0,17 m de um retângulo (tolerância de 1,8 m)
+        self.assertEqual(achatadas, n - 1)
+
+    def test_girada_e_puxada_nao_e_reconhecida(self):
+        for t, p, anel in self.formas:
+            with self.subTest(tipo=t, nome=p.get('nome')):
+                girado = girar_em_graus(anel, 30)
+                self.assertIsNone(formas.giro_em_graus(anel, puxar_vertice(t, p, girado, 0.003), t))
+                self.assertIsNone(formas.giro_em_graus(anel, anel, t))   # sem giro, nada a fazer
+
+
 def puxar_vertice(t, p, anel, frac, i=2):
     """O vértice i puxado para fora do centro do envolvente, de frac do tamanho da forma."""
     xs = [v[0] for v in anel[:-1]]
@@ -289,21 +350,26 @@ class TestExportador(unittest.TestCase):
     """A fixture 06 importada, as formas editadas pela camada (o caminho do QGIS) e exportada."""
 
     ESCALA = 1.5
+    GIRO = 30
 
     @classmethod
     def setUpClass(cls):
         cls.cam = os.path.join(TMP, 'f06.gpkg')
         escritor.importar(FIXTURE_06, cls.cam)
-        cls.escaladas, cls.puxadas = {}, {}
+        cls.escaladas, cls.puxadas, cls.giradas = {}, {}, {}
         for tipo in BALDES.values():
             l = QgsVectorLayer('{}|layername={}'.format(cls.cam, schema.TIPOS[tipo]['tabela']), tipo, 'ogr')
             fs = list(l.getFeatures())
             l.startEditing()
-            for i, f in enumerate(fs[:3]):
+            for i, f in enumerate(fs[:4]):
                 g = QgsGeometry(f.geometry())
                 if i < 2:
                     l.changeGeometry(f.id(), _transformar(g, cls.ESCALA))
                     cls.escaladas[f['ebgeo_id']] = tipo
+                elif i == 3:
+                    g.rotate(cls.GIRO, g.boundingBox().center())   # a ferramenta Girar, sem o plugin
+                    l.changeGeometry(f.id(), g)
+                    cls.giradas[f['ebgeo_id']] = tipo
                 else:
                     v = g.vertexAt(2)
                     tam = 0.01 * 111320 * max(g.boundingBox().width(), g.boundingBox().height()) / 2
@@ -355,6 +421,31 @@ class TestExportador(unittest.TestCase):
                 aviso = [a for a in self.exp.relatorio.avisos if '"{}"'.format(nome) in a]
                 self.assertTrue(aviso and 'tolerância' in aviso[0], aviso)
 
+    def test_giradas_em_graus_saem_giradas_no_terreno(self):
+        """Sem o plugin, a forma girada pela ferramenta Girar sai como a forma girada no terreno, com aviso."""
+        self.assertEqual(len(self.giradas), 4)
+        casos = []
+        for eid, tipo in self.giradas.items():
+            p, p0 = self.saida[eid]['properties'], self.orig[eid]['properties']
+            casos.append((tipo, p))
+            with self.subTest(tipo=tipo, nome=p.get('nome')):
+                if tipo != 'circle':
+                    self.assertAlmostEqual(_giro_esperado(tipo, p0, p, self.GIRO), 0, delta=0.05)
+                    aviso = [a for a in self.exp.relatorio.avisos if '"{}"'.format(p0.get('nome')) in a]
+                    self.assertTrue(aviso and 'girad' in aviso[0] and 'vértice a vértice' not in aviso[0], aviso)
+                for k in ('radius', 'majorRadius', 'minorRadius', 'width', 'height', 'aperture'):
+                    if k in p0 and k in formas._LIVRES[tipo]:
+                        self.assertAlmostEqual(p[k] / p0[k], 1, delta=1e-3)
+                self.assertEqual(self.saida[eid]['geometry']['coordinates'][0],
+                                 montador._arredondar(formas.gerar(tipo, p)))
+        web = rodar_web(casos)
+        if web is not None:
+            pior = max(desvio_vertices_m(self.saida[eid]['geometry']['coordinates'][0], w)
+                       for (eid, _t), w in zip(self.giradas.items(), web))
+            print('\nformas giradas em graus: o Web, com os parâmetros exportados, desenha a geometria exportada a até '
+                  '{:.3f} m'.format(pior))
+            self.assertLess(pior, 0.1)
+
     def test_regua_reprova_so_translacao(self):
         """Pior caso: o exportador de antes (sem o ajuste) avisa nas escaladas e guarda os parâmetros velhos."""
         class Antes(montador.Montador):
@@ -362,7 +453,85 @@ class TestExportador(unittest.TestCase):
                 return None, 'sem ajuste'
         exp = Antes(montador.Calco(self.cam), desenho.GeradorDesenho()).montar()
         avisos = [a for a in exp.relatorio.avisos if 'vértice a vértice' in a]
-        self.assertEqual(len(avisos), len(self.escaladas) + len(self.puxadas))
+        self.assertEqual(len(avisos), len(self.escaladas) + len(self.puxadas) + len(self.giradas))
+
+    def test_regua_reprova_sem_o_giro_em_graus(self):
+        """Pior caso: sem giro_em_graus (o exportador de antes), a girada que ficou achatada sai como desenhada."""
+        from unittest import mock
+        with mock.patch.object(formas, 'giro_em_graus', lambda *a: None):
+            exp = montador.montar(self.cam, montador.ESCOPO_TUDO, None, desenho.GeradorDesenho())
+        achatadas = [eid for eid, t in self.giradas.items() if t != 'circle']
+        nomes = ['"{}"'.format(self.orig[eid]['properties'].get('nome')) for eid in achatadas]
+        avisos = [a for a in exp.relatorio.avisos if 'vértice a vértice' in a and any(n in a for n in nomes)]
+        self.assertEqual(len(avisos), len(achatadas))
+
+
+@unittest.skipUnless(os.path.exists(FIXTURE_06), 'fixture 06 ausente')
+class TestGuardiao(unittest.TestCase):
+    """Com o plugin, o guardião troca a forma girada em graus pela forma girada no terreno."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cam = os.path.join(TMP, 'guardiao.gpkg')
+        escritor.importar(FIXTURE_06, cls.cam)
+        cls.orig = {}
+        for m in leitor.abrir(FIXTURE_06).data['maps'].values():
+            for balde in BALDES:
+                for f in (m.get('features') or {}).get(balde, []):
+                    cls.orig[f['properties']['id']] = f['properties']
+
+    def _girar(self, tipo, com_guardiao=True):
+        """Gira a primeira forma do tipo como o Girar do QGIS (um comando de edição)."""
+        from unittest import mock
+        from Calco import guardiao
+        l = QgsVectorLayer('{}|layername={}'.format(self.cam, schema.TIPOS[tipo]['tabela']), tipo, 'ogr')
+        g = guardiao.Guardiao(l, tipo)
+        f = next(l.getFeatures())
+        antes = QgsGeometry(f.geometry())
+        girada = QgsGeometry(antes)
+        girada.rotate(30, girada.boundingBox().center())
+        l.startEditing()
+        sem = mock.patch.object(g, '_desgirar', return_value=None)
+        if not com_guardiao:
+            sem.start()
+        l.beginEditCommand('Feições giradas')
+        l.changeGeometry(f.id(), girada)
+        l.endEditCommand()
+        if not com_guardiao:
+            sem.stop()
+        self.addCleanup(lambda: (g.desconectar(), l.rollBack()))
+        return l, g, f, antes, girada
+
+    @staticmethod
+    def _anel(geom):
+        partes = geom.asMultiPolygon() if geom.isMultipart() else [geom.asPolygon()]
+        return [[v.x(), v.y()] for v in partes[0][0]]
+
+    def test_girar_vira_a_forma_girada_no_terreno(self):
+        for tipo in ('circle', 'ellipse', 'rectangle', 'sector'):
+            with self.subTest(tipo=tipo):
+                l, g, f, antes, girada = self._girar(tipo)
+                agora = l.getFeature(f.id()).geometry()
+                self.assertEqual(g.desgiradas, 1)
+                esperado, _giro = formas.giro_em_graus(self._anel(antes), self._anel(girada), tipo)
+                self.assertEqual(self._anel(agora), [[x, y] for x, y in esperado])
+                self.assertEqual(agora.isMultipart(), antes.isMultipart())
+                # o ajuste a reconhece no plano, sem o giro em graus: é a forma, com o giro dado
+                p0 = self.orig[f['ebgeo_id']]
+                q, _a, desvio, tol = formas.ajustar(tipo, p0, self._anel(antes), self._anel(agora))
+                self.assertLessEqual(desvio, tol)
+                if tipo != 'circle':
+                    self.assertAlmostEqual(_giro_esperado(tipo, p0, q, 30), 0, delta=0.05)
+                r = formas.ajustar(tipo, p0, self._anel(antes), self._anel(girada))
+                self.assertGreater(r[2], r[3])   # o desenho do Girar não era a forma
+                # Ctrl+Z desfaz a troca do guardião e volta ao desenho do Girar
+                l.undoStack().undo()
+                self.assertEqual(self._anel(l.getFeature(f.id()).geometry()), self._anel(girada))
+
+    def test_pior_caso_sem_o_guardiao_fica_achatada(self):
+        l, g, f, antes, girada = self._girar('ellipse', com_guardiao=False)
+        self.assertEqual(g.desgiradas, 0)
+        self.assertEqual(self._anel(l.getFeature(f.id()).geometry()), self._anel(girada))
 
 
 if __name__ == '__main__':

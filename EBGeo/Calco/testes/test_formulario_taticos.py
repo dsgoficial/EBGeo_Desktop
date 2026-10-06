@@ -15,7 +15,9 @@ Formulário das linhas táticas sem catálogo: Linha de Limite, Seta e Frente Oc
     pelo formulário e salvar deixa o desenho igual pixel a pixel e as demais colunas iguais.
   - Dock: os mesmos campos que a especificação, o editor das posições no buffer (Salvar grava a
     lista que o estilo lê, Descartar volta), Inverter sentido no Limite e na Seta, bloqueada só
-    para leitura.
+    para leitura; na Seta combinada, o editor dos ramos (largura, aeromóvel, ponta e ponta dupla
+    de cada ramo, como o painel do Web) grava só o ramo na coluna `ramos` e relê o que cada ramo
+    desenha quando a seta inteira muda; a seta simples não o mostra.
   - Guardião: posições ilegíveis gravadas por outro caminho voltam ao valor anterior; a Seta
     bloqueada não se edita pela calculadora.
 
@@ -983,6 +985,83 @@ class TesteDock(unittest.TestCase):
         depois = [p.x() for p in g.vertices()]
         self.assertEqual(depois, list(reversed(antes)))
         self.assertTrue(self.painel.descartar())
+
+    # a Seta combinada de três ramos, como o importador a grava (as colunas e a coluna `ramos`)
+    RAMOS = [{'width': 400, 'doubleHeaded': False}, {'width': 400, 'doubleHeaded': True}, {'width': 250}]
+    TOPO = {'width': 400.0, 'showArrowHead': True, 'doubleHeaded': False, 'headLengthRatio': 1.5, 'airmobile': False,
+            'airmobilePosition': 0.7}
+    PARTES = 'MULTILINESTRING((-47 -15, -46.93 -15.02, -46.86 -15.0), (-47 -14.98, -46.93 -14.98, -46.86 -14.98), ' \
+             '(-47 -14.96, -46.93 -14.95, -46.86 -14.96))'
+
+    def _combinada(self):
+        from Calco.ferramentas import gravar_feicao
+        lyr = self.calco.camada('arrow')
+        a = atributos('arrow', 'seta_padrao')
+        a.update(ebgeo_id='combinada_{}'.format(uuid.uuid4().hex[:6]), width_m=400.0, show_arrow_head=True,
+                 double_headed=False, head_length_ratio=1.5, airmobile=False, airmobile_position=0.7,
+                 ramos={'ramos': copy.deepcopy(self.RAMOS), 'topo': dict(self.TOPO)})
+        gravar_feicao(lyr, 'arrow', QgsGeometry.fromWkt(self.PARTES), a)
+        self.painel._camada_mudou(lyr)
+        self.painel.mostrar_feicao(lyr, a['ebgeo_id'])
+        self.painel._selecao_mudou()
+        _app.processEvents()
+        return lyr, a['ebgeo_id']
+
+    def _no_buffer(self, lyr):
+        f = lyr.getFeature(self.painel.fid)
+        return regras.ler_ramos_seta(f['ramos'])[0], f
+
+    def test_ramos_da_seta_combinada(self):
+        lyr, eid = self._combinada()
+        ed = lambda: self.painel.widgets['ramos']  # noqa: E731  (o dock remonta ao abrir a edição)
+        self.assertIn('ramos', self.painel.campos_visiveis())
+        self.assertEqual([w.value() for w in ed().largura], [400, 400, 250])
+        self.assertEqual([c['doubleHeaded'].isChecked() for c in ed().caixas], [False, True, False])
+        self.assertEqual([c['showArrowHead'].isChecked() for c in ed().caixas], [True, True, True])
+        self._capturar('dock_seta_combinada.png')
+        self.assertFalse(lyr.isEditable())   # mostrar não grava
+        # a largura do ramo 3: só ele muda, e a coluna da feição fica
+        ed().largura[2].setValue(600)
+        self.painel._gravar_pendentes()
+        ramos, f = self._no_buffer(lyr)
+        self.assertEqual([r.get('width') for r in ramos], [400, 400, 600.0])
+        self.assertEqual([r.get('doubleHeaded') for r in ramos], [False, True, None])
+        self.assertEqual(f['width_m'], 400.0)
+        # a largura da seta inteira (vale para todos os ramos, como no Web): o editor relê
+        self.painel.widgets['width_m'].setValue(650)
+        self.painel._gravar_pendentes()
+        self.assertEqual([w.value() for w in ed().largura], [650, 650, 650])
+        # a ponta dupla do ramo 1: só ela muda no ramo; a largura segue a da feição em todos
+        ed().caixas[0]['doubleHeaded'].setChecked(True)
+        self.painel._gravar_pendentes()
+        ramos, f = self._no_buffer(lyr)
+        self.assertEqual([r.get('width') for r in ramos], [400, 400, 600.0])
+        self.assertEqual([r.get('doubleHeaded') for r in ramos], [True, True, None])
+        self.assertEqual(f['width_m'], 650.0)
+        self.assertEqual([w.value() for w in ed().largura], [650, 650, 650])
+        # a largura do ramo 2 depois da da feição: cada ramo fica com a da feição, o ramo 2 com a
+        # dele, e a coluna volta à da importação (senão valeria para todos de novo)
+        ed().largura[1].setValue(500)
+        self.painel._gravar_pendentes()
+        ramos, f = self._no_buffer(lyr)
+        self.assertEqual([r.get('width') for r in ramos], [650, 500.0, 650])
+        self.assertEqual(f['width_m'], 400.0)
+        self.assertEqual(self.painel.widgets['width_m'].value(), 400)
+        self.assertEqual([w.value() for w in ed().largura], [650, 500, 650])
+        # o desenho do estilo é o das propriedades que o editor mostra (seta_ramo.exp)
+        self.assertEqual(regras.ramos_desenhados(f['ramos'], {c: f[c] for c in ('width_m', 'show_arrow_head',
+                                                 'double_headed', 'airmobile')}, 3),
+                         [{'width': w, 'airmobile': False, 'showArrowHead': True, 'doubleHeaded': d}
+                          for w, d in ((650.0, True), (500.0, True), (650.0, False))])
+        self.assertTrue(self.painel.salvar())
+        _app.processEvents()
+        d = self._disco('arrow', eid)
+        self.assertEqual([r.get('width') for r in regras.ler_ramos_seta(d['ramos'])[0]], [650, 500, 650])
+
+    def test_seta_simples_sem_editor_de_ramos(self):
+        self._nova('arrow', 'seta_padrao')
+        self.assertNotIn('ramos', self.painel.widgets)
+        self.assertNotIn('ramos', self.painel.campos_visiveis())
 
     def test_capturas(self):
         self._nova('boundary', 'limite_3')

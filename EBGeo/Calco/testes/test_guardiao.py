@@ -222,7 +222,7 @@ class TesteGuardiao(unittest.TestCase):
 
 class TesteSemPluginSoValorNovo(unittest.TestCase):
     """
-    K5 dos defeitos conhecidos: sem o plugin, as regras de troca (a cor padrão do símbolo novo só
+    K5 (seção 11 da ARQUITETURA.md, "Sem o plugin, trocar o tipo não aplica os padrões"): sem o plugin, as regras de troca (a cor padrão do símbolo novo só
     na linha que ainda veste a do anterior, os padrões da Área, a cor e as escolhas de desenho da
     Medida) não têm como rodar no formulário nativo, porque dependem do valor ANTERIOR do campo
     trocado, e o valor padrão por expressão aplicado na atualização, o único mecanismo sem código,

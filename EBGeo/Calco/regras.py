@@ -161,6 +161,120 @@ _REGRAS['boundary'] = _linha_de_limite
 
 
 # ---------------------------------------------------------------------------------------------
+# Seta combinada: o ramo editado no dock
+# ---------------------------------------------------------------------------------------------
+# O painel do Web edita, em cada ramo da seta combinada, a largura, o aeromóvel, a ponta e a ponta
+# dupla (_addBranchGeometryControls de arrow_attributes_panel.js), e o dock faz o mesmo na coluna
+# `ramos` ({'ramos': [propriedades de cada ramo], 'topo': {chave: valor das colunas na
+# importação}}, schema.ramos_seta). O que o ramo desenha é o que seta_ramo.exp lê: a do ramo vale
+# enquanto a coluna da feição é a da importação; editada no Desktop, a coluna vale para todos os
+# ramos. A largura do ramo cai na da feição quando falsa; a ponta, a ponta dupla e o aeromóvel não.
+
+# (chave do Web, coluna da feição, o que o estilo desenha com a coluna nula: seta.exp)
+CHAVES_RAMO_DOCK = (('width', 'width_m', 1000.0), ('airmobile', 'airmobile', False),
+                    ('showArrowHead', 'show_arrow_head', True), ('doubleHeaded', 'double_headed', False))
+# as outras duas propriedades do ramo, que o dock não edita por ramo, como o painel do Web
+_OUTRAS_RAMO = (('headLengthRatio', 'head_length_ratio'), ('airmobilePosition', 'airmobile_position'))
+
+
+def ler_ramos_seta(bruto):
+    """(lista das propriedades de cada ramo, topo) da coluna `ramos`, lista ou texto JSON; ([], None) sem ela."""
+    import json
+    v = valor(bruto)
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except ValueError:
+            v = None
+    if not isinstance(v, dict) or not isinstance(v.get('ramos'), list):
+        return [], None
+    topo = v.get('topo') if isinstance(v.get('topo'), dict) else {}
+    return [r if isinstance(r, dict) else {} for r in v['ramos']], topo
+
+
+def _numero_nao_zero(v):
+    v = valor(v)
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and v != 0
+
+
+def _editada(colunas, topo, chave, coluna):
+    """A coluna da feição editada no Desktop: diferente da importação (o IS de seta_ramo.exp)."""
+    a, b = valor(colunas.get(coluna)), valor(topo.get(chave))
+    if a is None or b is None:
+        return (a is None) != (b is None)
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is not b
+    try:
+        return float(a) != float(b)
+    except (TypeError, ValueError):
+        return a != b
+
+
+def _da_feicao(chave, coluna, nulo, colunas):
+    v = valor(colunas.get(coluna))
+    if chave == 'width':
+        return abs(float(v)) if _numero_nao_zero(v) else nulo
+    return nulo if v is None else bool(v)
+
+
+def ramos_desenhados(bruto, colunas, n):
+    """
+    [{chave: valor}] dos `n` ramos, como seta_ramo.exp os desenha (CHAVES_RAMO_DOCK): o do ramo
+    enquanto a coluna da feição é a da importação, senão o da feição; o ramo além da lista vale o
+    da feição.
+    """
+    lista, topo = ler_ramos_seta(bruto)
+    topo = topo or {}
+    out = []
+    for j in range(n):
+        r = {}
+        for chave, coluna, nulo in CHAVES_RAMO_DOCK:
+            feicao = _da_feicao(chave, coluna, nulo, colunas)
+            if j >= len(lista) or _editada(colunas, topo, chave, coluna):
+                r[chave] = feicao
+            elif chave == 'width':
+                r[chave] = abs(float(lista[j]['width'])) if _numero_nao_zero(lista[j].get('width')) else feicao
+            elif chave == 'showArrowHead':
+                r[chave] = lista[j].get(chave) is not False
+            else:
+                r[chave] = lista[j].get(chave) is True
+        out.append(r)
+    return out
+
+
+def editar_ramo(bruto, colunas, n, i, chave, novo):
+    """
+    O ramo `i` (de `n`) com `chave` = `novo`, sem mudar o desenho dos outros: devolve (coluna
+    `ramos` nova, {coluna da feição: valor a regravar}). Como o _updateBranchProperty do Web, a
+    lista inteira é regravada e o ramo 0 é o espelho do topo (o exportador o devolve ao topo,
+    Montador._ramos). Quando a coluna da feição da chave foi editada no Desktop (valia para todos os
+    ramos), cada ramo passa a guardar o valor dela e a coluna volta à da importação: senão o estilo
+    e o exportador seguiriam com a da feição em todos os ramos. Ramo além da lista (parte nova da
+    geometria) entra com o que desenhava, o da feição. Sem a coluna, o topo é o valor das colunas.
+    """
+    lista, topo = ler_ramos_seta(bruto)
+    if topo is None:
+        topo = {w: valor(colunas.get(c)) for w, c, _n in CHAVES_RAMO_DOCK}
+        topo.update({w: valor(colunas.get(c)) for w, c in _OUTRAS_RAMO})
+    lista = [dict(r) for r in lista]
+    desenhados = ramos_desenhados(bruto, colunas, n)
+    for j in range(len(lista), n):
+        r = dict(desenhados[j])
+        for w, c in _OUTRAS_RAMO:
+            if _numero_nao_zero(colunas.get(c)):
+                r[w] = valor(colunas.get(c))
+        lista.append(r)
+    regravar = {}
+    coluna = dict((w, c) for w, c, _n in CHAVES_RAMO_DOCK)[chave]
+    if _editada(colunas, topo, chave, coluna):
+        for j, r in enumerate(lista[:n]):
+            r[chave] = desenhados[j][chave]
+        regravar[coluna] = topo.get(chave)
+    lista[i][chave] = novo
+    return {'ramos': lista, 'topo': topo}, regravar
+
+
+# ---------------------------------------------------------------------------------------------
 # Medida de Coordenação
 # ---------------------------------------------------------------------------------------------
 # Ao trocar a medida (`point_code`), como o seletor do Web e o dock de antes: o escalão acompanha

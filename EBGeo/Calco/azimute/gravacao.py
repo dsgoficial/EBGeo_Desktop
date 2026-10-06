@@ -67,11 +67,16 @@ def construcao_da_feicao(feat):
 
 # ---------------------------------------------------------------- camada
 
-def camada(calco, tipo):
-    """A camada do tipo no calco ativo, criando a tabela (point, line, polygon) se faltar."""
+def camada(calco, tipo, iface=None):
+    """
+    A camada do tipo no calco ativo, criando a tabela (point, line, polygon) se faltar. Num atlas
+    importado, a do mapa e da camada do EBGeo em que o operador está, como nas ferramentas
+    militares (`ferramentas.camada_para_gravar`).
+    """
     # cria a tabela que faltar e acrescenta a coluna azimute_distancia num calco antigo
     gpkg.criar_calco(calco.caminho, [tipo], apoio=False)
-    lyr = calco.camada(tipo)
+    from ..ferramentas import camada_para_gravar
+    lyr = camada_para_gravar(calco, tipo, iface)
     if lyr is not None and lyr.fields().indexOf(COLUNA) < 0:
         lyr.dataProvider().reloadData()
         lyr.updateFields()
@@ -132,11 +137,14 @@ def _editar(layer, funcao):
     return ok
 
 
-def criar(calco, estado, zoom=None):
-    """Grava a construção no calco. Devolve (camada, [ebgeo_id]) ou (None, [])."""
+def criar(calco, estado, zoom=None, iface=None):
+    """
+    Grava a construção no calco. Devolve (camada, [ebgeo_id]) ou (None, []). `iface` dá a camada
+    ativa e o nó da árvore que escolhem o mapa num atlas importado.
+    """
     modo = estado.get('outputMode', G.ROTA)
     tipo = TIPO_DO_MODO[modo]
-    lyr = camada(calco, tipo)
+    lyr = camada(calco, tipo, iface)
     if lyr is None:
         return None, []
     base = lyr.featureCount()

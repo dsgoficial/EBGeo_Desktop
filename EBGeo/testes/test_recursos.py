@@ -15,9 +15,11 @@ O que se prova:
     TestRecursos   o compilado tem exatamente os arquivos do .qrc, byte a byte iguais aos do disco,
                    sem o ícone antigo `icons/dsg.png` (nem no .qrc, nem no disco, nem no código), e
                    todo caminho `:/plugins/EBGeo/...` citado no código existe no compilado;
-    TestIcones     o plugin carregado: as ações do menu têm ícone, e os painéis que leem ícone do
-                   compilado (Análise de Visibilidade, Ir para coordenada) o desenham; a folha dos
-                   ícones vai para EBGEO_TESTE_SAIDA (ou uma pasta temporária) para conferência.
+    TestIcones     o plugin carregado: as ações do menu e do submenu do BDGEx têm ícone, e os
+                   painéis que leem ícone do compilado (Análise de Visibilidade, Ir para
+                   coordenada) o desenham; a folha dos ícones vai para EBGEO_TESTE_SAIDA (ou uma
+                   pasta temporária) para conferência. A Calculadora de Declinação aberta não
+                   deixa caixa de mensagem de topo solta (a causa da saída 139 do K7).
 """
 import glob
 import hashlib
@@ -161,13 +163,46 @@ class TestIcones(unittest.TestCase):
         cls.plugin.initGui()
 
     def test_acoes_do_menu_tem_icone(self):
-        # as ações do próprio menu EBGeo (as do submenu do BDGEx citam ícones de outro plugin,
-        # `:/plugins/DsgTools/icons/`, e ficam fora daqui)
         acoes = [a for a in self.plugin.ebGeo.actions() if a.menu() is None and not a.isSeparator()]
         self.assertGreater(len(acoes), 10)
         sem = [a.text() for a in acoes if not desenha(a.icon())]
         folha([a.icon() for a in acoes], 'recursos_acoes.png')
         self.assertEqual(sem, [])
+
+    def test_acoes_do_bdgex_tem_icone(self):
+        # as 29 do submenu do BDGEx apontavam para `:/plugins/DsgTools/icons/eb.png`, recurso de
+        # outro plugin, e saíam sem ícone; o eb.png deste plugin está no compilado
+        sub = [a.menu() for a in self.plugin.ebGeo.actions() if a.menu() is not None and a.menu().objectName() == 'bdgex']
+        self.assertEqual(len(sub), 1)
+
+        def folhas(menu):
+            for a in menu.actions():
+                if a.menu() is not None:
+                    yield from folhas(a.menu())
+                elif not a.isSeparator():
+                    yield a
+        acoes = list(folhas(sub[0]))
+        self.assertEqual(len(acoes), 29)
+        self.assertEqual([a.text() for a in acoes if not desenha(a.icon())], [])
+        folha([a.icon() for a in acoes], 'recursos_bdgex.png')
+        # o caminho de antes não desenha
+        self.assertFalse(desenha(QIcon(':/plugins/DsgTools/icons/eb.png')))
+
+    def test_declinacao_sem_caixa_de_mensagem_solta(self):
+        # a Calculadora de Declinação criava um QMessageBox() sem pai que nada usava, a causa da
+        # saída 139 do K7 (a janela de topo viva no fim do processo, destruída pelo sip em ordem
+        # que varia de uma execução para outra)
+        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+
+        def soltas():
+            return {id(w) for w in QApplication.topLevelWidgets() if isinstance(w, QMessageBox)}
+        antes = soltas()
+        IFACE.addDockWidget.reset_mock()
+        acao = {a.text(): a for a in self.plugin.ebGeo.actions()}['Calculadora de Declinação magnética e convergência meridiana']
+        acao.trigger()
+        self.assertEqual(IFACE.addDockWidget.call_count, 1)
+        self.assertIs(IFACE.addDockWidget.call_args[0][1], self.plugin.mainDecConv.dockWindow)
+        self.assertEqual(soltas() - antes, set())
 
     def test_paineis_desenham_os_icones_do_compilado(self):
         from qgis.PyQt.QtWidgets import QAbstractButton

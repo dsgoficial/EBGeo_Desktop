@@ -75,6 +75,27 @@ const AR = (await imp('military_tools/arrow_tool/add_arrow_geometry.js')).defaul
 const OF = (await imp('military_tools/occupied_front_tool/add_occupied_front_geometry.js')).default;
 const decl = await imp('military_tools/declination_tool/declination_svg_generator.js');
 const cl = new CL(), bd = new BD(), ar = new AR(), of = new OF();
+const { CoordinationMeasureGenerator } = await imp('military_tools/coordination_measure_tool/coordination_measure_generator.js');
+const { codigoDesenhavel } = await imp('military_tools/coordination_measure_tool/familias-de-escalao.js');
+const { applyGeneratedBitmap, bitmapStampChanges } = await imp('layers/bitmap-version.js');
+
+// O Web abre o arquivo e redesenha o bitmap da Medida: a importação não guarda o registro de
+// desenho local (getLocalBitmap), registerFromDisk de layer_setup.js não serve, e
+// restoreGeneratedBitmap chama o regenerador (_regenerateRemote do controle), que carimba o
+// resultado do gerador na feição (stampRegeneratedBitmap: applyGeneratedBitmap, com a âncora do
+// catálogo). O gerador é o do Web, sem a rasterização, que node não tem; o tamanho e o
+// deslocamento do bitmap entram pela assinatura do gerador que o chamador acrescenta. O gerador
+// que recusa deixa a feição como veio, e o Web guarda o bitmap do arquivo. Sem isto a camada era
+// avaliada com a âncora do arquivo, e a âncora da Medida parecia lida só pelo Web.
+const geradorMedida = new CoordinationMeasureGenerator();
+geradorMedida.convertToPngBlob = async (_svg, largura, altura) => ({ blob: {}, imagem: null, width: largura, height: altura });
+async function redesenhoAoAbrir(balde, f) {
+  if (balde !== 'coordination_measures') return;
+  const p = f.properties;
+  let r;
+  try { r = await geradorMedida.generate(codigoDesenhavel(p.pointCode, p.echelonCode), p); } catch { return; }
+  if (r && bitmapStampChanges(p, r)) applyGeneratedBitmap(p, r);
+}
 
 // O Web desenha uma feição montando as fontes e as camadas pelas próprias funções setup*Layers:
 // cada uma recebe o balde, passa as feições pelo que as prepara (pointSourceFeatures,
@@ -226,6 +247,7 @@ for (const m of Object.values(data.maps)) {
   const r = norm.normalizeMapDataForCurrentVersion(structuredClone(m), (l) => ({ processed: l, unavailableCount: 0 }));
   for (const [balde, lista] of Object.entries(r.mapData.features || {})) {
     for (const f of lista || []) {
+      await redesenhoAoAbrir(balde, f);
       const assin = { fontes: desenhoNoWeb(balde, f) };
       const d = derivadas(balde, f);
       if (d) assin.derivadas = d;

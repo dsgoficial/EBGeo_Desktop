@@ -760,8 +760,17 @@ class Montador:
             return None, 'os parâmetros do {} não se recalculam por ela'.format(nome)
         q, anel, desvio, tol = r
         if desvio > tol:
-            return None, 'não é mais {} (fica a {:.1f} m do mais próximo, tolerância de {:.1f} m)'.format(
-                nome, desvio, tol).replace('.', ',')
+            # girada em graus pela ferramenta Girar do QGIS (sem o plugin, que a refaz ao girar):
+            # sai a forma girada de verdade, com o giro que o operador deu
+            girada = formas.giro_em_graus(anel0, partes[0][0], tipo)
+            r2 = formas.ajustar(tipo, p, anel0, girada[0]) if girada else None
+            if r2 is None or r2[2] > r2[3]:
+                return None, 'não é mais {} (fica a {:.1f} m do mais próximo, tolerância de {:.1f} m)'.format(
+                    nome, desvio, tol).replace('.', ',')
+            q, anel = r2[0], r2[1]
+            self._aviso('{} "{}" girado em graus no QGIS ({:.1f} graus): sai como {} girado no terreno, a até '
+                        '{:.1f} m do desenho do QGIS.'.format(schema.TIPOS[tipo]['nome_pt'], p.get('nome'),
+                                                              -girada[1], nome, desvio).replace('.', ','))
         q['center'] = [q['center'][0], q['center'][1]]
         for k in formas._LIVRES[tipo]:
             q[k] = round(q[k], 6 if k in ('bearing', 'aperture', 'majorRadius', 'minorRadius') else 3)

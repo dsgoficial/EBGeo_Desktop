@@ -883,6 +883,52 @@ class TestEstiloPorPropriedade(unittest.TestCase):
         img = self._render('polygon', {'opacity': 0}, 'opacidade_zero')
         self.assertGreater(_tinta_branco(img), 50, 'o contorno sumiu com opacity 0')
 
+    # a caixa da hachura marcada com um tipo que o gerador do Web não desenha
+    SEM_DESENHO = ('none', 'desconhecido')
+
+    def _sem_preenchimento(self):
+        """Os pixels do polígono com a caixa marcada e cada tipo sem desenho, e os do só contorno."""
+        so_contorno = self._render('polygon', {'opacity': 0}, 'so_contorno')
+        return so_contorno, {t: self._render('polygon', {'hatch_enabled': 1, 'hatch_type': t}, 'marcada_' + t)
+                             for t in self.SEM_DESENHO}
+
+    def test_caixa_marcada_sem_tipo_desenhado_nao_preenche(self):
+        """
+        Com a caixa da hachura marcada, o Web não desenha o preenchimento liso (SOLID_FILL_FILTER:
+        hatchEnabled != true) e pede a imagem do padrão, que o gerador deixa vazia no tipo que ele
+        não desenha ('none' ou desconhecido): a forma fica só com o contorno. O Desktop pintava o
+        liso no 'none' (o liso ligava sempre que a hachura não desenhava).
+        """
+        so_contorno, marcadas = self._sem_preenchimento()
+        self.assertGreater(self._diferenca(so_contorno, self._render('polygon', {}, 'liso')), 1000)
+        for t, img in marcadas.items():
+            self.assertEqual(self._diferenca(so_contorno, img), 0, t)
+
+    def test_pior_caso_liso_quando_a_hachura_nao_desenha_reprova(self):
+        from unittest import mock
+        from Calco import estilos_formas as ef
+        with mock.patch.object(ef, 'COND_LISO', 'NOT ({})'.format(ef.COND_HACHURA)):
+            so_contorno, marcadas = self._sem_preenchimento()
+        self.assertGreater(self._diferenca(so_contorno, marcadas['none']), 1000)
+
+    def test_regra_do_liso_e_tipos_desenhados_sao_os_do_web(self):
+        """A regra do liso e os tipos que o gerador do Web desenha, lidos do código do Web."""
+        import re
+        web = os.environ.get('EBGEO_WEB') or os.environ.get('EBGEO_WEB_DIR')
+        if not web:
+            self.skipTest('EBGEO_WEB ausente')
+        js = os.path.join(web, 'frontend', 'src', 'js')
+        with open(os.path.join(js, 'layers', 'styles', 'layer.helpers.js'), encoding='utf-8') as fh:
+            ajudantes = fh.read()
+        liso = re.search(r'export const SOLID_FILL_FILTER = \[(.*?)\];', ajudantes, re.S).group(1)
+        self.assertEqual(re.findall(r"\['(!?=)=?', \['get', '(\w+)'\], (\w+)\]", liso),
+                         [('!=', 'visivel', 'false'), ('!=', 'hatchEnabled', 'true')])
+        with open(os.path.join(js, 'tool_manager', 'hatch_pattern_generator.js'), encoding='utf-8') as fh:
+            gerador = fh.read()
+        from Calco import estilos_formas as ef
+        self.assertEqual(set(re.findall(r"case '([\w-]+)':", gerador)), set(ef.HACHURAS_DESENHADAS))
+        self.assertNotIn('none', ef.HACHURAS_DESENHADAS)
+
 
 def _tinta_branco(img):
     n = 0

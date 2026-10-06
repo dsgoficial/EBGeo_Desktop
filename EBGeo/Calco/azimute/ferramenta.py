@@ -246,7 +246,7 @@ class AzimuteDistancia(QObject):
             return None
         from .. import zoom
         z, _lat = zoom.zoom_do_canvas(self.canvas)
-        lyr, ids = gravacao.criar(c, estado, z)
+        lyr, ids = gravacao.criar(c, estado, z, self.iface)
         if not ids:
             self.iface.messageBar().pushCritical('EBGeo', 'Não foi possível gravar a construção no calco.')
             return None

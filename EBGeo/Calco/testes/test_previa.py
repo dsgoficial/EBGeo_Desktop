@@ -410,7 +410,9 @@ class TesteAmostraDoPoligono(unittest.TestCase):
         self.assertEqual(len(medidas), len(self.casos))
         self.assertEqual(erros, [], '\n'.join(medidas))
         # o liso é o que o chefe mediu no mapa (#7fc4bd), e a hachura desenhada põe a mesma cor no traço
-        self.assertTrue(any(m.startswith('True none:') and 'mapa #7fc4bd' in m for m in medidas), medidas)
+        self.assertTrue(any(m.startswith('False none:') and 'mapa #7fc4bd' in m for m in medidas), medidas)
+        # a caixa marcada com 'none' não preenche, como o Web (estilos_formas.COND_LISO)
+        self.assertTrue(any(m.startswith('True none:') and 'mapa #ffffff (0%)' in m for m in medidas), medidas)
         hachurados = [m for m in medidas if m.startswith('True ') and m.split(':')[0].split(' ')[1] in ('diagonal-right', 'cross', 'dots')]
         self.assertTrue(all('(100%)' not in m for m in hachurados), hachurados)  # a régua separa o liso da hachura
         MEDIDAS.append('amostra do polígono contra o mapa, {} casos de hachura: '.format(len(medidas)) + '; '.join(medidas))
@@ -424,7 +426,9 @@ class TesteAmostraDoPoligono(unittest.TestCase):
             erros, _m = self.divergencias()
         finally:
             convencoes.FUNDO_AMOSTRA = original
-        self.assertEqual(len(erros), len(self.casos), erros)  # nenhum caso sai certo com o fundo de antes
+        # nenhum caso com tinta sai certo com o fundo de antes (a caixa marcada com 'none' não pinta nada)
+        nomes = {'{} {}'.format(ligada, tipo_h) for ligada, tipo_h in self.casos}
+        self.assertEqual(sorted(nomes - {e[0] for e in erros}), ['True none'], erros)
         MEDIDAS.append('pior caso (fundo branco transparente): {} de {} casos divergem, ex. {}'.format(
             len(erros), len(self.casos), erros[0]))
 

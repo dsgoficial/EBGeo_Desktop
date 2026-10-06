@@ -12,20 +12,26 @@ da especificação monta além dos widgets comuns.
     pontas, Aeromóvel, Texto sempre para o norte): a coluna nula aparece no estado que o estilo
     desenha, e nada se grava até o operador mudar a caixa.
   - Linha de Limite e Seta: o botão "Inverter sentido", como no dock de antes.
+  - Seta combinada (a geometria com mais de um ramo): uma seção por ramo com a largura, o
+    aeromóvel, a ponta e a ponta dupla, como o painel do Web (_addBranchGeometryControls de
+    arrow_attributes_panel.js). Grava a coluna `ramos` pelas funções puras de regras.py
+    (ramos_desenhados, editar_ramo): mostra o que o estilo desenha em cada ramo e muda só o ramo.
+    Ocupa o lugar do resumo que o formulário nativo mostra (RESUMO_RAMOS).
 """
 import json
 
 from qgis.PyQt.QtCore import QTimer
 from qgis.PyQt.QtWidgets import (
-    QCheckBox, QHBoxLayout, QLabel, QSpinBox, QToolButton, QVBoxLayout, QWidget,
+    QCheckBox, QFormLayout, QHBoxLayout, QLabel, QSpinBox, QToolButton, QVBoxLayout, QWidget,
 )
 
 from ... import regras
 from ...formulario import especificacao as esp
-from ...formulario.tipos.taticos import CAIXA_PADRAO, RESUMO_POSICOES
+from ...formulario.tipos.taticos import CAIXA_PADRAO, RESUMO_POSICOES, RESUMO_RAMOS
 
 TIPOS_INVERTER = ('boundary', 'arrow')
 ROTULO_POSICOES = 'Posições do símbolo'
+ROTULO_RAMOS = 'Ramos da seta combinada'
 
 
 class EditorPosicoes(QWidget):
@@ -128,6 +134,118 @@ class EditorPosicoes(QWidget):
         QTimer.singleShot(0, self._montar)
 
 
+class EditorRamos(QWidget):
+    """
+    Os ramos da Seta combinada, um por parte da geometria: "Ramo N" com Largura, Aeromóvel /
+    Aeroterrestre, Mostrar Seta e Seta nas Duas Pontas, os controles e os rótulos do painel do Web.
+    `ler()` dá (coluna `ramos`, {coluna da feição: valor}) da feição no buffer; `ao_mudar(ramos,
+    regravar)` recebe a coluna `ramos` nova e as colunas da feição que voltam à importação
+    (regras.editar_ramo).
+    """
+
+    def __init__(self, ler, n, ao_mudar, parent=None):
+        super().__init__(parent)
+        self.setObjectName('EBGeoEditorRamos')
+        self.ler, self.n, self.ao_mudar = ler, n, ao_mudar
+        self._montando = True
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        self.largura, self.caixas = [], []
+        for i in range(n):
+            v.addWidget(QLabel('<b>Ramo {}</b>'.format(i + 1)))
+            fl = QFormLayout()
+            fl.setContentsMargins(0, 0, 0, 0)
+            larg = QSpinBox()
+            larg.setRange(10, 10000)
+            larg.setSuffix(' m')
+            larg.valueChanged.connect(lambda val, i=i: self._mudou(i, 'width', float(val)))
+            fl.addRow('Largura', larg)
+            caixas = {}
+            for chave, rotulo in ROTULOS_RAMO:
+                cb = QCheckBox()
+                cb.toggled.connect(lambda val, i=i, chave=chave: self._mudou(i, chave, bool(val)))
+                fl.addRow(rotulo, cb)
+                caixas[chave] = cb
+            v.addLayout(fl)
+            self.largura.append(larg)
+            self.caixas.append(caixas)
+        self.reler()
+
+    def reler(self):
+        """Os valores que o estilo desenha em cada ramo, lidos da feição no buffer, sem gravar."""
+        self._montando = True
+        try:
+            ramos, colunas = self.ler()
+            for i, r in enumerate(regras.ramos_desenhados(ramos, colunas, self.n)):
+                self.largura[i].setValue(int(round(r['width'])))
+                for chave, cb in self.caixas[i].items():
+                    cb.setChecked(bool(r[chave]))
+        finally:
+            self._montando = False
+
+    def _mudou(self, i, chave, val):
+        if self._montando:
+            return
+        ramos, colunas = self.ler()
+        novo, regravar = regras.editar_ramo(ramos, colunas, self.n, i, chave, val)
+        self.ao_mudar(novo, regravar)
+
+
+# Os rótulos do painel do Web (arrow_attributes_panel.js), na ordem dele, depois da largura.
+ROTULOS_RAMO = (('airmobile', 'Aeromóvel / Aeroterrestre'), ('showArrowHead', 'Mostrar Seta'),
+                ('doubleHeaded', 'Seta nas Duas Pontas'))
+
+
+def _partes(painel):
+    f = painel.layer.getFeature(painel.fid) if painel.fid is not None else None
+    g = f.geometry() if f is not None and f.isValid() else None
+    return g.constGet().numGeometries() if g is not None and not g.isEmpty() and g.isMultipart() else 1
+
+
+def _editor_ramos(painel, fl, el, conds, attrs, travada):
+    """O editor dos ramos, só na Seta de mais de um ramo; a seta simples não mostra nada aqui."""
+    n = _partes(painel)
+    if 'ramos' not in attrs or n < 2:
+        return True
+    nulos = {c: n0 for _w, c, n0 in regras.CHAVES_RAMO_DOCK}
+    colunas = [c for _w, c, _n in regras.CHAVES_RAMO_DOCK] + [c for _w, c in regras._OUTRAS_RAMO]
+
+    def ler():
+        painel._gravar_pendentes()  # a mudança da seta inteira ainda no relógio do dock
+        f = painel.layer.getFeature(painel.fid)
+        return f['ramos'], {c: f[c] for c in colunas}
+
+    def gravar(ramos, regravar):
+        painel._mudou('ramos', json.dumps(ramos))
+        for col, val in regravar.items():
+            painel._mudou(col, val)
+        painel._gravar_pendentes()
+        # a coluna da feição que voltou à importação aparece no campo da seta inteira, sem gravar de novo
+        painel._carregando = True
+        try:
+            for col, val in regravar.items():
+                w = painel.widgets.get(col)
+                if isinstance(w, QCheckBox):  # a caixa de padrão do estilo (fora de _tipos_widget)
+                    w.setChecked(nulos[col] if esp._nulo(val) else bool(val))
+                elif w is not None:
+                    painel._mostrar_valor(col, val)
+        finally:
+            painel._carregando = False
+    caixa = QWidget()
+    v = QVBoxLayout(caixa)
+    v.setContentsMargins(0, 4, 0, 4)
+    v.addWidget(QLabel(ROTULO_RAMOS))
+    editor = EditorRamos(ler, n, gravar)
+    v.addWidget(editor)
+    fl.addRow(caixa)
+    if travada:
+        editor.setEnabled(False)
+    painel.widgets['ramos'] = editor
+    campo = esp.Campo('ramos', ROTULO_RAMOS, esp.oculto(), rico=RESUMO_RAMOS)
+    painel._linhas.append((campo, list(conds), fl, caixa, None))
+    return True
+
+
 def elemento_rico(painel, fl, el, conds, attrs, travada):
     """
     Monta no dock o widget rico que substitui um elemento da especificação. Devolve False quando o
@@ -135,6 +253,8 @@ def elemento_rico(painel, fl, el, conds, attrs, travada):
     """
     if isinstance(el, esp.Campo) and el.rico == CAIXA_PADRAO:
         return _caixa_padrao(painel, fl, el, conds, attrs, travada)
+    if isinstance(el, esp.Texto) and el.nome == RESUMO_RAMOS:
+        return _editor_ramos(painel, fl, el, conds, attrs, travada)
     if not (isinstance(el, esp.Texto) and el.nome == RESUMO_POSICOES):
         return False
     if 'symbol_instances' not in attrs:

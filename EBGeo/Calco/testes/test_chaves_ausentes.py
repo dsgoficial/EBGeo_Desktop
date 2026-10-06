@@ -8,8 +8,9 @@ feições de base, e para cada chave de schema.mapa_web, variantes com a chave a
 nula e com valores de referência (o da fixture, o padrão do esquema, o que o estilo do Desktop dá
 ao nulo, e os neutros 1, falso e verdadeiro), gravadas no contêiner do Web.
 
-O Web lê o arquivo pelo próprio código em node (portão, normalização, as camadas MapLibre que ele
-registra avaliadas pelo compilador de expressões do MapLibre, as fontes de rótulo e as derivadas:
+O Web lê o arquivo pelo próprio código em node (portão, normalização, o redesenho da Medida ao
+abrir, que carimba na feição o resultado do gerador, as camadas MapLibre que ele registra
+avaliadas pelo compilador de expressões do MapLibre, as fontes de rótulo e as derivadas:
 decorações da Área, desenho da Linha de Coordenação, do Limite, da Seta e da Frente, e o SVG da
 declinação), e o gerador de símbolo pontual do Web (o bundle do motor, que é o código do Web)
 desenha o militar, a medida e a engenharia com as propriedades como o Web as leu. Duas variantes
@@ -43,10 +44,11 @@ sys.path.insert(0, PLUGIN)
 
 from qgis.core import (  # noqa: E402
     QgsApplication, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsExpressionContext,
-    QgsExpressionContextUtils, QgsMapRendererSequentialJob, QgsMapSettings, QgsProject, QgsRectangle, QgsVectorLayer,
+    QgsExpressionContextUtils, QgsFeatureFilterProvider, QgsMapRendererCustomPainterJob, QgsMapSettings, QgsProject,
+    QgsRectangle, QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QSize  # noqa: E402
-from qgis.PyQt.QtGui import QColor, QImage  # noqa: E402
+from qgis.PyQt.QtGui import QColor, QImage, QPainter  # noqa: E402
 
 _app = QgsApplication.instance() or QgsApplication([], True)
 _app.initQgis()
@@ -257,6 +259,20 @@ def _filtro_ids(vids):
     return '"ebgeo_id" IN ({})'.format(', '.join("'{}'".format(v.replace("'", "''")) for v in vids))
 
 
+class SoUmaFeicao(QgsFeatureFilterProvider):
+    """O desenho do job só com a feição de `fid`, sem trocar o filtro da camada."""
+
+    def __init__(self, fid):
+        super().__init__()
+        self.fid = fid
+
+    def filterFeatures(self, _camada, pedido):
+        pedido.combineFilterExpression('$id = {}'.format(int(self.fid)))
+
+    def clone(self):
+        return SoUmaFeicao(self.fid)
+
+
 def desktop_assinaturas(caminho_gpkg, mapa_ids):
     """{id: hash dos pixels} de cada variante desenhada sozinha com o estilo do importador.
 
@@ -264,9 +280,12 @@ def desktop_assinaturas(caminho_gpkg, mapa_ids):
     QGIS, que só o solta depois de 60 s ociosos, num QTimer; sem laço de eventos nada é solto.
     Com duas trocas por variante (a extensão e o desenho), a suíte crescia até 16 GB privados e,
     rodando junto de outras suítes, morria em silêncio por falta de memória (medido em 2026-10-05:
-    1,7 MB por troca no polígono, 5,2 MB na Área). A extensão sai de uma consulta só, sem trocar o
-    filtro, e o laço de eventos roda a cada desenho: a fase dos desenhos fica plana em 3 GB, e a
-    suíte inteira tem pico de 5,4 GB.
+    1,7 MB por troca no polígono, 5,2 MB na Área). Com uma troca por variante e o laço de eventos
+    a cada desenho, a fase dos desenhos ainda ia de 1 a 5,4 GB (medido em 2026-10-06: 1,5 a 2 MB
+    por variante, o pool soltando só o que passou de 60 s). Hoje o filtro da camada não muda: a
+    variante sai do desenho pelo filtro do próprio job (SoUmaFeicao, o QgsFeatureFilterProvider
+    que o renderizador aplica ao pedido de feições da camada), e a extensão de cada base sai de
+    uma consulta só.
     """
     from qgis.core import QgsFeatureRequest
     from qgis.PyQt.QtCore import QCoreApplication
@@ -278,19 +297,17 @@ def desktop_assinaturas(caminho_gpkg, mapa_ids):
         vl = QgsVectorLayer(gpkg.uri_camada(caminho_gpkg, tipo), tipo, 'ogr')
         assert vl.isValid(), tipo
         for base_id, vids in porbase.items():
-            ext = None
-            vl.setSubsetString('')
+            ext, fids = None, {}
             for f in vl.getFeatures(QgsFeatureRequest().setFilterExpression(_filtro_ids(vids))):
+                fids[f['ebgeo_id']] = f.id()
                 bb = f.geometry().boundingBox()
                 if ext is None:
                     ext = QgsRectangle(bb)
                 else:
                     ext.combineExtentWith(bb)
             for vid in vids:
-                vl.setSubsetString('"ebgeo_id" = \'{}\''.format(vid.replace("'", "''")))
-                out[vid] = _hash(_render(vl, ext))
+                out[vid] = _hash(_render(vl, ext, SoUmaFeicao(fids[vid])))
                 QCoreApplication.processEvents()
-        vl.setSubsetString('')
     return out
 
 
@@ -305,7 +322,7 @@ FOLGA_PX = 400
 TETO_PX = 2400
 
 
-def _render(vl, ext_wgs):
+def _render(vl, ext_wgs, filtro=None):
     ms = QgsMapSettings()
     ms.setLayers([vl])
     ms.setDestinationCrs(QgsCoordinateReferenceSystem('EPSG:3857'))
@@ -328,10 +345,21 @@ def _render(vl, ext_wgs):
     ctx.appendScope(QgsExpressionContextUtils.projectScope(QgsProject.instance()))
     ctx.appendScope(QgsExpressionContextUtils.mapSettingsScope(ms))
     ms.setExpressionContext(ctx)
-    job = QgsMapRendererSequentialJob(ms)
-    job.start()
-    job.waitForFinished()
-    return job.renderedImage()
+    # a imagem do QgsMapRendererSequentialJob, montada como ele a monta, num job de pintor próprio:
+    # o sequencial não repassa o filtro de feições ao job interno (medido no QGIS 4.0.0: com ele, a
+    # variante saía com as outras feições da base)
+    img = QImage(ms.deviceOutputSize(), ms.outputImageFormat())
+    img.setDevicePixelRatio(ms.devicePixelRatio())
+    img.setDotsPerMeterX(int(ms.outputDpi() / 25.4 * 1000))
+    img.setDotsPerMeterY(int(ms.outputDpi() / 25.4 * 1000))
+    img.fill(ms.backgroundColor().rgba())
+    pintor = QPainter(img)
+    job = QgsMapRendererCustomPainterJob(ms, pintor)
+    if filtro is not None:
+        job.setFeatureFilterProvider(filtro)
+    job.renderSynchronously()
+    pintor.end()
+    return img
 
 
 def _hash(img):
@@ -512,25 +540,22 @@ class TesteChavesAusentes(unittest.TestCase):
         MEDIDAS.append('ida e volta: {} feições iguais, {} chaves ausentes voltaram ausentes'.format(len(ida), ausentes))
 
 
-# Divergência conhecida que espera o aval do chefe. (O hatchType nulo das cinco formas saiu daqui
-# em 2026-10-05: por decisão do chefe, o Desktop o desenha diagonal como o Web.)
+# Divergência conhecida, de defeito do Web. (O hatchType nulo das cinco formas saiu daqui em
+# 2026-10-05: por decisão do chefe, o Desktop o desenha diagonal como o Web.)
 PENDENTES = {}
 # O Web lê a âncora nula do tamanho do Ponto como zoom 0 (POINT_SIZE com anchorDefault 0, e
 # `props.sizeCreatedAtZoom || 0` em AddPointControl.applyZoomCorrections): com a correção ligada, o
 # ponto sem âncora sai no teto de 500 px. O rótulo do mesmo ponto lê a âncora ausente como "não
-# escala" (labelCreatedAtZoom). O Desktop desenha o ponto sem âncora sem escala. Portar exige o teto
-# de 500 px no tamanho no terreno do Desktop, que hoje não tem teto, ou o Web pode estar errado:
-# fica para o chefe.
-PENDENTES[('point', 'sizeCreatedAtZoom')] = 'âncora nula do Ponto: o Web satura em 500 px; corrigir o Web ou portar o teto'
+# escala" (labelCreatedAtZoom). O Desktop desenha o ponto sem âncora sem escala, como o rótulo. É
+# defeito do Web, e o chefe mandou corrigi-lo lá (2026-10-05): quando o Web mudar, esta pendência
+# deixa de divergir e a régua cobra a saída dela.
+PENDENTES[('point', 'sizeCreatedAtZoom')] = 'âncora nula do Ponto: o Web satura em 500 px (defeito do Web, a corrigir lá)'
 
 
-# Chave que só o Web desenha, à espera de conserto fora do estilo: a âncora da Medida. O Web
-# ancora o bitmap por properties.anchor (coalesce 'center') e só a reescreve quando regenera o
-# bitmap (bitmapVersion menor que 4, ou o desenho mudou); o Desktop ancora o SVG pela âncora do
-# catálogo (pointData.anchor do gerador), e a coluna anchor do Desktop (padrão 'center') não é a do
-# gerador. Os dois só divergem quando o arquivo traz uma âncora diferente da do catálogo com o
-# bitmap em dia (DEFEITOS-CONHECIDOS.md, Menores).
-SO_WEB_PENDENTES = {('coordination_measure', 'anchor'): 'âncora da Medida: a do arquivo no Web, a do catálogo no Desktop'}
+# Chave que só o Web desenha, à espera de conserto. (A âncora da Medida saiu daqui em 2026-10-06:
+# era o instrumento, que avaliava a camada com a âncora do arquivo; o Web redesenha a Medida ao
+# abrir e carimba a âncora do catálogo, a que o Desktop usa, e web_assinatura.mjs passou a fazê-lo.)
+SO_WEB_PENDENTES = {}
 
 
 def tearDownModule():

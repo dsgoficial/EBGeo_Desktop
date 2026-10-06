@@ -13,8 +13,8 @@ Unidades (seção 6 de ARQUITETURA.md):
 - lineWidth do Web é px fixo na tela: vira milímetros a 0,2646 mm/px;
 - tamanho com correção de zoom ligada é fixo NO TERRENO: vira metros pela
   convenção MapLibre de 512 px, m/px = 78271,517 · cos(lat) / 2^z, com
-  z = createdAtZoom. A CONFIRMAR lado a lado com o Web: o próprio ebgeo_web
-  usa 256 px (156543,03392) no KMZ, e só uma das duas reproduz a tela.
+  z = createdAtZoom, conferida lado a lado com a tela do Web em 2026-10-05
+  (testes/test_zoom.py; o KMZ do Web usa a de 256 px, que daria o dobro).
 """
 import os
 
@@ -397,6 +397,11 @@ HACHURA_SEM_TIPO = 'diagonal-right'
 TIPO_HACHURA = "coalesce(nullif(\"hatch_type\", ''), '{}')".format(HACHURA_SEM_TIPO)
 COND_HACHURA = "coalesce(\"hatch_enabled\", false) AND {} <> 'none'".format(TIPO_HACHURA)
 HACHURA_PONTOS = 'dots'  # a única desenhada por padrão de pontos (QgsPointPatternFillSymbolLayer)
+# O preenchimento liso só com a caixa desmarcada ou nula (SOLID_FILL_FILTER de layer.helpers.js:
+# hatchEnabled != true). Com a caixa marcada, o Web pede a imagem do padrão, e o tipo que o
+# gerador não desenha ('none' ou desconhecido) dá a imagem vazia: a forma fica sem preenchimento.
+# Antes o liso ligava sempre que a hachura não desenhava, e o 'none' com a caixa marcada saía liso.
+COND_LISO = 'NOT coalesce("hatch_enabled", false)'
 # Os tipos que o estilo desenha, lidos das camadas de padrão abaixo: o formulário mostra o
 # espaçamento e a espessura da hachura só com um deles (formulario/tipos/comuns.py).
 HACHURAS_DESENHADAS = frozenset(t for _a, tipos in _HACHURAS for t in tipos) | {HACHURA_PONTOS}
@@ -412,7 +417,7 @@ def _estilo_forma(layer):
     fill.setStrokeStyle(_qt_pen('none'))
     fill.setDataDefinedProperty(QgsSymbolLayer.Property.FillColor,
                                 _p(_cor_alfa('"fill_color"', '"opacity"', '#000000')))  # nula: preta, como o Web
-    fill.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p('NOT ({})'.format(COND_HACHURA)))
+    fill.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p(COND_LISO))
     s.appendSymbolLayer(fill)
     # hachura: cor do preenchimento (hatchColor é só reserva), com a mesma opacidade
     cor_h = _cor_alfa('coalesce("fill_color", "hatch_color")', '"opacity"', '#000000')

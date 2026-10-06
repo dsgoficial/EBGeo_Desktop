@@ -563,6 +563,24 @@ class TestSetaCombinada(unittest.TestCase):
         l, f = cls._seta(cam)
         cls.estilo_largura = _desenho_do_estilo(l, f)
         cls.doc_largura, cls.exp_largura = exportar(cam)
+        # o editor dos ramos do dock (regras.editar_ramo) depois da largura da feição editada: a largura
+        # do ramo 2 vai a 500 m, os outros ficam com a da feição e a coluna volta à da importação
+        from Calco import regras
+        cam = copia_06('seta_dock')
+        l, f = cls._seta(cam)
+        l.startEditing()
+        l.changeAttributeValue(f.id(), l.fields().indexOf('width_m'), 650.0)
+        f = l.getFeature(f.id())
+        cols = {c: f[c] for c in ('width_m', 'show_arrow_head', 'double_headed', 'airmobile', 'head_length_ratio',
+                                  'airmobile_position')}
+        ramos, regravar = regras.editar_ramo(f['ramos'], cols, 3, 1, 'width', 500.0)
+        l.changeAttributeValue(f.id(), l.fields().indexOf('ramos'), schema.valor_json_para_qgis(ramos))
+        for col, v in regravar.items():
+            l.changeAttributeValue(f.id(), l.fields().indexOf(col), v)
+        assert l.commitChanges(), l.commitErrors()
+        l, f = cls._seta(cam)
+        cls.estilo_dock = _desenho_do_estilo(l, f)
+        cls.doc_dock, cls.exp_dock = exportar(cam)
 
     def _feicao(self, doc):
         return next(f for k, f in feicoes_2d(doc.data).items() if k[2] == self.id)
@@ -591,6 +609,17 @@ class TestSetaCombinada(unittest.TestCase):
         self.assertLess(d, 1.0)
         self.assertGreater(_hausdorff_m(o['geometry'], f['geometry']), 50)   # o desenho mudou
         self.assertEqual(self.exp_ramos.relatorio.colunas_editadas, {'ramos': 1})
+
+    def test_ramo_editado_no_dock_depois_da_largura_da_feicao(self):
+        """Como o Web: updateFeaturesProperty grava 650 em cada ramo e _updateBranchProperty muda só o ramo 2."""
+        f, o = self._feicao(self.doc_dock), self._original()
+        self.assertEqual([b['width'] for b in f['properties']['branches']], [650, 500, 650])
+        self.assertEqual(f['properties']['width'], 650)   # o topo espelha o ramo 0
+        self.assertEqual([b['doubleHeaded'] for b in f['properties']['branches']],
+                         [b['doubleHeaded'] for b in o['properties']['branches']])
+        d = _hausdorff_m(self.estilo_dock, f['geometry'])
+        print('\nSeta combinada, ramo editado no dock: exportado x estilo {:.2f} m'.format(d))
+        self.assertLess(d, 1.0)
 
     def test_largura_da_feicao_vai_a_todos(self):
         f, o = self._feicao(self.doc_largura), self._original()

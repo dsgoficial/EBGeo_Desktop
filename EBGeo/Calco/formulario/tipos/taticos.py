@@ -9,6 +9,9 @@ O que depende do desenho sai do ESTILO, nunca de lista à mão:
     que só valem com a ponta ou com o aeromóvel;
   - os escalões do Limite são os do catálogo do Desktop (estilos_area.ESCALOES, com o rótulo
     do Web, rotulo_escalao), os mesmos que o glifo do estilo desenha;
+  - na Seta combinada, um resumo diz quantos ramos ela tem e que cada ramo (largura, ponta,
+    ponta dupla, aeromóvel) se edita no painel do calco, que tem o editor deles
+    (ui/blocos/taticos.py), como o painel do Web; a coluna `ramos` (JSON) fica oculta;
   - as posições do símbolo ao longo do Limite (`symbol_instances`, lista JSON) aparecem no
     formulário nativo como um resumo só de leitura, calculado pelas MESMAS ligações com que o
     estilo as lê (`ij` e `rs` de _limite.exp, `sl` de limite_rotulo_geometria.exp), e por isso
@@ -31,6 +34,11 @@ TIPOS = ('boundary', 'arrow', 'occupied_front')
 
 # O Texto do resumo das posições: o dock troca este elemento pelo editor da lista.
 RESUMO_POSICOES = 'posicoes_limite'
+# O Texto do resumo dos ramos da Seta combinada: o dock troca este elemento pelo editor dos ramos.
+RESUMO_RAMOS = 'ramos_seta'
+TEXTO_RAMOS = ("[% CASE WHEN num_geometries($geometry) > 1 THEN 'Seta combinada de ' || num_geometries($geometry) "
+               "|| ' ramos. Os campos acima valem para a seta inteira; a largura, a ponta, a ponta dupla e o "
+               "aeromóvel de cada ramo se editam no painel do calco.' END %]")
 # Widget rico do dock: a caixa booleana que mostra o padrão do estilo quando a coluna é nula.
 CAIXA_PADRAO = 'caixa_padrao'
 AVISO_ROTULOS_LIMITE = ('O rótulo superior fica à esquerda do sentido do traçado e o inferior à direita. '
@@ -144,6 +152,7 @@ def _seta():
         _caixa('airmobile', 'Aeromóvel / Aeroterrestre', aeromovel.padrao),
         esp.Campo('airmobile_position', 'Posição do aeromóvel (fração do eixo)', esp.numero(0.05, 0.95, 0.05, 2),
                   condicao=aeromovel),
+        esp.Texto(RESUMO_RAMOS, TEXTO_RAMOS),
         esp.descricao(),
     ])
     aparencia = esp.Aba('Aparência', [

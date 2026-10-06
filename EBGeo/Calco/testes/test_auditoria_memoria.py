@@ -12,13 +12,16 @@ ociosos, por um QTimer; sem laço de eventos nada é solto. A auditoria trocava 
 por variante (a extensão e o desenho) em 3.548 variantes, de 1,7 MB por troca no polígono a
 5,2 MB na Área de Coordenação: a suíte passava de 16 GB privados ainda na fase dos desenhos, e
 duas rodando juntas (ou ela e outras suítes) esgotavam a memória da máquina de 32 GB. Com a
-extensão numa consulta só e o laço de eventos a cada desenho, a fase dos desenhos fica plana em
-3 GB e a suíte tem pico de 5,4 GB (o que ainda cresce depois é a ida e volta pelo exportador).
+extensão numa consulta só e o laço de eventos a cada desenho, sobrava uma troca por variante, e a
+fase dos desenhos ia de 1 a 5,4 GB (medido em 2026-10-06, a fase sozinha: 1,5 a 2 MB por
+variante, o pool soltando só o que passou de 60 s; a ida e volta pelo exportador soma 0,1 GB, e
+não era ela que crescia). Hoje o filtro da camada não muda: cada variante sai do desenho pelo
+filtro do próprio job (test_chaves_ausentes.SoUmaFeicao, um QgsFeatureFilterProvider).
 
 O que se prova, num GeoPackage sintético, com a função da própria auditoria:
-    TesteTrocasDeFiltro  no máximo uma troca de filtro por variante (mais uma por base), e o laço
-                         de eventos rodando a cada desenho; o código de antes trocava duas vezes e
-                         nunca rodava o laço;
+    TesteTrocasDeFiltro  nenhuma troca de filtro da camada, o laço de eventos a cada desenho, e
+                         cada variante desenhada como sozinha na camada (o filtro de antes); sem o
+                         filtro do job, o desenho traz as outras feições (o pior caso);
     TestePoolSolta       o mecanismo: as trocas sem laço de eventos seguram a memória, e o laço de
                          eventos a devolve depois do prazo do pool (lento: 70 s; só com
                          EBGEO_TESTE_LENTO=1).
@@ -105,8 +108,20 @@ class TesteTrocasDeFiltro(unittest.TestCase):
             len(ids), bases, len(trocas), laco.call_count,
             '' if m0 is None else ', {:+.0f} MB privados'.format(m1 - m0)))
         self.assertEqual(len(out), len(ids))
-        self.assertLessEqual(len(trocas), len(ids) + bases)
+        self.assertEqual(trocas, [])
         self.assertGreaterEqual(laco.call_count, len(ids))
+        # na mesma camada (o símbolo padrão tem cor sorteada por camada): o filtro do job desenha o
+        # mesmo que a variante sozinha na camada (o filtro de antes); sem ele, o desenho é outro (as
+        # feições da base se sobrepõem), e é o filtro que isola a variante
+        vl = QgsVectorLayer(T.gpkg.uri_camada(caminho, 'point'), 'ponto', 'ogr')
+        fids = {f['ebgeo_id']: (f.id(), f.geometry().boundingBox()) for f in vl.getFeatures()}
+        amostra = list(ids)[::37]
+        pelo_job = {vid: T._hash(T._render(vl, fids[vid][1], T.SoUmaFeicao(fids[vid][0]))) for vid in amostra}
+        sem_filtro = {vid: T._hash(T._render(vl, fids[vid][1])) for vid in amostra}
+        for vid in amostra:
+            vl.setSubsetString('"ebgeo_id" = \'{}\''.format(vid))
+            self.assertEqual(pelo_job[vid], T._hash(T._render(vl, fids[vid][1])), vid)
+            self.assertNotEqual(pelo_job[vid], sem_filtro[vid], vid)
 
 
 @unittest.skipUnless(os.environ.get('EBGEO_TESTE_LENTO') and os.name == 'nt', 'lento (EBGEO_TESTE_LENTO=1), Windows')

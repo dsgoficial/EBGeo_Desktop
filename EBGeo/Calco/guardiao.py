@@ -28,14 +28,22 @@ Como funciona:
     formulário nativo grava no campo igual ao DEFAULT da coluna volta a ser o valor, no mesmo
     comando (sem isso, o SIDC padrão acendia o aviso até o commit).
 
-O retrato guarda só as colunas que as regras leem, mais a linha inteira das feições bloqueadas.
+  - Formas paramétricas (círculo, elipse, retângulo, setor): a ferramenta Girar do QGIS gira a
+    camada em EPSG:4326 no plano lon/lat, e a forma sai achatada (o grau de longitude vale cos(lat)
+    do de latitude). Quando a geometria mudada num comando é a anterior girada em graus
+    (exportador/formas.giro_em_graus), o guardião a troca, no comando dele, pela forma girada no
+    terreno com o mesmo giro e o mesmo centro, que o exportador reconhece com os parâmetros.
+
+O retrato guarda só as colunas que as regras leem, mais a linha inteira das feições bloqueadas, e
+a geometria das formas paramétricas.
 """
 from datetime import datetime, timezone
 
-from qgis.core import QgsFeatureRequest, QgsMessageLog, Qgis
+from qgis.core import QgsFeatureRequest, QgsGeometry, QgsMessageLog, QgsPointXY, Qgis
 from qgis.PyQt.QtCore import QObject
 
 from . import regras, schema, simbolos
+from .exportador import formas
 
 TIPOS_GUARDADOS = regras.TIPOS_COM_REGRAS | frozenset(simbolos.TIPOS_SVG)
 COLUNA_ATUALIZADO = 'atualizado_em'
@@ -68,6 +76,10 @@ class Guardiao(QObject):
         self.desenho = frozenset(simbolos.campos_que_desenham(tipo)) if self.svg else frozenset()
         self.regeneradas = 0
         self.erros_svg = []
+        self.forma = tipo in formas.TIPOS
+        self._geometrias = {}
+        self._giradas = {}
+        self.desgiradas = 0
         self._conexoes = [
             (layer.editCommandStarted, self._comando_comecou),
             (layer.editCommandEnded, self._comando_terminou),
@@ -80,6 +92,8 @@ class Guardiao(QObject):
         ]
         if self.svg:
             self._conexoes.append((layer.beforeCommitChanges, self._antes_de_gravar))
+        if self.forma:
+            self._conexoes.append((layer.geometryChanged, self._geometria_mudou))
         for sinal, slot in self._conexoes:
             sinal.connect(slot)
         self.recarregar()
@@ -98,6 +112,9 @@ class Guardiao(QObject):
         req = QgsFeatureRequest().setFlags(QgsFeatureRequest.Flag.NoGeometry)
         for f in self.layer.getFeatures(req):
             self._retratar(f, nomes)
+        if self.forma:
+            req = QgsFeatureRequest().setNoAttributes()
+            self._geometrias = {f.id(): QgsGeometry(f.geometry()) for f in self.layer.getFeatures(req)}
 
     def _retratar(self, f, nomes):
         self._anterior[f.id()] = {c: regras.valor(f[c]) for c in self.vigiados if c in nomes}
@@ -110,6 +127,8 @@ class Guardiao(QObject):
         f = self.layer.getFeature(fid)
         if f.isValid():
             self._retratar(f, self.layer.fields().names())
+            if self.forma:
+                self._geometrias[fid] = QgsGeometry(f.geometry())
         if self.svg and not self._aplicando and self.layer.isEditCommandActive():
             self._novas.add(fid)
 
@@ -128,11 +147,37 @@ class Guardiao(QObject):
     # ---------- sinais ----------
     def _comando_comecou(self, *_):
         if not self._aplicando:
-            self._mudancas, self._novas, self._indefinidos = {}, set(), {}
+            self._mudancas, self._novas, self._indefinidos, self._giradas = {}, set(), {}, {}
 
     def _comando_destruido(self, *_):
         if not self._aplicando:
-            self._mudancas, self._novas, self._indefinidos = {}, set(), {}
+            self._mudancas, self._novas, self._indefinidos, self._giradas = {}, set(), {}, {}
+
+    def _geometria_mudou(self, fid, geometria):
+        if not self._aplicando and self.layer.isEditCommandActive() and fid not in self._giradas:
+            self._giradas[fid] = self._geometrias.get(fid)
+        self._geometrias[fid] = QgsGeometry(geometria)
+
+    def _desgirar(self, fid, antes):
+        """A forma girada no terreno, quando a geometria de `fid` é `antes` girada em graus; ou None."""
+        if antes is None or not self.layer.crs().isGeographic():
+            return None
+        depois = self._geometrias.get(fid)
+        aneis = []
+        for g in (antes, depois):
+            if g is None or g.isEmpty():
+                return None
+            partes = g.asMultiPolygon() if g.isMultipart() else [g.asPolygon()]
+            if len(partes) != 1 or len(partes[0]) != 1:
+                return None
+            aneis.append([[p.x(), p.y()] for p in partes[0][0]])
+        r = formas.giro_em_graus(aneis[0], aneis[1], self.tipo)
+        if r is None:
+            return None
+        nova = QgsGeometry.fromPolygonXY([[QgsPointXY(x, y) for x, y in r[0]]])
+        if depois.isMultipart():
+            nova.convertToMultiType()
+        return nova
 
     def _atributo_mudou(self, fid, idx, valor):
         col = self.layer.fields().at(idx).name()
@@ -149,12 +194,18 @@ class Guardiao(QObject):
         self._mudancas.setdefault(fid, {})[col] = valor
 
     def _comando_terminou(self, *_):
-        if self._aplicando or not (self._mudancas or self._novas or self._indefinidos):
+        if self._aplicando or not (self._mudancas or self._novas or self._indefinidos or self._giradas):
             return
         mudancas, self._mudancas = self._mudancas, {}
         novas, self._novas = self._novas, set()
         indefinidos, self._indefinidos = self._indefinidos, {}
+        giradas, self._giradas = self._giradas, {}
         reverter, extras = {}, {}
+        geometrias = {}
+        for fid, antes in giradas.items():
+            nova = None if fid in self._travadas else self._desgirar(fid, antes)
+            if nova is not None:
+                geometrias[fid] = nova
         sem_padrao = not self._atualizado_nativo()
         for fid, muds in mudancas.items():
             desbloqueio = 'bloqueado' in muds and not _verdade(muds['bloqueado'])
@@ -186,8 +237,8 @@ class Guardiao(QObject):
                 cols = self._desenho(fid, extras.get(fid, {}), manter_bitmap=fid in novas) if desenhou else {}
                 if cols:
                     extras.setdefault(fid, {}).update(cols)
-        if reverter or extras:
-            self._aplicar(reverter, extras)
+        if reverter or extras or geometrias:
+            self._aplicar(reverter, extras, geometrias)
 
     # ---------- desenho dos símbolos pontuais ----------
     def _desenho(self, fid, extras, manter_bitmap=False):
@@ -237,11 +288,14 @@ class Guardiao(QObject):
         i = self.layer.fields().indexOf(COLUNA_ATUALIZADO)
         return i < 0 or self.layer.defaultValueDefinition(i).applyOnUpdate()
 
-    def _aplicar(self, reverter, extras):
+    def _aplicar(self, reverter, extras, geometrias=None):
         idx = self.layer.fields().indexOf
         self._aplicando = True
         try:
             self.layer.beginEditCommand('Calco: regras da feição')
+            for fid, g in (geometrias or {}).items():
+                self.layer.changeGeometry(fid, g)
+                self.desgiradas += 1
             for fid, (valores, novos) in reverter.items():
                 # sem valores padrão: atualizado_em também volta ao que era
                 self.layer.changeAttributeValues(fid, {idx(c): v for c, v in valores.items() if idx(c) >= 0},

@@ -36,9 +36,13 @@ TIPOS = ('circle', 'ellipse', 'rectangle', 'sector')
 # Escalar do QGIS na camada em EPSG:4326, a até 0,045 %; um vértice só puxado de 0,3 % do tamanho para
 # fora, a 0,15 % ou mais. Girada em graus (a ferramenta Girar, na camada em EPSG:4326) a 15 a 24 graus
 # de latitude, fica a 0,6 a 10 % do tamanho, porque o grau de longitude vale cos(lat) do de latitude:
-# deixou de ser a forma, salvo perto do equador.
+# deixou de ser a forma, salvo perto do equador, e giro_em_graus a reconhece pelo giro.
 TOL_PISO_M = 0.5
 TOL_FRACAO = 0.001
+# Resíduo da semelhança em graus, em fração do tamanho, abaixo do qual o anel editado é o anterior
+# girado (e escalado, transladado) no plano lon/lat: o Girar e o Escalar do QGIS levam cada vértice
+# exatamente, e o resíduo é o do ponto flutuante; um vértice puxado de 0,3 % do tamanho fica fora.
+TOL_GIRO_FRACAO = 1e-5
 
 
 # ---------------------------------------------------------------- esfera
@@ -325,6 +329,41 @@ def ajustar(tipo, props0, anel0, anel):
     passo = max(1.0, tamanho(tipo, p) / 200)
     desvio = _hausdorff(_densificar(plano.xy(novo), passo), _densificar(Y, passo))
     return p, novo, desvio, tolerancia(tipo, p)
+
+
+def giro_em_graus(anel0, anel, tipo=None):
+    """
+    A forma girada de verdade, quando `anel` é `anel0` girado em graus: a ferramenta Girar do QGIS
+    gira a camada em EPSG:4326 no plano lon/lat, onde o grau de longitude vale cos(lat) do de
+    latitude, e a forma sai achatada (deixa de ser a forma fora do equador). Se `anel` é uma
+    semelhança de `anel0` no plano lon/lat (giro, escala e translação, vértice a vértice), com
+    giro, devolve (`anel0` com o mesmo giro e a mesma escala no plano métrico local, com o centro
+    onde o giro em graus o pôs, [[lon, lat], ...] fechado; o giro em graus anti-horários): o anel
+    que o operador pediu. O círculo, que o giro não muda, só muda de centro e de escala (o do Web
+    começa sempre a leste, e o anel girado ficaria fora da tolerância pela fase dos vértices). None
+    quando não é uma semelhança em graus ou não há giro.
+    """
+    if len(anel0) != len(anel) or len(anel) < 4:
+        return None
+    u0 = np.asarray(anel0[:-1], dtype=float)
+    u = np.asarray(anel[:-1], dtype=float)
+    s, phi, rot, t = _semelhanca(u0, u)
+    if abs(phi) < 1e-9:
+        return None
+    centro0 = u0.mean(0)
+    plano = _Plano(*centro0)
+    x0 = plano.xy(anel0)
+    c0 = plano.xy([centro0])[0]
+    raio = float(np.sqrt(((x0[:-1] - c0) ** 2).sum(1)).max())
+    # o resíduo da semelhança em graus, levado a metros no plano da forma
+    residuo = float(np.sqrt(((plano.xy(u) - plano.xy(s * u0.dot(rot.T) + t)) ** 2).sum(1)).max())
+    if not raio > 0 or residuo > TOL_GIRO_FRACAO * raio:
+        return None
+    c1 = plano.xy([s * rot.dot(centro0) + t])[0]
+    x = (x0 - c0).dot((np.eye(2) if tipo == 'circle' else rot).T) * s + c1
+    out = [plano.lonlat(a, b) for a, b in x]
+    out[-1] = out[0]
+    return out, math.degrees(phi)
 
 
 def _circulo_algebrico(pts):

@@ -590,6 +590,9 @@ class PainelCalco(QDockWidget):
                 self.layer.changeAttributeValue(fid, i, v)
         self._no_buffer(mudar)
         self._mostrar_regras(fid, antes)
+        ramos = self.widgets.get('ramos')
+        if ramos is not None and hasattr(ramos, 'reler') and 'ramos' not in mudancas:
+            ramos.reler()  # a seta inteira mudou: o que cada ramo desenha
         self._aplicar_condicoes()
 
     def _mostrar_regras(self, fid, antes):
