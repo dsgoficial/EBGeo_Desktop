@@ -82,6 +82,24 @@ class CampoPosicaoNaBorda(esp.Campo):
         return esp.Campo.expressao_rotulo(self)
 
 
+@dataclass(frozen=True)
+class HachuraDoTerreno:
+    """O painel do Web chama o preenchimento de hachura quando é a prevista para o terreno."""
+
+    @staticmethod
+    def pares():
+        from ...estilos_area import CATALOGO_AREA
+        return [(codigo, s['padroes']['hatch_type']) for codigo, s in CATALOGO_AREA.items()
+                if s['padroes'].get('hatch_enabled')]
+
+    def avaliar(self, atributos):
+        return (atributos.get('symbol_code'), atributos.get('hatch_type')) in self.pares()
+
+    def expressao(self):
+        return ' OR '.join('(coalesce("symbol_code", \'\') = {} AND coalesce("hatch_type", \'\') = {})'.format(
+            esp._literal(c), esp._literal(h)) for c, h in self.pares()) or 'FALSE'
+
+
 def _lista_com_nulo(opcoes, rotulo_nulo):
     return esp.lista([(NULO_VALUEMAP, rotulo_nulo)] + list(opcoes))
 
@@ -164,8 +182,9 @@ def formulario():
         esp.Campo('line_color', 'Borda', esp.cor()),
         esp.Campo('line_width', 'Espessura da Borda', esp.numero(1, 10, 1, 0, ' px')),
         esp.Campo('line_style', 'Estilo da borda', esp.lista(ESTILOS_TRACO), condicao=cond(lambda s: s['borda'] != 'elos')),
-        esp.Campo('fill_color', 'Preenchimento', esp.cor()),
-        esp.Campo('opacity', 'Opacidade do Preenchimento', esp.numero(0, 1, 0.05, 2)),
+        esp.Campo('fill_color', 'Preenchimento', esp.cor(), rotulo_se=(HachuraDoTerreno(), 'Cor da hachura')),
+        esp.Campo('opacity', 'Opacidade do Preenchimento', esp.numero(0, 1, 0.05, 2),
+                  rotulo_se=(HachuraDoTerreno(), 'Opacidade da hachura')),
         esp.Campo('hatch_type', 'Hachura', esp.lista(HACHURAS)),
         esp.Campo('hatch_spacing', 'Espaçamento da Hachura', esp.numero(2, 40, 1, 0, ' px'), condicao=com_hachura),
         esp.Campo('hatch_line_width', 'Espessura da Hachura', esp.numero(0.5, 10, 0.5, 1, ' px'), condicao=com_hachura),

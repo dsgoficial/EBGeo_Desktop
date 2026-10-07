@@ -163,6 +163,8 @@ def referencias(tipo, web, coluna, tp, padrao, original, literais):
     if padrao is not None:
         vals.append(json.loads(padrao) if tp == 'json' and isinstance(padrao, str) else padrao)
     vals += literais
+    if tipo == 'point' and web == 'sizeCreatedAtZoom':
+        vals.insert(0, 0)  # âncora legítima: também participa da comparação com o teto de 500 px
     # 1 é o padrão do MapLibre para espessura e opacidade nulas; zero e texto vazio não entram:
     # eles medem como o valor desenha, não como desenha a chave ausente ou nula
     vals += {'real': [1], 'int': [1], 'bool': [False, True]}.get(tp, [])
@@ -416,8 +418,8 @@ def comparar(mapa_ids, web, desk):
             continue
         else:
             continue
-        # referência que os dois lados desenham com regra diferente (o zoom 0 que o Desktop lê como
-        # sem âncora, a opacidade 2,5 que um corta e o outro não) mede o VALOR, não a ausência:
+        # referência que os dois lados desenham com regra diferente (a opacidade 2,5 que um
+        # corta e o outro não) mede o VALOR, não a ausência:
         # sai da comparação e vai para a lista à parte
         refs = [r for r in g if r.startswith('ref')]
         ruins = set()
@@ -427,7 +429,8 @@ def comparar(mapa_ids, web, desk):
                     ruins |= {a, b}
         if ruins:
             valor.append((tipo, base_id, chave, sorted(ruins)))
-        g2 = {r: v for r, v in g.items() if r not in ruins}
+        # O tamanho do Ponto tem a mesma regra de valor nos dois lados; não esconder uma regressão.
+        g2 = g if (tipo, chave) == ('point', 'sizeCreatedAtZoom') else {r: v for r, v in g.items() if r not in ruins}
         for rot in ('ausente', 'nula'):
             cw, cd = _classe(web, g2, rot), _classe(desk, g2, rot)
             if cw != cd:
@@ -540,16 +543,7 @@ class TesteChavesAusentes(unittest.TestCase):
         MEDIDAS.append('ida e volta: {} feições iguais, {} chaves ausentes voltaram ausentes'.format(len(ida), ausentes))
 
 
-# Divergência conhecida, de defeito do Web. (O hatchType nulo das cinco formas saiu daqui em
-# 2026-10-05: por decisão do chefe, o Desktop o desenha diagonal como o Web.)
 PENDENTES = {}
-# O Web lê a âncora nula do tamanho do Ponto como zoom 0 (POINT_SIZE com anchorDefault 0, e
-# `props.sizeCreatedAtZoom || 0` em AddPointControl.applyZoomCorrections): com a correção ligada, o
-# ponto sem âncora sai no teto de 500 px. O rótulo do mesmo ponto lê a âncora ausente como "não
-# escala" (labelCreatedAtZoom). O Desktop desenha o ponto sem âncora sem escala, como o rótulo. É
-# defeito do Web, e o chefe mandou corrigi-lo lá (2026-10-05): quando o Web mudar, esta pendência
-# deixa de divergir e a régua cobra a saída dela.
-PENDENTES[('point', 'sizeCreatedAtZoom')] = 'âncora nula do Ponto: o Web satura em 500 px (defeito do Web, a corrigir lá)'
 
 
 # Chave que só o Web desenha, à espera de conserto. (A âncora da Medida saiu daqui em 2026-10-06:

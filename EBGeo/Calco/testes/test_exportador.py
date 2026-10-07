@@ -51,10 +51,11 @@ from qgis.core import (  # noqa: E402
     QgsProcessingFeedback, QgsProject, QgsRectangle, QgsVectorLayer,
 )
 
-_APP = QgsApplication.instance()
-if _APP is None:
-    _APP = QgsApplication([], True)
-    _APP.initQgis()
+# get_iface() chama start_app(), que guarda sua própria instância global e não consulta
+# QgsApplication.instance(). Usar a mesma entrada evita duas aplicações Qt vivas.
+from qgis.testing import start_app  # noqa: E402
+
+_APP = start_app()
 
 from qgis.gui import QgsMapCanvas, QgsMapMouseEvent  # noqa: E402
 from qgis.PyQt.QtCore import QEvent, QPoint, Qt  # noqa: E402
@@ -787,6 +788,14 @@ class TestArvore(unittest.TestCase):
 
 
 class TestAlgoritmo(unittest.TestCase):
+    def test_zoom_zero_do_desenho_nao_vira_zoom_doze(self):
+        from Calco import zoom
+        g = QgsGeometry.fromPointXY(QgsPointXY(0, 0))
+        for ancora in (0, 12, None):
+            escopo = desenho._escopo_mapa({'created_zoom': ancora}, g)
+            esperado = zoom.metros_por_pixel_de_zoom(12 if ancora is None else ancora, 0) / (0.0254 / 96)
+            self.assertAlmostEqual(escopo.variable('map_scale'), esperado)
+
     def test_algoritmo_e_conferencia(self):
         from Calco.exportador.algoritmo import ExportarEbgeo
         cam = calco_desktop()
@@ -818,7 +827,9 @@ class TestAlgoritmo(unittest.TestCase):
         c.criar()
         lyr = c.carregar(estilizar_novas=False)['military_symbol']
         definir_calco_ativo(c)
-        g = GerenciadorCalco(get_iface(), QMenu('EBGeo'))
+        iface = get_iface()
+        self.assertIs(QgsApplication.instance(), _APP, 'get_iface não pode criar uma segunda aplicação Qt')
+        g = GerenciadorCalco(iface, QMenu('EBGeo'))
         g.initGui()
         acao = next(a for a in g.acoes if a.text() == 'Exportar arquivo .ebgeo...')
         self.assertFalse(acao.icon().isNull())

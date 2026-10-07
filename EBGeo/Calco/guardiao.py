@@ -104,6 +104,10 @@ class Guardiao(QObject):
                 sinal.disconnect(slot)
             except (TypeError, RuntimeError):
                 pass
+        # Os slots são métodos de self: guardar a lista depois de desconectar mantém um
+        # ciclo Python vivo além do deleteLater do QObject. Soltá-lo só após o Qt reutilizar
+        # a memória corrompia a destruição das camadas (0xC0000409 no QGIS 4/Windows).
+        self._conexoes.clear()
 
     # ---------- retrato ----------
     def recarregar(self, *_):

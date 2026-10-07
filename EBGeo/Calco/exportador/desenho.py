@@ -132,7 +132,9 @@ def _escopo_mapa(linha, g):
     from .. import zoom
     s = QgsExpressionContextScope('EBGeo: zoom de criação')
     lat = g.centroid().asPoint().y() if not g.isEmpty() else 0.0
-    z = linha.get('created_zoom') or 12
+    z = linha.get('created_zoom')
+    if z is None:
+        z = 12
     escala = zoom.metros_por_pixel_de_zoom(z, lat) / math.cos(math.radians(lat)) / (0.0254 / 96)
     s.setVariable('map_crs', 'EPSG:3857')
     s.setVariable('map_scale', escala)
@@ -205,4 +207,3 @@ def edicoes_pendentes(caminho, projeto):
         if os.path.normcase(os.path.abspath(fonte)) == alvo:
             out.append(l)
     return out
-

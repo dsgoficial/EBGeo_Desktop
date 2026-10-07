@@ -71,10 +71,13 @@ RX_PROP = re.compile(r"""(?:update\w*Propert\w*\(\s*(?:\w+\s*,\s*)?|\bset\(\s*)'
 RX_CHAVE = re.compile(r"""\{\s*key:\s*'(\w+)',\s*label:\s*'([^']*)'""")
 
 
-def pares_do_painel(caminho):
+def pares_do_painel(caminho, trecho=None):
     """[(propriedade do Web, rótulo)] dos controles do painel que gravam uma propriedade."""
     with open(caminho, encoding='utf-8') as fh:
         s = fh.read()
+    if trecho:
+        s = s[s.index('const ' + trecho + ' ='):]
+        s = s[:s.index('\n    };')]
     out = [(m.group(1), m.group(2)) for m in RX_CHAVE.finditer(s)]
     chaves = {m.start(2) for m in RX_CHAVE.finditer(s)}
     ms = list(RX_LABEL.finditer(s))
@@ -114,12 +117,21 @@ def divergencias_paineis(formulario=esp.formulario):
         spec = formulario(tipo)
         col_de = {w: c for c, _t, _p, w in schema.campos(tipo) if w}
         campos = {c.coluna: c for c in spec.campos()}
-        for prop, rotulo in pares_do_painel(os.path.join(JS, arq)):
+        pares = [(p, r, {}) for p, r in pares_do_painel(os.path.join(JS, arq))]
+        if tipo == 'coordination_area':
+            # A mesma coluna tem dois rótulos no Web, conforme o símbolo e sua hachura.
+            # Comparar todos contra atributos vazios cobrava ambos no mesmo estado.
+            from Calco.formulario.tipos.area import HachuraDoTerreno
+            condicionais = pares_do_painel(os.path.join(JS, arq), 'buildForcedHatch')
+            pares = [(p, r, a) for p, r, a in pares if (p, r) not in condicionais]
+            pares += [(p, r, {'symbol_code': codigo, 'hatch_type': hachura})
+                      for codigo, hachura in HachuraDoTerreno.pares() for p, r in condicionais]
+        for prop, rotulo, attrs in pares:
             c = campos.get(col_de.get(prop))
             if c is None:
                 continue
             vistos += 1
-            nativo, dock = c.rotulo, c.rotulo_para({}, rico=bool(c.rico))
+            nativo, dock = c.rotulo_para(attrs), c.rotulo_para(attrs, rico=bool(c.rico))
             if nativo != rotulo or dock != rotulo:
                 ruins.append((tipo, c.coluna, nativo, dock, rotulo))
     return ruins, vistos
@@ -145,6 +157,26 @@ def divergencias_militar(formulario=esp.formulario):
 
 @unittest.skipUnless(WEB and os.path.isdir(JS), 'sem EBGEO_WEB_DIR (checkout do ebgeo_web)')
 class TestRotulosDoWeb(unittest.TestCase):
+
+    def test_rotulo_da_hachura_no_nativo_e_no_dock(self):
+        from qgis.core import QgsExpression, QgsExpressionContext, QgsFeature
+        camada = QgsVectorLayer('Point?field=symbol_code:string&field=hatch_type:string', 'area', 'memory')
+        spec = esp.formulario('coordination_area')
+        for codigo, hachura, forcada in (('151100', 'diagonal-right', True),
+                                         ('151199-01', 'cross-diagonal', True),
+                                         ('151100', 'cross', False), ('150000', 'diagonal-right', False),
+                                         (None, None, False)):
+            attrs = dict(symbol_code=codigo, hatch_type=hachura)
+            f = QgsFeature(camada.fields())
+            f.setAttributes([codigo, hachura])
+            ctx = QgsExpressionContext()
+            ctx.setFeature(f)
+            for coluna, livre, terreno in (('fill_color', 'Preenchimento', 'Cor da hachura'),
+                                           ('opacity', 'Opacidade do Preenchimento', 'Opacidade da hachura')):
+                campo = spec.campo(coluna)
+                esperado = terreno if forcada else livre
+                self.assertEqual(campo.rotulo_para(attrs), esperado)
+                self.assertEqual(QgsExpression(campo.expressao_rotulo()).evaluate(ctx), esperado)
 
     def test_paineis_de_todos_os_tipos(self):
         ruins, vistos = divergencias_paineis()

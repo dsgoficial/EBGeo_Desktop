@@ -212,19 +212,21 @@ def _estilo_ponto(layer):
     custom_ok = ['custom:' + i for i in icones]
     cond_custom = '"marker_symbol" IN ({})'.format(', '.join(_sql_str(c) for c in custom_ok)) if custom_ok else 'false'
 
-    def fabrica(terreno):
+    def fabrica():
         s = _simbolo_limpo(QgsMarkerSymbol)
         sm = QgsSimpleMarkerSymbolLayer()
-        sm.setSizeUnit(_unidade(terreno))
+        sm.setSizeUnit(Qgis.RenderUnit.Millimeters)
         sm.setStrokeWidthUnit(Qgis.RenderUnit.Millimeters)
         sm.setDataDefinedProperty(QgsSymbolLayer.Property.Name,
                                   _p("CASE {} ELSE 'circle' END".format(formas)))
         sm.setDataDefinedProperty(QgsSymbolLayer.Property.Angle,
                                   _p("CASE WHEN \"marker_symbol\" = 'x-mark' THEN 45 ELSE 0 END"))
         # círculo nativo: raio = size; forma e ícone: o desenho ocupa INNER/HALF (40/48) da imagem
-        sm.setDataDefinedProperty(QgsSymbolLayer.Property.Size, _p(_tamanho(
-            "2 * coalesce(\"size\", 10) * if(coalesce(\"marker_symbol\", 'circle') = 'circle', 1, {})".format(
-                RAZAO_DESENHO), terreno)))
+        # O QGIS centra o traço na borda; aumentar o diâmetro pela espessura põe o traço fora do círculo.
+        sm.setDataDefinedProperty(QgsSymbolLayer.Property.Size, _p(_mm(
+            "2 * ({}) * if(coalesce(\"marker_symbol\", 'circle') = 'circle', 1, {}) "
+            "+ if(coalesce(\"marker_symbol\", 'circle') = 'circle', coalesce(\"line_width\", 0), 0)".format(
+                expr_tamanho_ponto_px(), RAZAO_DESENHO))))
         # cor nula como no Web (point.layers.js): o círculo é a camada circle, com circle-color cru
         # (nulo é o preto do MapLibre) e contorno 'transparent'; as demais formas são a imagem
         # gerada, com POINT_MARKER_DEFAULTS (preenchimento #3f4fb5, contorno preto) no lugar do
@@ -236,34 +238,62 @@ def _estilo_ponto(layer):
         sm.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeColor, _p(
             "CASE WHEN {} THEN coalesce(\"line_color\", '0,0,0,0') "
             "ELSE coalesce(nullif(\"line_color\", ''), '#000000') END".format(circulo)))
-        sm.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeWidth, _p(_mm('coalesce("line_width", 0)')))
+        # O círculo tem contorno em px de tela; nas imagens ele escala com o desenho.
+        # Imagem do Web: 96 px, pixelRatio 2, largura desenhada 2 * size => traço * size / 24.
+        sm.setDataDefinedProperty(QgsSymbolLayer.Property.StrokeWidth, _p(_mm(
+            'coalesce("line_width", 0) * if({}, 1, ({}) / 24)'.format(
+                circulo, expr_tamanho_ponto_px()))))
         sm.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p('NOT ({})'.format(cond_custom)))
         s.appendSymbolLayer(sm)
         # glifo branco do ícone (car, drone, fire, gun, news, plane, supply)
         gl = QgsSvgMarkerSymbolLayer('')
-        gl.setSizeUnit(_unidade(terreno))
+        gl.setSizeUnit(Qgis.RenderUnit.Millimeters)
         casos_gl = ' '.join("WHEN \"marker_symbol\" = '{}' THEN 'base64:{}'".format(k, _svg_icone_b64(k))
                             for k in ICONES_WEB)
         gl.setDataDefinedProperty(QgsSymbolLayer.Property.Name, _p('CASE {} END'.format(casos_gl)))
-        gl.setDataDefinedProperty(QgsSymbolLayer.Property.Size, _p(_tamanho('2 * coalesce("size", 10)', terreno)))
+        gl.setDataDefinedProperty(QgsSymbolLayer.Property.Size, _p(_mm('2 * ({})'.format(expr_tamanho_ponto_px()))))
         gl.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p('"marker_symbol" IN ({})'.format(
             ', '.join(_sql_str(k) for k in ICONES_WEB))))
         s.appendSymbolLayer(gl)
         if icones:
             rm = QgsRasterMarkerSymbolLayer('')
-            rm.setSizeUnit(_unidade(terreno))
+            rm.setSizeUnit(Qgis.RenderUnit.Millimeters)
             rm.setFixedAspectRatio(0)
             casos = ' '.join("WHEN \"marker_symbol\" = 'custom:{}' THEN 'base64:{}'".format(i, b64)
                              for i, (_m, b64) in icones.items())
             rm.setDataDefinedProperty(QgsSymbolLayer.Property.Name, _p('CASE {} END'.format(casos)))
-            rm.setDataDefinedProperty(QgsSymbolLayer.Property.Width, _p(_tamanho('2 * coalesce("size", 10)', terreno)))
+            rm.setDataDefinedProperty(QgsSymbolLayer.Property.Width, _p(_mm('2 * ({})'.format(expr_tamanho_ponto_px()))))
             rm.setDataDefinedProperty(QgsSymbolLayer.Property.LayerEnabled, _p(cond_custom))
             s.appendSymbolLayer(rm)
         s.setDataDefinedProperty(QgsSymbol.Property.Opacity, _p('100 * coalesce("opacity", 1)'))
         return s
 
-    layer.setRenderer(_regras_por_zoom(fabrica, 'Ponto'))
+    layer.setRenderer(QgsSingleSymbolRenderer(fabrica()))
     _rotulo_forma(layer, ponto=True)
+
+
+def expr_tamanho_ponto_px():
+    """Raio do Ponto em pixels CSS, com âncora 0 válida e teto de 500 px do Web."""
+    return _expr_tamanho_px('size', 10, 'created_zoom', 'zoom_corr', 500)
+
+
+def expr_raio_ponto_px():
+    """Borda externa do marcador, como markerRadiusAtStop do Web (inclui o contorno)."""
+    return ("CASE WHEN coalesce(\"marker_symbol\", 'circle') = 'circle' THEN ({s}) + coalesce(\"line_width\", 0) "
+            "WHEN left(\"marker_symbol\", 7) = 'custom:' THEN ({s}) "
+            'ELSE ({s}) * (40 + coalesce("line_width", 0)) / 48 END').format(s=expr_tamanho_ponto_px())
+
+
+def _expr_tamanho_px(coluna, padrao, ancora, correcao, teto):
+    from .estilos_taticos import compor, finalizar
+    base = 'coalesce("{}", {})'.format(coluna, padrao)
+    m_ancora = ('{m0} * cos(radians(y(centroid(transform($geometry, @layer_crs, \'EPSG:4326\'))))) '
+                '/ 2 ^ "{ancora}"').format(m0=M_POR_PX_Z0, ancora=ancora)
+    return ('CASE WHEN "{c}" IS NOT NULL AND NOT "{c}" THEN {b} '
+            'WHEN "{a}" IS NULL OR coalesce(@map_scale, 0) <= 0 THEN {b} '
+            'ELSE min({t}, {b} * ({m}) / (({e}) * {px})) END').format(
+                c=correcao, a=ancora, b=base, t=teto, m=m_ancora,
+                e=finalizar(compor('_escala_terreno')), px=MM_POR_PX / 1000)
 
 
 def expr_tamanho_rotulo_px():
@@ -274,14 +304,7 @@ def expr_tamanho_rotulo_px():
     ao terreno; a correção desligada (só o falso gravado) ou a âncora nula deixam o labelSize fixo
     na tela. O zoom atual é o do MapLibre (m/px de terreno no zoom da âncora sobre o de agora).
     """
-    from .estilos_taticos import compor, finalizar
-    base = 'coalesce("label_size", 14)'
-    m_ancora = "{m0} * cos(radians(y(centroid(transform($geometry, @layer_crs, 'EPSG:4326'))))) / 2 ^ \"label_created_zoom\"".format(
-        m0=M_POR_PX_Z0)
-    return ('CASE WHEN "label_zoom_corr" IS NOT NULL AND NOT "label_zoom_corr" THEN {b} '
-            'WHEN "label_created_zoom" IS NULL OR coalesce(@map_scale, 0) <= 0 THEN {b} '
-            'ELSE min(255, {b} * ({m}) / (({e}) * 0.00026458333)) END').format(
-                b=base, m=m_ancora, e=finalizar(compor('_escala_terreno')))
+    return _expr_tamanho_px('label_size', 14, 'label_created_zoom', 'label_zoom_corr', 255)
 
 
 def _rotulo_forma(layer, ponto=False):
@@ -313,7 +336,7 @@ def _rotulo_forma(layer, ponto=False):
         s.offsetUnits = Qgis.RenderUnit.Millimeters
         # deslocamento radial do Web: raio do marcador + 6 px, na diagonal
         dd.setProperty(QgsPalLayerSettings.Property.OffsetXY, _p(
-            "concat({d}, ',', -{d})".format(d=_mm('(coalesce("size", 10) + coalesce("line_width", 0) + 6) * 0.7071'))))
+            "concat({d}, ',', -{d})".format(d=_mm('(({}) + 6) / sqrt(2)'.format(expr_raio_ponto_px())))))
     else:
         s.placement = Qgis.LabelPlacement.OverPoint if layer.geometryType() == Qgis.GeometryType.Point \
             else Qgis.LabelPlacement.Horizontal
