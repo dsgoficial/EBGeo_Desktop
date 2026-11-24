@@ -224,7 +224,7 @@ class Main(QtWidgets.QDockWidget, FORM_CLASS):
                 for line in range(nrow):
                     ymin = bbox[3] - dy * (line + 1)
                     ymax = bbox[3] - dy * line
-                    imageURL = "https://bdgex.eb.mil.br/mapcache?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&BBOX={},{},{},{}&SRS=EPSG:4326&WIDTH={}&HEIGHT={}&LAYERS={}&STYLES=,,,&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE".format(xmin, ymin, xmax, ymax, width, height, layerWMS)
+                    imageURL = "https://app-bdgex.eb.mil.br/mapcache?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&BBOX={},{},{},{}&SRS=EPSG:4326&WIDTH={}&HEIGHT={}&LAYERS={}&STYLES=,,,&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE".format(xmin, ymin, xmax, ymax, width, height, layerWMS)
                     
                     # Desabilitar verificação SSL para este servidor específico
                     partialImage = requests.get(imageURL, allow_redirects=True, verify=False)
